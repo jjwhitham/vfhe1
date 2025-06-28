@@ -1,0 +1,15 @@
+
+### the below ignores all executables ###
+# Ignore all
+*
+# Unignore all with extensions
+!*.*
+# unignore Makefile
+!Makefile
+# Unignore all dirs
+!*/
+##########################################
+
+# ignore vscode
+.vscode
+*.dSYM
