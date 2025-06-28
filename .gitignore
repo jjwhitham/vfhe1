@@ -13,3 +13,6 @@
 # ignore vscode
 .vscode
 *.dSYM
+!googletest
+build/
+.DS_Store

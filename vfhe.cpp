@@ -18,6 +18,16 @@ scalar_mat_mult(i128 s, vector<vector<i128>> M, i128 q) {
     return M;
 }
 
+vector<i128>
+scalar_vec_mult(i128 s, vector<i128> v, i128 q) {
+    // """Multiplies each element of matrix M by scalar s (mod q)."""
+    // return [[int(s * elem) % q for elem in row] for row in M]
+    for (size_t i = 0; i < v.size(); i++) {
+        v.at(i) = v.at(i) * s % q;
+    }
+    return v;
+}
+
 void print_i128(i128 n) {
     if (n == 0) {
         cout << "0";
