@@ -144,26 +144,26 @@ public:
 
 class array1d {
 private:
-    size_t cols_;
+    size_t size_;
     i128* arr;
 public:
-    array1d(size_t cols) : cols_(cols) {
-        arr = new i128[cols](); // new []() to zero-initialise
+    array1d(size_t size) : size_(size) {
+        arr = new i128[size](); // new []() to zero-initialise
     }
     ~array1d() {
         delete[] arr;
     }
-    void check_index_bounds(size_t col) {
-        if (col >= cols_) {
+    void check_index_bounds(size_t n) {
+        if (n >= size_) {
             throw std::out_of_range(
-                "Index error: accessing arr[" + std::to_string(col) + "]"
-                + " in a " + std::to_string(cols_) + " element array."
+                "Index error: accessing arr[" + std::to_string(n) + "]"
+                + " in a " + std::to_string(size_) + " element array."
             );
         }
     }
-    i128 get(int col) {
-        check_index_bounds(col);
-        return arr[col];
+    i128 get(int n) {
+        check_index_bounds(n);
+        return arr[n];
     }
     void check_value_bounds(i128 val) {
         // assert abs(val) less than 2^63 using INT_MIN and INT_MAX
@@ -176,10 +176,13 @@ public:
             );
         }
     }
-    void set(int col, i128 val) {
-        check_index_bounds(col);
+    void set(int n, i128 val) {
+        check_index_bounds(n);
         check_value_bounds(val);
-        arr[col] = val;
+        arr[n] = val;
+    }
+    size_t size() {
+        return size_;
     }
 };
 
@@ -233,6 +236,13 @@ public:
         check_value_bounds(val);
         arr[row][col] = val;
     }
+    size_t size() {
+        return rows_;
+    }
+    size_t size(size_t row) {
+        check_index_bounds(row, 0);
+        return cols_;
+    }
 };
 
 void test_array2d() {
@@ -240,6 +250,13 @@ void test_array2d() {
     min_val <<= 63;
     i128 max_val = (1UL << 63) - 1;
     array2d arr(3, 2);
+    // check values are zero initialised
+    for (size_t i = 0; i < arr.size(); i++) {
+        for (size_t j = 0; j < arr.size(i); j++) {
+            assert(arr.get(i, j) == 0);
+        }
+    }
+    // set some values
     arr.set(0, 0, 1);
     arr.set(1, 1, 2);
     arr.set(2, 0, 3);
@@ -256,7 +273,7 @@ void test_array2d() {
     assert(arr.get(1, 1) == 2);
     assert(arr.get(2, 0) == 3);
     // Test out of bounds
-    bool tests_passed = false;
+    // bool tests_passed = false;
     try {
         arr.get(3, 0);
     } catch (const std::out_of_range& e) {
@@ -307,7 +324,12 @@ void test_array1d() {
     i128 min_val = -1;
     min_val <<= 63;
     i128 max_val = (1UL << 63) - 1;
+
     array1d arr(3);
+    // check values are zero initialised
+    for (size_t i = 0; i < arr.size(); i++) {
+        assert(arr.get(i) == 0);
+    }
     arr.set(0, 1);
     arr.set(1, 2);
     arr.set(2, 3);
