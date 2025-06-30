@@ -29,28 +29,17 @@ string print_to_string_i128(i128 n) {
     reverse(buf.begin(), buf.end());
     return buf;
 }
-
-array1d::Proxy::Proxy(array1d& parent_, size_t idx_) : parent(parent_), idx(idx_) {}
-// Assignment operator with value check
-array1d::Proxy& array1d::Proxy::operator=(i128 val) {
-    parent.check_index_bounds(idx);
-    parent.check_value_bounds(val);
-    parent.arr[idx] = val;
-    return *this;
+// template class array1d<i128>;
+template<typename T>
+array1d<T>::array1d(size_t size) : size_(size) {
+    arr = new T[size]();
 }
-// Conversion operator for reading value
-array1d::Proxy::operator i128() const {
-    parent.check_index_bounds(idx);
-    return parent.arr[idx];
-}
-
-array1d::array1d(size_t size) : size_(size) {
-    arr = new i128[size]();
-}
-array1d::~array1d() {
+template<typename T>
+array1d<T>::~array1d() {
     delete[] arr;
 }
-void array1d::check_index_bounds(size_t n) const {
+template<typename T>
+void array1d<T>::check_index_bounds(size_t n) const {
     if (n >= size_) {
         throw std::out_of_range(
             "Index error: accessing arr[" + std::to_string(n) + "]"
@@ -58,20 +47,24 @@ void array1d::check_index_bounds(size_t n) const {
         );
     }
 }
-i128 array1d::get(size_t n) {
+template<typename T>
+T array1d<T>::get(size_t n) {
     check_index_bounds(n);
     return arr[n];
 }
 // Use Proxy for operator[]
-array1d::Proxy array1d::operator[](size_t idx) {
+template<typename T>
+typename array1d<T>::Proxy array1d<T>::operator[](size_t idx) {
     return Proxy(*this, idx);
 }
 // For const access
-i128 array1d::operator[](size_t idx) const {
+template<typename T>
+T array1d<T>::operator[](size_t idx) const {
     check_index_bounds(idx);
     return arr[idx];
 }
-void array1d::check_value_bounds(i128 val) {
+template<>
+void array1d<i128>::check_value_bounds(i128 val) {
     i128 min_val = -1;
     min_val <<= 63;
     i128 max_val = (1UL << 63) - 1;
@@ -81,13 +74,36 @@ void array1d::check_value_bounds(i128 val) {
         );
     }
 }
-void array1d::set(int n, i128 val) {
+template<typename T>
+void array1d<T>::check_value_bounds(T val) {
+    cout << "check_value_bounds not implemented for type T\n";
+}
+template<typename T>
+void array1d<T>::set(int n, T val) {
     check_index_bounds(n);
     check_value_bounds(val);
     arr[n] = val;
 }
-size_t array1d::size() const {
+template<typename T>
+size_t array1d<T>::size() const {
     return size_;
+}
+
+template<typename T>
+array1d<T>::Proxy::Proxy(array1d<T>& parent_, size_t idx_) : parent(parent_), idx(idx_) {}
+// Assignment operator with value check
+template<typename T>
+typename array1d<T>::Proxy& array1d<T>::Proxy::operator=(T val) {
+    parent.check_index_bounds(idx);
+    parent.check_value_bounds(val);
+    parent.arr[idx] = val;
+    return *this;
+}
+// Conversion operator for reading value
+template<typename T>
+array1d<T>::Proxy::operator T() const {
+    parent.check_index_bounds(idx);
+    return parent.arr[idx];
 }
 
 
@@ -233,8 +249,8 @@ scalar_vec_mult(i128 s, vector<i128> v, i128 q) {
     return v;
 }
 
-array1d
-scalar_vec_mult(i128 s, array1d v, i128 q) {
+array1d<i128>
+scalar_vec_mult(i128 s, array1d<i128> v, i128 q) {
     // """Multiplies each element of matrix M by scalar s (mod q)."""
     // return [[int(s * elem) % q for elem in row] for row in M]
     for (size_t i = 0; i < v.size(); i++) {
@@ -394,7 +410,7 @@ void test_array1d() {
     min_val <<= 63;
     i128 max_val = (1UL << 63) - 1;
 
-    array1d arr(3);
+    array1d<i128> arr(3);
     // check values are zero initialised
     for (size_t i = 0; i < arr.size(); i++) {
         assert(arr.get(i) == 0);
@@ -448,7 +464,7 @@ void test_array1d() {
 }
 
 void test_array1d_indexing() {
-    array1d arr(5);
+    array1d<i128> arr(5);
     for (size_t i = 0; i < arr.size(); i++) {
         arr[i] = i + 1; // Using operator[] for assignment
     }

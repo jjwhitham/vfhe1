@@ -13,32 +13,33 @@ using namespace std;
 
 string print_to_string_i128(i128 n);
 
+template<typename T>
 class array1d {
 private:
     size_t size_;
-    i128* arr;
+    T* arr;
     // Proxy class for operator[]
     class Proxy {
-        array1d& parent;
+        array1d<T>& parent;
         size_t idx;
     public:
-        Proxy(array1d& parent_, size_t idx_);
+        Proxy(array1d<T>& parent_, size_t idx_);
         // Assignment operator with value check
-        Proxy& operator=(i128 val);
+        Proxy& operator=(T val);
         // Conversion operator for reading value
-        operator i128() const;
+        operator T() const;
     };
 public:
     array1d(size_t size);
     ~array1d();
     void check_index_bounds(size_t n) const;
-    i128 get(size_t n);
+    T get(size_t n);
     // Use Proxy for operator[]
     Proxy operator[](size_t idx);
     // For const access
-    i128 operator[](size_t idx) const;
-    void check_value_bounds(i128 val);
-    void set(int n, i128 val);
+    T operator[](size_t idx) const;
+    void check_value_bounds(T val);
+    void set(int n, T val);
     size_t size() const;
 };
 
@@ -98,8 +99,8 @@ scalar_mat_mult(i128 s, array2d M, i128 q);
 vector<i128>
 scalar_vec_mult(i128 s, vector<i128> v, i128 q);
 
-array1d
-scalar_vec_mult(i128 s, array1d v, i128 q);
+array1d<i128>
+scalar_vec_mult(i128 s, array1d<i128> v, i128 q);
 
 vector<i128>
 round_vec(vector<double> v);

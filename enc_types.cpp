@@ -1,9 +1,12 @@
 #include "vfhe.h"
 
-class poly : public array1d {
+class poly : public array1d<i128> {
 private:
 public:
-    poly(size_t N) : array1d(N) {
+    static constexpr size_t DEFAULT_N = 4;
+    poly(size_t N) : array1d<i128>(N) {
+    }
+    poly() : array1d<i128>(DEFAULT_N) {
     }
     ~poly() = default;
 
@@ -18,10 +21,10 @@ public:
 };
 
 /* a tuple of polys */
-class rlwe {
+class rlwe : public array1d<poly> {
     private:
     public:
-    rlwe() {}
+    rlwe() : array1d<poly>(2) {}
     ~rlwe() = default;
 };
 
@@ -75,4 +78,19 @@ int main() {
         cout << print_to_string_i128(p3[i]) + ", ";
     cout << "\n";
     return 0;
+    rlwe r1;
+    rlwe r2;
+    r1[0] = p1;
+    r1[1] = p2;
+    r2[0] = p2;
+    r2[1] = p1;
+    // poly p4 = r1[0] * r2[0];
+    poly p4 = r1[0];
+    // for (int i = 0; i < 2; i++) {
+    //     cout << "r3[" << i << "]: ";
+    //     for (int j = 0; j < 4; j++) {
+    //         cout << print_to_string_i128(r3[i][j]) + ", ";
+    //     }
+    //     cout << "\n";
+    // }
 }
