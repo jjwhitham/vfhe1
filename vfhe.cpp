@@ -10,6 +10,25 @@
 typedef __int128_t i128;
 using namespace std;
 
+string print_to_string_i128(i128 n) {
+    if (n == 0) {
+        return "0";
+    }
+    bool neg = false;
+    if (n < 0) {
+        neg = true;
+        n = -n;
+    }
+    string buf;
+    while (n > 0) {
+        buf += '0' + (n % 10);
+        n /= 10;
+    }
+    if (neg) buf += '-';
+    reverse(buf.begin(), buf.end());
+    return buf;
+}
+
 class array1d {
 private:
     size_t size_;
@@ -132,25 +151,6 @@ void print_i128(i128 n) {
     }
     if (neg) buf[i--] = '-';
     cout << (buf + i + 1);
-}
-
-string print_to_string_i128(i128 n) {
-    if (n == 0) {
-        return "0";
-    }
-    bool neg = false;
-    if (n < 0) {
-        neg = true;
-        n = -n;
-    }
-    string buf;
-    while (n > 0) {
-        buf += '0' + (n % 10);
-        n /= 10;
-    }
-    if (neg) buf += '-';
-    reverse(buf.begin(), buf.end());
-    return buf;
 }
 
 vector<vector<i128>>
