@@ -17,11 +17,12 @@ public:
     }
 };
 
+/* a tuple of polys */
 class rlwe {
     private:
     public:
     rlwe() {}
-    ~rlwe() {}
+    ~rlwe() = default;
 };
 
 class rlwe_vec {
@@ -72,6 +73,6 @@ int main() {
     poly p3 = p1 * p2;
     for (int i = 0; i < 4; i++)
         cout << print_to_string_i128(p3[i]) + ", ";
-        cout << "\n";
+    cout << "\n";
     return 0;
 }

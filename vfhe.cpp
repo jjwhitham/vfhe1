@@ -8,8 +8,8 @@
 #include <algorithm>
 #include "vfhe.h"
 
-typedef __int128_t i128;
-using namespace std;
+// typedef __int128_t i128;
+// using namespace std;
 
 string print_to_string_i128(i128 n) {
     if (n == 0) {
@@ -30,186 +30,152 @@ string print_to_string_i128(i128 n) {
     return buf;
 }
 
-class array1d {
-private:
-    size_t size_;
-    i128* arr;
+array1d::Proxy::Proxy(array1d& parent_, size_t idx_) : parent(parent_), idx(idx_) {}
+// Assignment operator with value check
+array1d::Proxy& array1d::Proxy::operator=(i128 val) {
+    parent.check_index_bounds(idx);
+    parent.check_value_bounds(val);
+    parent.arr[idx] = val;
+    return *this;
+}
+// Conversion operator for reading value
+array1d::Proxy::operator i128() const {
+    parent.check_index_bounds(idx);
+    return parent.arr[idx];
+}
 
-    // Proxy class for operator[]
-    class Proxy {
-        array1d& parent;
-        size_t idx;
-    public:
-        Proxy(array1d& parent_, size_t idx_) : parent(parent_), idx(idx_) {}
+array1d::array1d(size_t size) : size_(size) {
+    arr = new i128[size]();
+}
+array1d::~array1d() {
+    delete[] arr;
+}
+void array1d::check_index_bounds(size_t n) const {
+    if (n >= size_) {
+        throw std::out_of_range(
+            "Index error: accessing arr[" + std::to_string(n) + "]"
+            + " in a " + std::to_string(size_) + " element array."
+        );
+    }
+}
+i128 array1d::get(size_t n) {
+    check_index_bounds(n);
+    return arr[n];
+}
+// Use Proxy for operator[]
+array1d::Proxy array1d::operator[](size_t idx) {
+    return Proxy(*this, idx);
+}
+// For const access
+i128 array1d::operator[](size_t idx) const {
+    check_index_bounds(idx);
+    return arr[idx];
+}
+void array1d::check_value_bounds(i128 val) {
+    i128 min_val = -1;
+    min_val <<= 63;
+    i128 max_val = (1UL << 63) - 1;
+    if (val < min_val || val > max_val) {
+        throw std::out_of_range(
+            "(array2d) Value out of range: " + print_to_string_i128(val)
+        );
+    }
+}
+void array1d::set(int n, i128 val) {
+    check_index_bounds(n);
+    check_value_bounds(val);
+    arr[n] = val;
+}
+size_t array1d::size() const {
+    return size_;
+}
 
-        // Assignment operator with value check
-        Proxy& operator=(i128 val) {
-            parent.check_index_bounds(idx);
-            parent.check_value_bounds(val);
-            parent.arr[idx] = val;
-            return *this;
-        }
 
-        // Conversion operator for reading value
-        operator i128() const {
-            parent.check_index_bounds(idx);
-            return parent.arr[idx];
-        }
-    };
+array2d::RowProxy::RowProxy(array2d& parent_, size_t row_) : parent(parent_), row(row_) {}
 
-public:
-    array1d(size_t size) : size_(size) {
-        arr = new i128[size]();
-    }
-    ~array1d() {
-        delete[] arr;
-    }
-    void check_index_bounds(size_t n) const {
-        if (n >= size_) {
-            throw std::out_of_range(
-                "Index error: accessing arr[" + std::to_string(n) + "]"
-                + " in a " + std::to_string(size_) + " element array."
-            );
-        }
-    }
-    i128 get(size_t n) {
-        check_index_bounds(n);
-        return arr[n];
-    }
-    // Use Proxy for operator[]
-    Proxy operator[](size_t idx) {
-        return Proxy(*this, idx);
-    }
-    // For const access
-    i128 operator[](size_t idx) const {
-        check_index_bounds(idx);
-        return arr[idx];
-    }
-    void check_value_bounds(i128 val) {
-        i128 min_val = -1;
-        min_val <<= 63;
-        i128 max_val = (1UL << 63) - 1;
-        if (val < min_val || val > max_val) {
-            throw std::out_of_range(
-                "(array2d) Value out of range: " + print_to_string_i128(val)
-            );
-        }
-    }
-    void set(int n, i128 val) {
-        check_index_bounds(n);
-        check_value_bounds(val);
-        arr[n] = val;
-    }
-    size_t size() const {
-        return size_;
-    }
-};
+// Assignment and access with value/index checks
+array2d::RowProxy::ColProxy::ColProxy(array2d& parent_, size_t row_, size_t col_)
+        : parent(parent_), row(row_), col(col_) {}
 
-class array2d {
-private:
-    size_t rows_;
-    size_t cols_;
-    i128* data;
-    i128** arr;
-
-    // Proxy for a row, to enable arr[row][col] with checks
-    class RowProxy {
-        array2d& parent;
-        size_t row;
-    public:
-        RowProxy(array2d& parent_, size_t row_) : parent(parent_), row(row_) {}
-
-        // Assignment and access with value/index checks
-        class ColProxy {
-            array2d& parent;
-            size_t row, col;
-        public:
-            ColProxy(array2d& parent_, size_t row_, size_t col_)
-                : parent(parent_), row(row_), col(col_) {}
-
-            // Assignment operator with checks
-            ColProxy& operator=(i128 val) {
-                parent.check_index_bounds(row, col);
-                parent.check_value_bounds(val);
-                parent.arr[row][col] = val;
-                return *this;
-            }
-
-            // Conversion operator for reading value
-            operator i128() const {
-                parent.check_index_bounds(row, col);
-                return parent.arr[row][col];
-            }
-        };
-
-        ColProxy operator[](size_t col) {
-            return ColProxy(parent, row, col);
-        }
-        // For const access
-        i128 operator[](size_t col) const {
-            parent.check_index_bounds(row, col);
-            return parent.arr[row][col];
-        }
-    };
-
-public:
-    array2d(size_t rows, size_t cols) : rows_(rows), cols_(cols) {
-        data = new i128[rows * cols]();
-        arr = new i128*[rows];
-        for (size_t i = 0; i < rows; i++) {
-            arr[i] = &data[i * cols];
-        }
-    }
-    ~array2d() {
-        delete[] data;
-        delete[] arr;
-    }
-    void check_index_bounds(size_t row, size_t col) const {
-        if (row >= rows_ || col >= cols_) {
-            throw std::out_of_range(
-                "Index out of bounds: tried to access "
-                + std::to_string(row) + ", " + std::to_string(col)
-                + " in a " + std::to_string(rows_) + "x" + std::to_string(cols_)
-                + " array."
-            );
-        }
-    }
-    i128 get(size_t row, size_t col) const {
-        check_index_bounds(row, col);
-        return arr[row][col];
-    }
-    void check_value_bounds(i128 val) const {
-        i128 min_val = -1;
-        min_val <<= 63;
-        i128 max_val = (1UL << 63) - 1;
-        if (val < min_val || val > max_val) {
-            throw std::out_of_range(
-                "(array2d) Value out of range: " + print_to_string_i128(val)
-            );
-        }
-    }
-    void set(size_t row, size_t col, i128 val) {
-        check_index_bounds(row, col);
-        check_value_bounds(val);
-        arr[row][col] = val;
-    }
-    size_t size() const {
-        return rows_;
-    }
-    size_t size(size_t row) const {
-        check_index_bounds(row, 0);
-        return cols_;
+    // Assignment operator with checks
+   array2d::RowProxy::ColProxy& array2d::RowProxy::ColProxy::operator=(i128 val) {
+        parent.check_index_bounds(row, col);
+        parent.check_value_bounds(val);
+        parent.arr[row][col] = val;
+        return *this;
     }
 
-    // Proxy for arr[row][col] with checks
-    RowProxy operator[](size_t row) {
-        return RowProxy(*this, row);
+// Conversion operator for reading value
+array2d::RowProxy::ColProxy::operator i128() const {
+    parent.check_index_bounds(row, col);
+    return parent.arr[row][col];
+}
+
+array2d::RowProxy::ColProxy array2d::RowProxy::operator[](size_t col) {
+    return ColProxy(parent, row, col);
+}
+// For const access
+i128 array2d::RowProxy::operator[](size_t col) const {
+    parent.check_index_bounds(row, col);
+    return parent.arr[row][col];
+}
+
+array2d::array2d(size_t rows, size_t cols) : rows_(rows), cols_(cols) {
+    data = new i128[rows * cols]();
+    arr = new i128*[rows];
+    for (size_t i = 0; i < rows; i++) {
+        arr[i] = &data[i * cols];
     }
-    // For const access
-    const RowProxy operator[](size_t row) const {
-        return RowProxy(const_cast<array2d&>(*this), row);
+}
+array2d::~array2d() {
+    delete[] data;
+    delete[] arr;
+}
+void array2d::check_index_bounds(size_t row, size_t col) const {
+    if (row >= rows_ || col >= cols_) {
+        throw std::out_of_range(
+            "Index out of bounds: tried to access "
+            + std::to_string(row) + ", " + std::to_string(col)
+            + " in a " + std::to_string(rows_) + "x" + std::to_string(cols_)
+            + " array."
+        );
     }
-};
+}
+i128 array2d::get(size_t row, size_t col) const {
+    check_index_bounds(row, col);
+    return arr[row][col];
+}
+void array2d::check_value_bounds(i128 val) const {
+    i128 min_val = -1;
+    min_val <<= 63;
+    i128 max_val = (1UL << 63) - 1;
+    if (val < min_val || val > max_val) {
+        throw std::out_of_range(
+            "(array2d) Value out of range: " + print_to_string_i128(val)
+        );
+    }
+}
+void array2d::set(size_t row, size_t col, i128 val) {
+    check_index_bounds(row, col);
+    check_value_bounds(val);
+    arr[row][col] = val;
+}
+size_t array2d::size() const {
+    return rows_;
+}
+size_t array2d::size(size_t row) const {
+    check_index_bounds(row, 0);
+    return cols_;
+}
+
+// Proxy for arr[row][col] with checks
+array2d::RowProxy array2d::operator[](size_t row) {
+    return RowProxy(*this, row);
+}
+// For const access
+const array2d::RowProxy array2d::operator[](size_t row) const {
+    return RowProxy(const_cast<array2d&>(*this), row);
+}
 
 void print_i128(i128 n) {
     if (n == 0) {
@@ -328,25 +294,25 @@ void test_scalar_mat_mult() {
     assert(M.at(2).at(1) == 12);
 }
 
-class array2d_vec {
-private:
-    size_t rows_;
-    size_t cols_;
-    vector<vector<i128>> data_;
-public:
-    array2d_vec(size_t rows, size_t cols) : rows_(rows), cols_(cols) {
-        data_.resize(rows, vector<i128>(cols, 0));
-    }
-    ~array2d_vec() = default;
+// class array2d_vec {
+// private:
+//     size_t rows_;
+//     size_t cols_;
+//     vector<vector<i128>> data_;
+// public:
+//     array2d_vec(size_t rows, size_t cols) : rows_(rows), cols_(cols) {
+//         data_.resize(rows, vector<i128>(cols, 0));
+//     }
+//     ~array2d_vec() = default;
 
-    vector<i128>& operator[](size_t index) {
-        return data_[index];
-    }
+//     vector<i128>& operator[](size_t index) {
+//         return data_[index];
+//     }
 
-    const vector<i128>& operator[](size_t index) const {
-        return data_[index];
-    }
-};
+//     const vector<i128>& operator[](size_t index) const {
+//         return data_[index];
+//     }
+// };
 
 void test_array2d() {
     i128 min_val = -1;
@@ -507,12 +473,12 @@ void test_array2d_indexing() {
     cout << "All tests passed for array2d indexing.\n";
 }
 
-int main() {
-    test_scalar_mat_mult();
-    test_round_vec();
-    test_array1d();
-    test_array2d();
-    test_array1d_indexing();
-    test_array2d_indexing();
-    return EXIT_SUCCESS;
-}
+// int main() {
+//     test_scalar_mat_mult();
+//     test_round_vec();
+//     test_array1d();
+//     test_array2d();
+//     test_array1d_indexing();
+//     test_array2d_indexing();
+//     return EXIT_SUCCESS;
+// }
