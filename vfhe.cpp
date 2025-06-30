@@ -6,6 +6,7 @@
 #include <cmath>
 #include <climits>
 #include <algorithm>
+#include "vfhe.h"
 
 typedef __int128_t i128;
 using namespace std;
@@ -33,14 +34,37 @@ class array1d {
 private:
     size_t size_;
     i128* arr;
+
+    // Proxy class for operator[]
+    class Proxy {
+        array1d& parent;
+        size_t idx;
+    public:
+        Proxy(array1d& parent_, size_t idx_) : parent(parent_), idx(idx_) {}
+
+        // Assignment operator with value check
+        Proxy& operator=(i128 val) {
+            parent.check_index_bounds(idx);
+            parent.check_value_bounds(val);
+            parent.arr[idx] = val;
+            return *this;
+        }
+
+        // Conversion operator for reading value
+        operator i128() const {
+            parent.check_index_bounds(idx);
+            return parent.arr[idx];
+        }
+    };
+
 public:
     array1d(size_t size) : size_(size) {
-        arr = new i128[size](); // new []() to zero-initialise
+        arr = new i128[size]();
     }
     ~array1d() {
         delete[] arr;
     }
-    void check_index_bounds(size_t n) {
+    void check_index_bounds(size_t n) const {
         if (n >= size_) {
             throw std::out_of_range(
                 "Index error: accessing arr[" + std::to_string(n) + "]"
@@ -48,12 +72,20 @@ public:
             );
         }
     }
-    i128 get(int n) {
+    i128 get(size_t n) {
         check_index_bounds(n);
         return arr[n];
     }
+    // Use Proxy for operator[]
+    Proxy operator[](size_t idx) {
+        return Proxy(*this, idx);
+    }
+    // For const access
+    i128 operator[](size_t idx) const {
+        check_index_bounds(idx);
+        return arr[idx];
+    }
     void check_value_bounds(i128 val) {
-        // assert abs(val) less than 2^63 using INT_MIN and INT_MAX
         i128 min_val = -1;
         min_val <<= 63;
         i128 max_val = (1UL << 63) - 1;
@@ -68,7 +100,7 @@ public:
         check_value_bounds(val);
         arr[n] = val;
     }
-    size_t size() {
+    size_t size() const {
         return size_;
     }
 };
@@ -79,11 +111,50 @@ private:
     size_t cols_;
     i128* data;
     i128** arr;
+
+    // Proxy for a row, to enable arr[row][col] with checks
+    class RowProxy {
+        array2d& parent;
+        size_t row;
+    public:
+        RowProxy(array2d& parent_, size_t row_) : parent(parent_), row(row_) {}
+
+        // Assignment and access with value/index checks
+        class ColProxy {
+            array2d& parent;
+            size_t row, col;
+        public:
+            ColProxy(array2d& parent_, size_t row_, size_t col_)
+                : parent(parent_), row(row_), col(col_) {}
+
+            // Assignment operator with checks
+            ColProxy& operator=(i128 val) {
+                parent.check_index_bounds(row, col);
+                parent.check_value_bounds(val);
+                parent.arr[row][col] = val;
+                return *this;
+            }
+
+            // Conversion operator for reading value
+            operator i128() const {
+                parent.check_index_bounds(row, col);
+                return parent.arr[row][col];
+            }
+        };
+
+        ColProxy operator[](size_t col) {
+            return ColProxy(parent, row, col);
+        }
+        // For const access
+        i128 operator[](size_t col) const {
+            parent.check_index_bounds(row, col);
+            return parent.arr[row][col];
+        }
+    };
+
 public:
     array2d(size_t rows, size_t cols) : rows_(rows), cols_(cols) {
-        // allocate contiguous mem
-        data = new i128[rows * cols](); // new []() to zero-initialise
-        // point each row of 2d arr to the right place in 1d data
+        data = new i128[rows * cols]();
         arr = new i128*[rows];
         for (size_t i = 0; i < rows; i++) {
             arr[i] = &data[i * cols];
@@ -93,22 +164,21 @@ public:
         delete[] data;
         delete[] arr;
     }
-    void check_index_bounds(size_t row, size_t col) {
+    void check_index_bounds(size_t row, size_t col) const {
         if (row >= rows_ || col >= cols_) {
             throw std::out_of_range(
-                "Index out of bounds: tryed to access "
+                "Index out of bounds: tried to access "
                 + std::to_string(row) + ", " + std::to_string(col)
                 + " in a " + std::to_string(rows_) + "x" + std::to_string(cols_)
                 + " array."
             );
         }
     }
-    i128 get(int row, int col) {
+    i128 get(size_t row, size_t col) const {
         check_index_bounds(row, col);
         return arr[row][col];
     }
-    void check_value_bounds(i128 val) {
-        // assert abs(val) less than 2^63 using INT_MIN and INT_MAX
+    void check_value_bounds(i128 val) const {
         i128 min_val = -1;
         min_val <<= 63;
         i128 max_val = (1UL << 63) - 1;
@@ -118,17 +188,26 @@ public:
             );
         }
     }
-    void set(int row, int col, i128 val) {
+    void set(size_t row, size_t col, i128 val) {
         check_index_bounds(row, col);
         check_value_bounds(val);
         arr[row][col] = val;
     }
-    size_t size() {
+    size_t size() const {
         return rows_;
     }
-    size_t size(size_t row) {
+    size_t size(size_t row) const {
         check_index_bounds(row, 0);
         return cols_;
+    }
+
+    // Proxy for arr[row][col] with checks
+    RowProxy operator[](size_t row) {
+        return RowProxy(*this, row);
+    }
+    // For const access
+    const RowProxy operator[](size_t row) const {
+        return RowProxy(const_cast<array2d&>(*this), row);
     }
 };
 
@@ -402,10 +481,38 @@ void test_array1d() {
     cout << "All tests passed for array1d.\n";
 }
 
+void test_array1d_indexing() {
+    array1d arr(5);
+    for (size_t i = 0; i < arr.size(); i++) {
+        arr[i] = i + 1; // Using operator[] for assignment
+    }
+    for (size_t i = 0; i < arr.size(); i++) {
+        assert(arr[i] == i + 1); // Using operator[] for access
+    }
+    cout << "All tests passed for array1d indexing.\n";
+}
+
+void test_array2d_indexing() {
+    array2d arr(3, 3);
+    for (size_t i = 0; i < arr.size(); i++) {
+        for (size_t j = 0; j < arr.size(i); j++) {
+            arr[i][j] = i * 3 + j + 1; // Using operator[] for assignment
+        }
+    }
+    for (size_t i = 0; i < arr.size(); i++) {
+        for (size_t j = 0; j < arr.size(i); j++) {
+            assert(arr[i][j] == i * 3 + j + 1); // Using operator[] for access
+        }
+    }
+    cout << "All tests passed for array2d indexing.\n";
+}
+
 int main() {
     test_scalar_mat_mult();
     test_round_vec();
-    test_array2d();
     test_array1d();
+    test_array2d();
+    test_array1d_indexing();
+    test_array2d_indexing();
     return EXIT_SUCCESS;
 }
