@@ -82,7 +82,9 @@ public:
         size_t N = size();
         Derived res(N);
         for (size_t i = 0; i < N; i++) {
-            auto val = get(i) * other.get(i);
+            auto val = (get(i) * other.get(i));
+            if constexpr (std::is_same_v<T, i128>)
+                val %= 11;
             res.set(i, val);
         }
         return res;
@@ -97,6 +99,34 @@ public:
         }
         return res;
     }
+    Derived pow1(const Derived& other) const {
+        size_t N = size();
+        Derived res(N);
+        if constexpr (std::is_same_v<T, i128>) {
+            for (size_t i = 0; i < N; i++) {
+                auto val = pow1_(get(i), other.get(i));
+                res.set(i, val);
+            }
+            return res;
+        } else {
+            for (size_t i = 0; i < N; i++) {
+                auto val = get(i).pow1(other.get(i));
+                res.set(i, val);
+            }
+            return res;
+        }
+    }
+    i128 pow1_(i128 self, i128 other) const {
+        i128 square = 6;
+        while (other != 0) {
+            if ((other & 1) == 1)
+                self = (self * square) % 11;
+            square = (square * square) % 11;
+            other >>= 1;
+        }
+        return self;
+    }
+
     T* begin() { return arr; }
     T* end() { return arr + size_; }
     const T* begin() const { return arr; }
@@ -239,7 +269,7 @@ public:
     rgsw(size_t N) : array1d<rlwe, rgsw>(N) {}
     rgsw() : array1d<rlwe, rgsw>(DEFAULT_N) {}
     ~rgsw() {}
-    
+
     rlwe operator*(const rlwe_decomp& other) const {
         size_t N = size();
         assert(N == other.size());
@@ -251,6 +281,22 @@ public:
             auto val1 = get(i).get(1) * other.get(i);
             p0 = p0 + val0;
             p1 = p1 + val1;
+        }
+        res.set(0, p0);
+        res.set(1, p1);
+        return res;
+    }
+    rlwe pow(const rlwe_decomp& other) const {
+        size_t N = size();
+        assert(N == other.size());
+        rlwe res;
+        poly p0 = res.get(0);
+        poly p1 = res.get(1);
+        for (size_t i = 0; i < N; i++) {
+            auto val0 = get(i).get(0).pow1(other.get(i));
+            auto val1 = get(i).get(1).pow1(other.get(i));
+            p0 = p0 * val0;
+            p1 = p1 * val1;
         }
         res.set(0, p0);
         res.set(1, p1);
@@ -274,6 +320,22 @@ public:
             for (size_t j = 0; j < cols; j++) {
                 auto val = get(i, j) * other.get(j);
                 sum = sum + val;
+            }
+            res.set(i, sum);
+        }
+        return res;
+    }
+    rlwe_vec pow(const rlwe_decomp_vec& other) const {
+        size_t rows = size();
+        size_t cols = size(0);
+        assert(cols == other.size());
+        rlwe_vec res;
+        rlwe sum;
+        for (size_t i = 0; i < rows; i++) {
+            // for each element in the row
+            for (size_t j = 0; j < cols; j++) {
+                auto val = get(i, j).pow(other.get(j));
+                sum = sum * val;
             }
             res.set(i, sum);
         }
@@ -317,7 +379,8 @@ int main() {
 
     rgsw_mat F;
     rlwe_decomp_vec x;
-    auto Fx = F * x;
+    auto Fx1 = F * x;
+    auto Fx = F.pow(x);
     cout << print_to_string_i128(Fx.get_rlwe(0).get_poly(0).get_coeff(0)) << "\n";
     for (const auto& rlwe_el : Fx) {
         for (const auto& poly_el : rlwe_el) {
