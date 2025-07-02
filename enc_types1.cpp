@@ -1,3 +1,14 @@
+/*
+Setup:
+rF, rG, sH
+- veri_vec * rgsw_vec
+    - scalar * rgsw
+
+Verfication:
+rx' = rFx + rGx
+su = sHu
+*/
+
 // TODO array1d/2d<double>
 #include <iostream>
 #include <cstdlib>
@@ -9,6 +20,9 @@
 
 typedef __int128_t i128;
 using namespace std;
+// global variable for modulus
+constexpr i128 GROUP_MODULUS = 11;
+constexpr i128 GENERATOR = 6;
 
 string print_to_string_i128(i128 n) {
     if (n == 0) {
@@ -84,7 +98,19 @@ public:
         for (size_t i = 0; i < N; i++) {
             auto val = (get(i) * other.get(i));
             if constexpr (std::is_same_v<T, i128>)
-                val %= 11;
+                val %= GROUP_MODULUS;
+            res.set(i, val);
+        }
+        return res;
+    }
+    // Scalar multiplication, for:
+    // rlwe_decom_vec * rgsw_mat
+    Derived operator*(const i128& scalar) const {
+        size_t N = size();
+        Derived res(N);
+        for (size_t i = 0; i < N; i++) {
+            // multiply each element by scalar
+            auto val = (get(i) * scalar) % GROUP_MODULUS;
             res.set(i, val);
         }
         return res;
@@ -117,11 +143,11 @@ public:
         }
     }
     i128 pow1_(i128 self, i128 other) const {
-        i128 square = 6;
+        i128 square = GENERATOR;
         while (other != 0) {
             if ((other & 1) == 1)
-                self = (self * square) % 11;
-            square = (square * square) % 11;
+                self = (self * square) % GROUP_MODULUS;
+            square = (square * square) % GROUP_MODULUS;
             other >>= 1;
         }
         return self;
@@ -261,6 +287,46 @@ public:
     rlwe_decomp_vec() : array1d<rlwe_decomp, rlwe_decomp_vec>(DEFAULT_N) {}
     ~rlwe_decomp_vec() {}
 };
+
+// class veri_vec_scalar : public array1d<i128, veri_vec_scalar> {
+// private:
+// public:
+//     // TODO mult for veri_vec_scalar * rgsw_mat
+//     rlwe operator*(const rlwe_decomp& other) const {
+//         size_t N = size();
+//         assert(N == other.size());
+//         rlwe res;
+//         poly p0 = res.get(0);
+//         poly p1 = res.get(1);
+//         for (size_t i = 0; i < N; i++) {
+//             auto val0 = get(i).get(0) * other.get(i);
+//             auto val1 = get(i).get(1) * other.get(i);
+//             p0 = p0 + val0;
+//             p1 = p1 + val1;
+//         }
+//         res.set(0, p0);
+//         res.set(1, p1);
+//         return res;
+//     }
+
+    // TODO pow func for g^rFx, etc
+    // rlwe_vec pow(const rgsw_mat& other) const {
+    //     size_t rows = other.size();
+    //     size_t cols = other.size(0);
+    //     assert(rows == size());
+    //     rlwe_vec res;
+    //     rlwe sum;
+    //     for (size_t j = 0; j < cols; j++) {
+    //         // for each element in the row
+    //         for (size_t i = 0; i < rows; i++) {
+    //             auto val = get(i).pow(other.get(i, j)).pow(other.get(j));
+    //             sum = sum * val;
+    //         }
+    //         res.set(i, sum);
+    //     }
+    //     return res;
+    // }
+// };
 
 class rgsw : public array1d<rlwe, rgsw> {
 private:
