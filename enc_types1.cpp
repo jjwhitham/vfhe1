@@ -121,36 +121,58 @@ public:
         Derived res(N);
         for (size_t i = 0; i < N; i++) {
             auto val = get(i) + other.get(i);
+            if constexpr (std::is_same_v<T, i128>)
+                val %= GROUP_MODULUS;
             res.set(i, val);
         }
         return res;
     }
-    Derived pow1(const Derived& other) const {
+    // raise self to other
+    Derived pow(const Derived& other) const {
         size_t N = size();
         Derived res(N);
         if constexpr (std::is_same_v<T, i128>) {
             for (size_t i = 0; i < N; i++) {
-                auto val = pow1_(get(i), other.get(i));
+                auto val = pow_(get(i), other.get(i));
                 res.set(i, val);
             }
             return res;
         } else {
             for (size_t i = 0; i < N; i++) {
-                auto val = get(i).pow1(other.get(i));
+                auto val = get(i).pow(other.get(i));
                 res.set(i, val);
             }
             return res;
         }
     }
-    i128 pow1_(i128 self, i128 other) const {
-        i128 square = GENERATOR;
-        while (other != 0) {
-            if ((other & 1) == 1)
-                self = (self * square) % GROUP_MODULUS;
-            square = (square * square) % GROUP_MODULUS;
-            other >>= 1;
+    // raise generator to self
+    Derived pow() const {
+        size_t N = size();
+        Derived res(N);
+        if constexpr (std::is_same_v<T, i128>) {
+            for (size_t i = 0; i < N; i++) {
+                auto val = pow_(GENERATOR, get(i));
+                res.set(i, val);
+            }
+            return res;
+        } else {
+            for (size_t i = 0; i < N; i++) {
+                auto val = get(i).pow();
+                res.set(i, val);
+            }
+            return res;
         }
-        return self;
+    }
+    // base case binary modular exponentiation
+    i128 pow_(i128 base, i128 power) const {
+        i128 square = base;
+        while (power != 0) {
+            if ((power & 1) == 1)
+                base = (base * square) % GROUP_MODULUS;
+            square = (square * square) % GROUP_MODULUS;
+            power >>= 1;
+        }
+        return base;
     }
 
     T* begin() { return arr; }
@@ -359,8 +381,8 @@ public:
         poly p0 = res.get(0);
         poly p1 = res.get(1);
         for (size_t i = 0; i < N; i++) {
-            auto val0 = get(i).get(0).pow1(other.get(i));
-            auto val1 = get(i).get(1).pow1(other.get(i));
+            auto val0 = get(i).get(0).pow(other.get(i));
+            auto val1 = get(i).get(1).pow(other.get(i));
             p0 = p0 * val0;
             p1 = p1 * val1;
         }
@@ -446,15 +468,28 @@ int main() {
     rgsw_mat F;
     rlwe_decomp_vec x;
     auto Fx1 = F * x;
+    // TODO Fx
+    // TODO Fx + Fx
+    // TODO rF
+    // TODO g^(rF)
+    // TODO (g^rF)^x
+    // TODO rFx
+    // TODO g^(rFx)
+    // TODO g^(rFx) * g^(rFx)
+    // TODO rx
+    // TODO g^(rx)
+    // TODO g^r
+    // TODO (g^r)^x
+    Fx1.pow();
     auto Fx = F.pow(x);
     cout << print_to_string_i128(Fx.get_rlwe(0).get_poly(0).get_coeff(0)) << "\n";
-    for (const auto& rlwe_el : Fx) {
+    for (const auto& rlwe_el : Fx1) {
         for (const auto& poly_el : rlwe_el) {
             for (const auto& coeff : poly_el)
                 cout << print_to_string_i128(coeff) << ", ";
             cout << "\n";
         }
-        cout << "\n\n\n\n";
+        cout << "\n";
     }
     return 0;
 }
