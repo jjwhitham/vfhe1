@@ -8,10 +8,10 @@
 | Verify | \(su_k, r_G y_k \\ g^{s u_k}, g^{r_G y_k}\) | veri_vec_scalar * rlwe_vec, rgsw_vec * rlwe_vec \(\\\)  rlwe_vec.pow()
 
 ##### TODO
-- [ ] simplify pow1()
+- [x] simplify pow1() NOTE can't
 - [ ] operator+: confirm this doesn't accumulate
 - [ ] should accumulate:
-    - [ ] veri_vec_scalar * rgsw_mat -> rgsw_vec
+    - [x] veri_vec_scalar * rgsw_mat -> rgsw_vec
 
     - [ ] veri_vec_scalar * rlwe_vec -> rlwe
     - [ ] veri_vec_scalar.pow(rlwe_vec)->rlwe
@@ -19,7 +19,7 @@
     - [ ] rgsw_vec * rlwe_decomp_vec -> rlwe
     - [ ] rgsw_vec.pow(rlwe_decomp_vec)->rlwe (needs group mult)
 
-    - [ ] rgsw_mat * rlwe_decomp_vec -> rlwe_vec
+    - [x] rgsw_mat * rlwe_decomp_vec -> rlwe_vec
 - [ ] this.pow()
 - [ ] rgsw_vec
 - [ ] this.pow() should take underying poly elements and do \(g^{element}\)

@@ -17,6 +17,7 @@ su = sHu
 #include <cmath>
 #include <climits>
 #include <algorithm>
+#include <type_traits>
 
 typedef __int128_t i128;
 using namespace std;
@@ -110,7 +111,9 @@ public:
         Derived res(N);
         for (size_t i = 0; i < N; i++) {
             // multiply each element by scalar
-            auto val = (get(i) * scalar) % GROUP_MODULUS;
+            auto val = get(i) * scalar;
+            if constexpr (std::is_same_v<T, i128>)
+                val %= GROUP_MODULUS;
             res.set(i, val);
         }
         return res;
@@ -310,45 +313,6 @@ public:
     ~rlwe_decomp_vec() {}
 };
 
-// class veri_vec_scalar : public array1d<i128, veri_vec_scalar> {
-// private:
-// public:
-//     // TODO mult for veri_vec_scalar * rgsw_mat
-//     rlwe operator*(const rlwe_decomp& other) const {
-//         size_t N = size();
-//         assert(N == other.size());
-//         rlwe res;
-//         poly p0 = res.get(0);
-//         poly p1 = res.get(1);
-//         for (size_t i = 0; i < N; i++) {
-//             auto val0 = get(i).get(0) * other.get(i);
-//             auto val1 = get(i).get(1) * other.get(i);
-//             p0 = p0 + val0;
-//             p1 = p1 + val1;
-//         }
-//         res.set(0, p0);
-//         res.set(1, p1);
-//         return res;
-//     }
-
-    // TODO pow func for g^rFx, etc
-    // rlwe_vec pow(const rgsw_mat& other) const {
-    //     size_t rows = other.size();
-    //     size_t cols = other.size(0);
-    //     assert(rows == size());
-    //     rlwe_vec res;
-    //     rlwe sum;
-    //     for (size_t j = 0; j < cols; j++) {
-    //         // for each element in the row
-    //         for (size_t i = 0; i < rows; i++) {
-    //             auto val = get(i).pow(other.get(i, j)).pow(other.get(j));
-    //             sum = sum * val;
-    //         }
-    //         res.set(i, sum);
-    //     }
-    //     return res;
-    // }
-// };
 
 class rgsw : public array1d<rlwe, rgsw> {
 private:
@@ -358,6 +322,9 @@ public:
     rgsw() : array1d<rlwe, rgsw>(DEFAULT_N) {}
     ~rgsw() {}
 
+    // NOTE required to expose base class member funcs.
+    // Apparently overloads hide them...
+    using array1d<rlwe, rgsw>::operator*;
     rlwe operator*(const rlwe_decomp& other) const {
         size_t N = size();
         assert(N == other.size());
@@ -392,26 +359,44 @@ public:
     }
 };
 
+class rgsw_vec : public array1d<rgsw, rgsw_vec> {
+private:
+public:
+    static constexpr size_t DEFAULT_N = 4;
+    rgsw_vec(size_t N) : array1d<rgsw, rgsw_vec>(N) {}
+    rgsw_vec() : array1d<rgsw, rgsw_vec>(DEFAULT_N) {}
+    ~rgsw_vec() {}
+    // TODO - [ ] rgsw_vec * rlwe_decomp_vec -> rlwe
+    // TODO - [ ] rgsw_vec.pow(rlwe_decomp_vec)->rlwe (needs group mult)
+};
+
+template<typename T, typename T1, typename U>
+U vec_mat_mult(const T& self, const T1& other) {
+    size_t rows = self.size();
+    size_t cols = self.size(0);
+    assert(cols == other.size());
+    U res;
+    // NOTE get type of array element. Remove reference from type
+    using U_element = std::remove_reference_t<decltype(res.get(0))>;
+    U_element sum;
+    for (size_t i = 0; i < rows; i++) {
+        // for each element in the row
+        for (size_t j = 0; j < cols; j++) {
+            auto val = self.get(i, j).operator*(other.get(j));
+            sum = sum + val;
+        }
+        res.set(i, sum);
+    }
+    return res;
+}
+
 class rgsw_mat : public array2d<rgsw> {
 private:
 public:
     rgsw_mat() : array2d<rgsw>(3, 3) {}
     ~rgsw_mat() {}
     rlwe_vec operator*(const rlwe_decomp_vec& other) const {
-        size_t rows = size();
-        size_t cols = size(0);
-        assert(cols == other.size());
-        rlwe_vec res;
-        rlwe sum;
-        for (size_t i = 0; i < rows; i++) {
-            // for each element in the row
-            for (size_t j = 0; j < cols; j++) {
-                auto val = get(i, j) * other.get(j);
-                sum = sum + val;
-            }
-            res.set(i, sum);
-        }
-        return res;
+        return vec_mat_mult<rgsw_mat, rlwe_decomp_vec, rlwe_vec>(*this, other);
     }
     rlwe_vec pow(const rlwe_decomp_vec& other) const {
         size_t rows = size();
@@ -429,6 +414,50 @@ public:
         }
         return res;
     }
+};
+
+
+class veri_vec_scalar : public array1d<i128, veri_vec_scalar> {
+private:
+public:
+    // TODO mult for veri_vec_scalar * rgsw_mat
+    // TODO pow func for g^rFx, etc
+    rgsw_vec operator*(const rgsw_mat& other) const {
+        size_t rows = other.size();
+        size_t cols = other.size(0);
+        assert(rows == size());
+        rgsw_vec res;
+        rgsw sum;
+        for (size_t j = 0; j < cols; j++) {
+            for (size_t i = 0; i < rows; i++) {
+            // for each element in the row
+                // scalar mult member function from rgsw_vec
+                auto val = other.get(i, j) * get(i);
+                sum = sum + val;
+            }
+            res.set(j, sum);
+        }
+        return res;
+    }
+    // TODO - [ ] veri_vec_scalar * rlwe_vec -> rlwe
+    // TODO - [ ] veri_vec_scalar.pow(rlwe_vec)->rlwe
+
+    // rlwe_vec pow(const rlwe_decomp_vec& other) const {
+    //     size_t rows = size();
+    //     size_t cols = size(0);
+    //     assert(cols == other.size());
+    //     rlwe_vec res;
+    //     rlwe sum;
+    //     for (size_t i = 0; i < rows; i++) {
+    //         // for each element in the row
+    //         for (size_t j = 0; j < cols; j++) {
+    //             auto val = get(i, j).pow(other.get(j));
+    //             sum = sum * val;
+    //         }
+    //         res.set(i, sum);
+    //     }
+    //     return res;
+    // }
 };
 
 int main() {
