@@ -22,8 +22,9 @@ su = sHu
 typedef __int128_t i128;
 using namespace std;
 // global variable for modulus
+constexpr i128 FIELD_MODULUS = 23;
 constexpr i128 GROUP_MODULUS = 11;
-constexpr i128 GENERATOR = 6;
+constexpr i128 GENERATOR = 4;
 
 string print_to_string_i128(i128 n) {
     if (n == 0) {
@@ -99,7 +100,7 @@ public:
         for (size_t i = 0; i < N; i++) {
             auto val = (get(i) * other.get(i));
             if constexpr (std::is_same_v<T, i128>)
-                val %= GROUP_MODULUS;
+                val %= FIELD_MODULUS;
             res.set(i, val);
         }
         return res;
@@ -113,7 +114,7 @@ public:
             // multiply each element by scalar
             auto val = get(i) * scalar;
             if constexpr (std::is_same_v<T, i128>)
-                val %= GROUP_MODULUS;
+                val %= FIELD_MODULUS;
             res.set(i, val);
         }
         return res;
@@ -125,7 +126,7 @@ public:
         for (size_t i = 0; i < N; i++) {
             auto val = get(i) + other.get(i);
             if constexpr (std::is_same_v<T, i128>)
-                val %= GROUP_MODULUS;
+                val %= FIELD_MODULUS;
             res.set(i, val);
         }
         return res;
@@ -143,6 +144,24 @@ public:
         } else {
             for (size_t i = 0; i < N; i++) {
                 auto val = get(i).pow(other.get(i));
+                res.set(i, val);
+            }
+            return res;
+        }
+    }
+    // raise scalar to self
+    Derived pow(const i128 scalar) const {
+        size_t N = size();
+        Derived res(N);
+        if constexpr (std::is_same_v<T, i128>) {
+            for (size_t i = 0; i < N; i++) {
+                auto val = pow_(scalar, get(i));
+                res.set(i, val);
+            }
+            return res;
+        } else {
+            for (size_t i = 0; i < N; i++) {
+                auto val = get(i).pow(scalar);
                 res.set(i, val);
             }
             return res;
@@ -168,14 +187,18 @@ public:
     }
     // base case binary modular exponentiation
     i128 pow_(i128 base, i128 power) const {
-        i128 square = base;
-        while (power != 0) {
-            if ((power & 1) == 1)
-                base = (base * square) % GROUP_MODULUS;
-            square = (square * square) % GROUP_MODULUS;
+        power %= GROUP_MODULUS;
+        base %= FIELD_MODULUS;
+        i128 result = 1;
+        i128 one = 1;
+        i128 two = 2;
+        while (power > 0) {
+            if ((power % two) == one)
+                result = (result * base) % FIELD_MODULUS;
             power >>= 1;
+            base = (base * base) % FIELD_MODULUS;
         }
-        return base;
+        return result;
     }
 
     T* begin() { return arr; }
@@ -287,7 +310,7 @@ public:
 class rlwe_vec : public array1d<rlwe, rlwe_vec> {
 private:
 public:
-    static constexpr size_t DEFAULT_N = 4;
+    static constexpr size_t DEFAULT_N = 3;
     rlwe_vec(size_t N) : array1d<rlwe, rlwe_vec>(N) {}
     rlwe_vec() : array1d<rlwe, rlwe_vec>(DEFAULT_N) {}
     auto& get_rlwe(size_t n) const {
@@ -307,7 +330,7 @@ public:
 class rlwe_decomp_vec : public array1d<rlwe_decomp, rlwe_decomp_vec> {
 private:
 public:
-    static constexpr size_t DEFAULT_N = 3;
+    static constexpr size_t DEFAULT_N = 4;
     rlwe_decomp_vec(size_t N) : array1d<rlwe_decomp, rlwe_decomp_vec>(N) {}
     rlwe_decomp_vec() : array1d<rlwe_decomp, rlwe_decomp_vec>(DEFAULT_N) {}
     ~rlwe_decomp_vec() {}
@@ -341,6 +364,7 @@ public:
         res.set(1, p1);
         return res;
     }
+    using array1d<rlwe, rgsw>::pow;
     rlwe pow(const rlwe_decomp& other) const {
         size_t N = size();
         assert(N == other.size());
@@ -367,7 +391,29 @@ public:
     rgsw_vec() : array1d<rgsw, rgsw_vec>(DEFAULT_N) {}
     ~rgsw_vec() {}
     // TODO - [ ] rgsw_vec * rlwe_decomp_vec -> rlwe
+    // using array1d<rgsw, rgsw_vec>::operator*;
+    using array1d<rgsw, rgsw_vec>::pow;
+    rlwe operator*(const rlwe_decomp_vec& other) const {
+        size_t n = other.size();
+        assert(size() == n);
+        rlwe sum;
+        for (size_t i = 0; i < n; i++) {
+            auto val = get(i) * other.get(i);
+            sum = sum + val;
+        }
+        return sum;
+    }
     // TODO - [ ] rgsw_vec.pow(rlwe_decomp_vec)->rlwe (needs group mult)
+    rlwe pow(const rlwe_decomp_vec& other) const {
+        size_t n = other.size();
+        assert(size() == n);
+        rlwe sum;
+        for (size_t i = 0; i < n; i++) {
+            auto val = get(i).pow(other.get(i));
+            sum = sum * val;
+        }
+        return sum;
+    }
 };
 
 template<typename T, typename T1, typename U>
@@ -393,7 +439,7 @@ U vec_mat_mult(const T& self, const T1& other) {
 class rgsw_mat : public array2d<rgsw> {
 private:
 public:
-    rgsw_mat() : array2d<rgsw>(3, 3) {}
+    rgsw_mat() : array2d<rgsw>(3, 4) {}
     ~rgsw_mat() {}
     rlwe_vec operator*(const rlwe_decomp_vec& other) const {
         return vec_mat_mult<rgsw_mat, rlwe_decomp_vec, rlwe_vec>(*this, other);
@@ -420,6 +466,10 @@ public:
 class veri_vec_scalar : public array1d<i128, veri_vec_scalar> {
 private:
 public:
+    static constexpr size_t DEFAULT_N = 3;
+    veri_vec_scalar(size_t N) : array1d<i128, veri_vec_scalar>(N) {}
+    veri_vec_scalar() : array1d<i128, veri_vec_scalar>(DEFAULT_N) {}
+    ~veri_vec_scalar() {}
     // TODO mult for veri_vec_scalar * rgsw_mat
     // TODO pow func for g^rFx, etc
     rgsw_vec operator*(const rgsw_mat& other) const {
@@ -440,7 +490,28 @@ public:
         return res;
     }
     // TODO - [ ] veri_vec_scalar * rlwe_vec -> rlwe
+    rlwe operator*(const rlwe_vec& other) const {
+        size_t n = other.size();
+        assert(size() == n);
+        rlwe sum;
+        for (size_t i = 0; i < n; i++) {
+            auto val = other.get(i) * get(i);
+            sum = sum + val;
+        }
+        return sum;
+    }
     // TODO - [ ] veri_vec_scalar.pow(rlwe_vec)->rlwe
+    using array1d<i128, veri_vec_scalar>::pow;
+    rlwe pow(const rlwe_vec& other) const {
+        size_t n = other.size();
+        assert(size() == n);
+        rlwe product;
+        for (size_t i = 0; i < n; i++) {
+            auto val = other.get(i).pow(get(i));
+            product = product * val;
+        }
+        return product;
+    }
 
     // rlwe_vec pow(const rlwe_decomp_vec& other) const {
     //     size_t rows = size();
@@ -461,63 +532,94 @@ public:
 };
 
 int main() {
-    rlwe r;
-    r.get(0).set(0, 21);
-    r.get(1).set(0, 2);
+    // rlwe r;
+    // r.get(0).set(0, 21);
+    // r.get(1).set(0, 2);
 
-    poly p = r.get(0) * r.get(1);
-    // for (int i = 0; i < 4; i++) {
-    //     cout << print_to_string_i128(p.get(i));
-    //     cout << ", ";
+    // poly p = r.get(0) * r.get(1);
+    // // for (int i = 0; i < 4; i++) {
+    // //     cout << print_to_string_i128(p.get(i));
+    // //     cout << ", ";
+    // // }
+    // // cout << "\n";
+
+
+    // rlwe_vec rv;
+    // poly p1 = rv.get(0).get(0);
+    // p1.set(0, 21);
+    // poly p2 = rv.get(0).get(1);
+    // p2.set(0, 2);
+    // poly p3 = p1 * p2;
+    // // for (int i = 0; i < 4; i++) {
+    // //     cout << print_to_string_i128(p3.get(i));
+    // //     cout << ", ";
+    // // }
+    // // cout << "\n";
+    // // for (int i = 0; i < 4; i++) {
+    // //     cout << print_to_string_i128(p3.get(i));
+    // //     cout << ", ";
+    // // }
+    // // cout << "\n";
+
+    // rv.get(1).set(0, p3);
+    // rlwe_vec r1;
+    // rlwe_vec r2;
+    // rlwe_vec r3 = r1 * r2;
+
+    // rgsw_mat F;
+    // rlwe_decomp_vec x;
+    // auto Fx1 = F * x;
+    // Fx1.pow();
+    // auto Fx = F.pow(x);
+    // cout << print_to_string_i128(Fx.get_rlwe(0).get_poly(0).get_coeff(0)) << "\n";
+    // for (const auto& rlwe_el : Fx1) {
+    //     for (const auto& poly_el : rlwe_el) {
+    //         for (const auto& coeff : poly_el)
+    //             cout << print_to_string_i128(coeff) << ", ";
+    //         cout << "\n";
+    //     }
+    //     cout << "\n";
     // }
-    // cout << "\n";
 
-
-    rlwe_vec rv;
-    poly p1 = rv.get(0).get(0);
-    p1.set(0, 21);
-    poly p2 = rv.get(0).get(1);
-    p2.set(0, 2);
-    poly p3 = p1 * p2;
-    // for (int i = 0; i < 4; i++) {
-    //     cout << print_to_string_i128(p3.get(i));
-    //     cout << ", ";
-    // }
-    // cout << "\n";
-    // for (int i = 0; i < 4; i++) {
-    //     cout << print_to_string_i128(p3.get(i));
-    //     cout << ", ";
-    // }
-    // cout << "\n";
-    rv.get(1).set(0, p3);
-    rlwe_vec r1;
-    rlwe_vec r2;
-    rlwe_vec r3 = r1 * r2;
-
+    // TODO Fx
     rgsw_mat F;
     rlwe_decomp_vec x;
-    auto Fx1 = F * x;
-    // TODO Fx
+    rlwe_vec Fx = F * x;
     // TODO Fx + Fx
+    // Fx = Fx + Fx;
     // TODO rF
+    veri_vec_scalar r;
+    rgsw_vec rF = r * F;
     // TODO g^(rF)
+    rgsw_vec grF = rF.pow();
     // TODO (g^rF)^x
+    rlwe grFx = grF.pow(x);
     // TODO rFx
+    rlwe rFx = rF * x;
     // TODO g^(rFx)
+    rlwe grFx2 = rFx.pow();
     // TODO g^(rFx) * g^(rFx)
-    // TODO rx
-    // TODO g^(rx)
+    // rlwe grFx_prod = grFx * grFx2;
     // TODO g^r
-    // TODO (g^r)^x
-    Fx1.pow();
-    auto Fx = F.pow(x);
-    cout << print_to_string_i128(Fx.get_rlwe(0).get_poly(0).get_coeff(0)) << "\n";
-    for (const auto& rlwe_el : Fx1) {
-        for (const auto& poly_el : rlwe_el) {
-            for (const auto& coeff : poly_el)
-                cout << print_to_string_i128(coeff) << ", ";
-            cout << "\n";
-        }
+    veri_vec_scalar gr = r.pow();
+    // TODO (g^r)^(Fx)
+    rlwe grFx3 = gr.pow(Fx);
+    cout << "grFx:\n";
+    for (const auto& poly_el : grFx) {
+        for (const auto& coeff : poly_el)
+            cout << print_to_string_i128(coeff) << ", ";
+        cout << "\n";
+    }
+    cout << "grFx2:\n";
+    for (const auto& poly_el : grFx2) {
+        for (const auto& coeff : poly_el)
+            cout << print_to_string_i128(coeff) << ", ";
+        cout << "\n";
+    }
+    cout << "grFx3:\n";
+    for (const auto& poly_el : grFx3) {
+        for (const auto& coeff : poly_el)
+            cout << print_to_string_i128(coeff) << ", ";
         cout << "\n";
     }
     return 0;

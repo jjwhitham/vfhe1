@@ -13,18 +13,15 @@
 - [ ] should accumulate:
     - [x] veri_vec_scalar * rgsw_mat -> rgsw_vec
 
-    - [ ] veri_vec_scalar * rlwe_vec -> rlwe
-    - [ ] veri_vec_scalar.pow(rlwe_vec)->rlwe
+    - [x] veri_vec_scalar * rlwe_vec -> rlwe
+    - [x] veri_vec_scalar.pow(rlwe_vec)->rlwe
 
-    - [ ] rgsw_vec * rlwe_decomp_vec -> rlwe
-    - [ ] rgsw_vec.pow(rlwe_decomp_vec)->rlwe (needs group mult)
+    - [x] rgsw_vec * rlwe_decomp_vec -> rlwe
+    - [x] rgsw_vec.pow(rlwe_decomp_vec)->rlwe (needs group mult)
 
     - [x] rgsw_mat * rlwe_decomp_vec -> rlwe_vec
-- [ ] this.pow()
 - [ ] rgsw_vec
-- [ ] this.pow() should take underying poly elements and do \(g^{element}\)
-- [ ] rgsw_vec.pow(rlwe_decomp_vec)
-- [ ] rgsw_vec * (rlwe_decomp_vec)
+- [x] this.pow() should take underying poly elements and do \(g^{element}\)
 - [ ] group multiplication
 - [ ] standard mult requires (mod q)
 
