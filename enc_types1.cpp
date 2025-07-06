@@ -659,12 +659,7 @@ public:
         size_t n_polys = other.get(0).size();
         size_t n_coeffs = other.get(0).get(0).size();
         rlwe product(n_polys, n_coeffs);
-        // Initialize product to multiplicative identity (all polys set to 1)
-        for (auto& p : product) {
-            for (size_t k = 0; k < p.size(); ++k) {
-                p.set(k, 1);
-            }
-        }
+        product.set_coeffs_to_one();
         for (size_t i = 0; i < n; i++) {
             auto val = other.get(i).pow(get(i));
             product = product.group_mult(val);
