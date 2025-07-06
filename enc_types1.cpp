@@ -469,18 +469,27 @@ public:
         size_t n_coeffs = get_n_coeffs();
         size_t N = size();
         assert(N == other.size());
-        rlwe res(n_polys, n_coeffs);
-        res.set_coeffs_to_one();
-        poly& p0 = res.get(0);
-        poly& p1 = res.get(1);
+        rlwe_vec res_vec(N, n_polys, n_coeffs);
+        #pragma omp parallel for num_threads(2)
         for (size_t i = 0; i < N; i++) {
+            // int thread_id = omp_get_thread_num();
+            // #pragma omp critical
+            // {
+            //     std::cout << "pow1: hi from thread #" << thread_id << std::endl;
+            // }
+
+            rlwe& res = res_vec.get(i);
             auto val0 = get(i).get(0).pow(other.get(i));
             auto val1 = get(i).get(1).pow(other.get(i));
-            p0 = p0.group_mult(val0);
-            p1 = p1.group_mult(val1);
+            res.set(0, val0);
+            res.set(1, val1);
         }
-        res.set(0, p0);
-        res.set(1, p1);
+
+        rlwe res(n_polys, n_coeffs);
+        res.set_coeffs_to_one();
+        for (auto& rlwe_ : res_vec) {
+            res = res.group_mult(rlwe_);
+        }
         return res;
     }
 };
@@ -530,8 +539,13 @@ public:
         res.set_coeffs_to_one();
         // size_t n_threads_max = omp_get_max_threads();
         // std::cout << "Max threads: " << n_threads_max << std::endl;
-        #pragma omp parallel for num_threads(omp_get_max_threads())
+        #pragma omp parallel for num_threads(12)
         for (size_t i = 0; i < n; i++) {
+            // int thread_id = omp_get_thread_num();
+            // #pragma omp critical
+            // {
+            //     std::cout << "pow0: hi from thread #" << thread_id << std::endl;
+            // }
             auto val = get(i).pow(other.get(i));
             res_vec.set(i, val);
         }
@@ -1015,8 +1029,13 @@ void test_full() {
 
 int main() {
     // test();
+    omp_set_nested(1);
+    // omp_set_num_threads(1);
+    std::cout << "omp num threads: " << omp_get_max_threads() << std::endl;
+    std::cout << " omp num threads: " << omp_get_num_threads() << std::endl;
     test_full();
     // test_rlwe_decomp();
     // test_rlwe_decomp_vec();
     return 0;
 }
+
