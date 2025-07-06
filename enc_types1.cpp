@@ -30,11 +30,16 @@ su = sHu
 #include <climits>
 #include <algorithm>
 #include <type_traits>
+#include <chrono>
+#include <random>
 
 typedef __int128_t i128;
-constexpr i128 GROUP_MODULUS = 23;
-constexpr i128 FIELD_MODULUS = 11;
-constexpr i128 GENERATOR = 4;
+// constexpr i128 GROUP_MODULUS = 23;
+// constexpr i128 FIELD_MODULUS = 11;
+// constexpr i128 GENERATOR = 4;
+constexpr i128 GROUP_MODULUS = 540431955285196831;
+constexpr i128 FIELD_MODULUS = 18014398509506561;
+constexpr i128 GENERATOR = 1073741824;
 
 std::string print_to_string_i128(i128 n) {
     if (n == 0) {
@@ -402,6 +407,7 @@ public:
         size_t n_rlwe_decomps, size_t n_polys, size_t n_coeffs
     ) : array1d<rlwe_decomp, rlwe_decomp_vec>(n_rlwe_decomps) {
         for (size_t i = 0; i < n_rlwe_decomps; i++)
+            // FIXME n_polys should match n_rlwes for rgsw. rethink terminology
             set(i, rlwe_decomp(n_polys, n_coeffs));
     }
     ~rlwe_decomp_vec() {}
@@ -463,13 +469,9 @@ public:
         size_t N = size();
         assert(N == other.size());
         rlwe res(n_polys, n_coeffs);
-        // Initialize p0 and p1 to multiplicative identity (all coefficients 1)
+        res.set_coeffs_to_one();
         poly& p0 = res.get(0);
         poly& p1 = res.get(1);
-        for (size_t k = 0; k < res.size(); ++k) {
-            p0.set(k, 1);
-            p1.set(k, 1);
-        }
         for (size_t i = 0; i < N; i++) {
             auto val0 = get(i).get(0).pow(other.get(i));
             auto val1 = get(i).get(1).pow(other.get(i));
@@ -491,7 +493,7 @@ public:
     rgsw_vec(
         size_t n_rgsws, size_t n_rlwes, size_t n_polys, size_t n_coeffs
     ) : array1d<rgsw, rgsw_vec>(n_rgsws) {
-        for (size_t i = 0; i < n_rlwes; i++)
+        for (size_t i = 0; i < n_rgsws; i++)
             set(i, rgsw(n_rlwes, n_polys, n_coeffs));
     }
     ~rgsw_vec() {}
@@ -523,13 +525,7 @@ public:
         size_t n_polys = get_n_polys();
         size_t n_coeffs = get_n_coeffs();
         rlwe sum(n_polys, n_coeffs);
-        // Initialize sum to multiplicative identity (all polys set to 1)
-        poly& p0 = sum.get(0);
-        poly& p1 = sum.get(1);
-        for (size_t k = 0; k < sum.size(); ++k) {
-            p0.set(k, 1);
-            p1.set(k, 1);
-        }
+        sum.set_coeffs_to_one();
         for (size_t i = 0; i < n; i++) {
             auto val = get(i).pow(other.get(i));
             sum = sum.group_mult(val);
@@ -585,10 +581,7 @@ public:
         rlwe_vec res(rows, n_polys, n_coeffs);
         for (size_t i = 0; i < rows; i++) {
             rlwe sum(n_polys, n_coeffs);
-            for (auto& p : sum) {
-                for (size_t k = 0; k < p.size(); ++k)
-                    p.set(k, 1); // Initialize coefficients to 1
-            }
+            sum.set_coeffs_to_one();
             for (size_t j = 0; j < cols; j++) {
                 auto val = get(i, j).pow(other.get(j));
                 sum = sum.group_mult(val);
@@ -673,7 +666,11 @@ public:
 };
 
 void init(rgsw_mat& F, rlwe_decomp_vec& x, veri_vec_scalar& r) {
-    i128 counter = 0;
+    std::random_device rd;  // Non-deterministic seed
+    std::mt19937 gen(rd()); // Mersenne Twister engine
+    std::uniform_int_distribution<i128> distrib(0, FIELD_MODULUS - 1); // Range: 0 to 100
+    i128 random_number = distrib(gen);
+    i128 counter = random_number;
     for (size_t i = 0; i < F.get_rows(); ++i) {
         for (size_t j = 0; j < F.get_cols(); ++j) {
             rgsw& rg = F.get_rgsw(i, j);
@@ -686,7 +683,7 @@ void init(rgsw_mat& F, rlwe_decomp_vec& x, veri_vec_scalar& r) {
             }
         }
     }
-    counter = 0;
+    counter = distrib(gen);
     for (size_t i = 0; i < x.size(); ++i) {
         rlwe_decomp& rd = x.get(i);
         for (size_t j = 0; j < rd.size(); ++j) {
@@ -696,7 +693,7 @@ void init(rgsw_mat& F, rlwe_decomp_vec& x, veri_vec_scalar& r) {
             }
         }
     }
-    counter = 0;
+    counter = distrib(gen);
     for (size_t i = 0; i < r.size(); ++i) {
         r.set(i, counter++ % FIELD_MODULUS);
     }
@@ -919,24 +916,26 @@ void test_rlwe_decomp_vec() {
 }
 
 void test_full() {
-    size_t n_rlwes = 2;
-    size_t n_polys = 2;
-    size_t n_coeffs = 2;
-    size_t rows = 2;
-    size_t cols = 2;
+    size_t n_rlwes = 7;
+    size_t n_polys = 2; // XXX must be 2
+    size_t n_coeffs = 4096;
+    size_t rows = 5;
+    size_t cols = 5;
     rgsw_mat F(rows, cols, n_rlwes, n_polys, n_coeffs);
-    rlwe_decomp_vec x(n_rlwes, n_polys, n_coeffs);
-    veri_vec_scalar r(n_rlwes);
+    rlwe_decomp_vec x(cols, n_rlwes, n_coeffs);
+    veri_vec_scalar r(rows);
     init(F, x, r);
-    for (size_t i = 0; i < F.get_rows(); i++) {
-        for (size_t j = 0; j < F.get_cols(); j++) {
-            F.get(i, j).print();
-            std::cout << "\n";
-        }
-    }
-    x.print();
-    r.print();
-    std::cout << "\n";
+    // for (size_t i = 0; i < F.get_rows(); i++) {
+    //     for (size_t j = 0; j < F.get_cols(); j++) {
+    //         F.get(i, j).print();
+    //         std::cout << "\n";
+    //     }
+    // }
+    // x.print();
+    // r.print();
+    // std::cout << "\n";
+
+    auto start = std::chrono::high_resolution_clock::now();
     // Compute Fx = F * x
     rlwe_vec Fx = F * x;
 
@@ -958,7 +957,7 @@ void test_full() {
     // Compute grFx2 = g^{rFx}
     rlwe grFx2 = rFx.pow();
 
-    init(F, x, r); // reinitialize F, x, r
+    // init(F, x, r); // reinitialize F, x, r
 
     // Compute gr = g^r (elementwise)
     veri_vec_scalar gr = r.pow();
@@ -966,41 +965,56 @@ void test_full() {
     // Compute grFx3 = (g^r)^{Fx} = g^{r * Fx}
     rlwe grFx3 = gr.pow(Fx);
 
-    std::cout << "grFx:\n";
-    for (const auto& poly_el : grFx) {
-        for (const auto& coeff : poly_el)
-            std::cout << print_to_string_i128(coeff) << ", ";
-        std::cout << "\n";
-    }
-    std::cout << "grFx2:\n";
-    for (const auto& poly_el : grFx2) {
-        for (const auto& coeff : poly_el)
-            std::cout << print_to_string_i128(coeff) << ", ";
-        std::cout << "\n";
-    }
-    std::cout << "grFx3:\n";
-    for (const auto& poly_el : grFx3) {
-        for (const auto& coeff : poly_el)
-            std::cout << print_to_string_i128(coeff) << ", ";
-        std::cout << "\n";
-    }
-    std::cout << "r:\n";
-    r.print();
-    std::cout << "F:\n";
-    for (size_t i = 0; i < F.get_rows(); i++) {
-        for (size_t j = 0; j < F.get_cols(); j++) {
-            F.get(i, j).print();
-            std::cout << "\n";
+    // std::cout << "grFx:\n";
+    // for (const auto& poly_el : grFx) {
+    //     for (const auto& coeff : poly_el)
+    //         std::cout << print_to_string_i128(coeff) << ", ";
+    //     std::cout << "\n";
+    // }
+    // std::cout << "grFx2:\n";
+    // for (const auto& poly_el : grFx2) {
+    //     for (const auto& coeff : poly_el)
+    //         std::cout << print_to_string_i128(coeff) << ", ";
+    //     std::cout << "\n";
+    // }
+    // std::cout << "grFx3:\n";
+    // for (const auto& poly_el : grFx3) {
+    //     for (const auto& coeff : poly_el)
+    //         std::cout << print_to_string_i128(coeff) << ", ";
+    //     std::cout << "\n";
+    // }
+    // // std::cout << "r:\n";
+    // // r.print();
+    // // std::cout << "F:\n";
+    // // for (size_t i = 0; i < F.get_rows(); i++) {
+    // //     for (size_t j = 0; j < F.get_cols(); j++) {
+    // //         F.get(i, j).print();
+    // //         std::cout << "\n";
+    // //     }
+    // // }
+    // // std::cout << "rF:\n";
+    // // rF.print();
+
+    // assert coeffs are equal for grFx, grFx2, grFx3
+    for (size_t i = 0; i < grFx.size(); i++) {
+        poly& p1 = grFx.get_poly(i);
+        poly& p2 = grFx2.get_poly(i);
+        poly& p3 = grFx3.get_poly(i);
+        for (size_t j = 0; j < p1.size(); j++) {
+            assert(p1.get(j) == p2.get(j));
+            assert(p1.get(j) == p3.get(j));
         }
     }
-    std::cout << "rF:\n";
-    rF.print();
+
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::nano> elapsed = end - start;
+    std::cout << "Elapsed time: " << elapsed.count() << " ns\n";
 }
 
 int main() {
     // test();
-    // test_full();
+    test_full();
     // test_rlwe_decomp();
-    test_rlwe_decomp_vec();
+    // test_rlwe_decomp_vec();
     return 0;
 }
