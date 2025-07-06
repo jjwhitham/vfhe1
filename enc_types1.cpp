@@ -1,5 +1,15 @@
-// TODO how will objects be instantiated setting sizes cascading?
-    // perhaps Derived d(size, size_base)
+// TODO write more tests
+// TODO rgsw code
+    // TODO PRNG
+    // TODO decomposition
+    // TODO enc/dec
+// TODO control code
+// TODO verification code
+// TODO proof code (linear/dynamic checks)
+// TODO NTT code
+// TODO homomorphic hash variant
+// TODO parallellise
+// TODO cyclic group code
 // TODO
 /*
 Setup:
@@ -22,13 +32,9 @@ su = sHu
 #include <type_traits>
 
 typedef __int128_t i128;
-// global variable for modulus
-// constexpr i128 FIELD_MODULUS = 23;
-// constexpr i128 GROUP_MODULUS = 11;
-// constexpr i128 GENERATOR = 4;
+constexpr i128 GROUP_MODULUS = 23;
 constexpr i128 FIELD_MODULUS = 11;
-constexpr i128 GROUP_MODULUS = 10;
-constexpr i128 GENERATOR = 2;
+constexpr i128 GENERATOR = 4;
 
 std::string print_to_string_i128(i128 n) {
     if (n == 0) {
@@ -121,6 +127,32 @@ public:
         return res;
     }
     // when derived class is used, this is called recursively
+    Derived group_mult(const Derived& other) const {
+        size_t N = size();
+        Derived res(N);
+        for (size_t i = 0; i < N; i++) {
+            auto val = (get(i) * other.get(i));
+            if constexpr (std::is_same_v<T, i128>)
+                val %= GROUP_MODULUS;
+            res.set(i, val);
+        }
+        return res;
+    }
+    // Scalar multiplication, for:
+    // rlwe_decom_vec * rgsw_mat
+    Derived group_mult(const i128& scalar) const {
+        size_t N = size();
+        Derived res(N);
+        for (size_t i = 0; i < N; i++) {
+            // multiply each element by scalar
+            auto val = get(i) * scalar;
+            if constexpr (std::is_same_v<T, i128>)
+                val %= GROUP_MODULUS;
+            res.set(i, val);
+        }
+        return res;
+    }
+    // when derived class is used, this is called recursively
     Derived operator+(const Derived& other) const {
         size_t N = size();
         Derived res(N);
@@ -188,16 +220,16 @@ public:
     }
     // base case binary modular exponentiation
     i128 pow_(i128 base, i128 power) const {
-        power %= GROUP_MODULUS;
-        base %= FIELD_MODULUS;
+        power %= FIELD_MODULUS;
+        base %= GROUP_MODULUS;
         i128 result = 1;
         i128 one = 1;
         i128 two = 2;
         while (power > 0) {
             if ((power % two) == one)
-                result = (result * base) % FIELD_MODULUS;
+                result = (result * base) % GROUP_MODULUS;
             power >>= 1;
-            base = (base * base) % FIELD_MODULUS;
+            base = (base * base) % GROUP_MODULUS;
         }
         return result;
     }
@@ -459,8 +491,8 @@ public:
         for (size_t i = 0; i < N; i++) {
             auto val0 = get(i).get(0).pow(other.get(i));
             auto val1 = get(i).get(1).pow(other.get(i));
-            p0 = p0 * val0;
-            p1 = p1 * val1;
+            p0 = p0.group_mult(val0);
+            p1 = p1.group_mult(val1);
         }
         res.set(0, p0);
         res.set(1, p1);
@@ -528,7 +560,7 @@ public:
         }
         for (size_t i = 0; i < n; i++) {
             auto val = get(i).pow(other.get(i));
-            sum = sum * val;
+            sum = sum.group_mult(val);
         }
         return sum;
     }
@@ -627,7 +659,7 @@ public:
             }
             for (size_t j = 0; j < cols; j++) {
                 auto val = get(i, j).pow(other.get(j));
-                sum = sum * val;
+                sum = sum.group_mult(val);
             }
             res.set(i, sum);
         }
@@ -712,7 +744,7 @@ public:
         }
         for (size_t i = 0; i < n; i++) {
             auto val = other.get(i).pow(get(i));
-            product = product * val;
+            product = product.group_mult(val);
         }
         return product;
     }
@@ -972,9 +1004,6 @@ void test_rlwe_decomp_vec() {
     std::cout << "grFx:\n";
     grFx.print();
 
-    std::cout << "rF (again):\n";
-    rF.print();
-
     rlwe rFx1 = rF * x; // rgsw_vec * rlwe_decomp_vec
     std::cout << "rFx1:\n";
     rFx1.print();
@@ -982,6 +1011,14 @@ void test_rlwe_decomp_vec() {
     rlwe grFx1 = rFx1.pow(); // g^rFx1
     std::cout << "grFx1:\n";
     grFx1.print();
+
+    for (size_t i = 0; i < grFx.size(); i++) {
+        poly& p1 = grFx.get_poly(i);
+        poly& p2 = grFx1.get_poly(i);
+        for (size_t j = 0; j < p1.size(); j++) {
+            assert(p1.get(j) == p2.get(j)); // check if grFx and grFx1 are equal
+        }
+    }
 }
 
 void test_full() {
