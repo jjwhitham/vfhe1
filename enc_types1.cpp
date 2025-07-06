@@ -23,9 +23,12 @@ su = sHu
 
 typedef __int128_t i128;
 // global variable for modulus
-constexpr i128 FIELD_MODULUS = 23;
-constexpr i128 GROUP_MODULUS = 11;
-constexpr i128 GENERATOR = 4;
+// constexpr i128 FIELD_MODULUS = 23;
+// constexpr i128 GROUP_MODULUS = 11;
+// constexpr i128 GENERATOR = 4;
+constexpr i128 FIELD_MODULUS = 11;
+constexpr i128 GROUP_MODULUS = 10;
+constexpr i128 GENERATOR = 2;
 
 std::string print_to_string_i128(i128 n) {
     if (n == 0) {
@@ -364,6 +367,9 @@ public:
         }
     }
     ~rlwe_decomp() {}
+    poly& get_poly(size_t n) const {
+        return get(n);
+    }
 };
 
 class rlwe_decomp_vec : public array1d<rlwe_decomp, rlwe_decomp_vec> {
@@ -378,38 +384,52 @@ public:
             set(i, rlwe_decomp(n_polys, n_coeffs));
     }
     ~rlwe_decomp_vec() {}
+    rlwe_decomp& get_rlwe_decomp(size_t n) const {
+        return get(n);
+    }
+    size_t get_n_polys() const {
+        return get_rlwe_decomp(0).size();
+    }
+    size_t get_n_coeffs() const {
+        return get_rlwe_decomp(0).get_poly(0).size();
+    }
 };
 
 
 class rgsw : public array1d<rlwe, rgsw> {
 private:
-    size_t n_polys_;
-    size_t n_coeffs_;
+    // size_t n_polys_;
+    // size_t n_coeffs_;
 public:
     // static constexpr size_t DEFAULT_N = 4;
     // rgsw() : array1d<rlwe, rgsw>(DEFAULT_N) {}
     rgsw() : array1d<rlwe, rgsw>() {}
     rgsw(size_t n_rlwes) : array1d<rlwe, rgsw>(n_rlwes) {}
     rgsw(size_t n_rlwes, size_t n_polys, size_t n_coeffs) : array1d<rlwe, rgsw>(n_rlwes) {
-        n_polys_ = n_polys;
-        n_coeffs_ = n_coeffs;
+        // n_polys_ = n_polys;
+        // n_coeffs_ = n_coeffs;
         for (size_t i = 0; i < n_rlwes; i++)
             set(i, rlwe(n_polys, n_coeffs));
     }
     ~rgsw() {}
-
+    rlwe& get_rlwe(size_t n) const {
+        return get(n);
+    }
+    size_t get_n_polys() const {
+        return get_rlwe(0).size();
+    }
+    size_t get_n_coeffs() const {
+        return get_rlwe(0).get_poly(0).size();
+    }
     // NOTE required to expose base class member funcs.
     // Apparently overloads hide them...
     using array1d<rlwe, rgsw>::operator*;
     rlwe operator*(const rlwe_decomp& other) const {
         size_t N = size();
         assert(N == other.size());
-        rlwe res(n_polys_, n_coeffs_);
-        poly p0(get(0).size());
-        poly p1(get(1).size());
-        // Initialize all coefficients to zero
-        for (size_t j = 0; j < p0.size(); ++j) p0.set(j, 0);
-        for (size_t j = 0; j < p1.size(); ++j) p1.set(j, 0);
+        rlwe res(get_n_polys(), get_n_coeffs());
+        poly& p0 = res.get(0);
+        poly& p1 = res.get(1);
         for (size_t i = 0; i < N; i++) {
             auto val0 = get(i).get(0) * other.get(i);
             auto val1 = get(i).get(1) * other.get(i);
@@ -424,13 +444,15 @@ public:
 
     // Overload for pow with rlwe_decomp argument
     rlwe pow(const rlwe_decomp& other) const {
+        size_t n_polys = get_n_polys();
+        size_t n_coeffs = get_n_coeffs();
         size_t N = size();
         assert(N == other.size());
-        rlwe res;
+        rlwe res(n_polys, n_coeffs);
         // Initialize p0 and p1 to multiplicative identity (all coefficients 1)
-        poly p0(res.get(0).size());
-        poly p1(res.get(1).size());
-        for (size_t k = 0; k < p0.size(); ++k) {
+        poly& p0 = res.get(0);
+        poly& p1 = res.get(1);
+        for (size_t k = 0; k < res.size(); ++k) {
             p0.set(k, 1);
             p1.set(k, 1);
         }
@@ -448,29 +470,41 @@ public:
 
 class rgsw_vec : public array1d<rgsw, rgsw_vec> {
 private:
-    size_t n_rlwes_;
-    size_t n_polys_;
-    size_t n_coeffs_;
+    // size_t n_rlwes_;
+    // size_t n_polys_;
+    // size_t n_coeffs_;
 public:
     // static constexpr size_t DEFAULT_N = 4;
     // rgsw_vec() : array1d<rgsw, rgsw_vec>(DEFAULT_N) {}
     rgsw_vec() : array1d<rgsw, rgsw_vec>() {}
     rgsw_vec(size_t n_rgsws) : array1d<rgsw, rgsw_vec>(n_rgsws) {}
     rgsw_vec(size_t n_rgsws, size_t n_rlwes, size_t n_polys, size_t n_coeffs) : array1d<rgsw, rgsw_vec>(n_rgsws) {
-        n_rlwes_ = n_rlwes;
-        n_polys_ = n_polys;
-        n_coeffs_ = n_coeffs;
+        // n_rlwes_ = n_rlwes;
+        // n_polys_ = n_polys;
+        // n_coeffs_ = n_coeffs;
         for (size_t i = 0; i < n_rlwes; i++)
             set(i, rgsw(n_rlwes, n_polys, n_coeffs));
     }
     ~rgsw_vec() {}
+    rgsw& get_rgsw(size_t n) const {
+        return get(n);
+    }
+    size_t get_n_rlwes() const {
+        return get_rgsw(0).size();
+    }
+    size_t get_n_polys() const {
+        return get_rgsw(0).get_n_polys();
+    }
+    size_t get_n_coeffs() const {
+        return get_rgsw(0).get_n_coeffs();
+    }
     // TODO - [ ] rgsw_vec * rlwe_decomp_vec -> rlwe
     // using array1d<rgsw, rgsw_vec>::operator*;
     using array1d<rgsw, rgsw_vec>::pow;
     rlwe operator*(const rlwe_decomp_vec& other) const {
         size_t n = other.size();
         assert(size() == n);
-        rlwe sum(n_polys_, n_coeffs_); // Initialize sum to default rlwe (all elements zero)
+        rlwe sum(get_n_polys(), get_n_coeffs()); // Initialize sum to default rlwe (all elements zero)
         for (size_t i = 0; i < n; i++) {
             auto val = get(i) * other.get(i);
             sum = sum + val;
@@ -479,16 +513,18 @@ public:
     }
     // TODO - [ ] rgsw_vec.pow(rlwe_decomp_vec)->rlwe (needs group mult)
     rlwe pow(const rlwe_decomp_vec& other) const {
+        std::cout << "rgsw_vec pow called\n";
         size_t n = other.size();
         assert(size() == n);
-        rlwe sum;
+        size_t n_polys = get_n_polys();
+        size_t n_coeffs = get_n_coeffs();
+        rlwe sum(n_polys, n_coeffs);
         // Initialize sum to multiplicative identity (all polys set to 1)
-        for (size_t j = 0; j < sum.size(); ++j) {
-            poly ident_poly(sum.get(j).size());
-            for (size_t k = 0; k < ident_poly.size(); ++k) {
-                ident_poly.set(k, 1);
-            }
-            sum.set(j, ident_poly);
+        poly& p0 = sum.get(0);
+        poly& p1 = sum.get(1);
+        for (size_t k = 0; k < sum.size(); ++k) {
+            p0.set(k, 1);
+            p1.set(k, 1);
         }
         for (size_t i = 0; i < n; i++) {
             auto val = get(i).pow(other.get(i));
@@ -498,48 +534,48 @@ public:
     }
 };
 
-template<typename T, typename T1, typename U>
-U vec_mat_mult(const T& self, const T1& other) {
-    size_t rows = self.size();
-    size_t cols = self.size(0);
-    assert(cols == other.size());
-    U res(rows);
-    // NOTE get type of array element. Remove reference from type
-    using U_element = std::remove_reference_t<decltype(res.get(0))>;
-    for (size_t i = 0; i < rows; i++) {
-        size_t n_coeffs = self.get(0, 0).get(0).get(0).size();
-        size_t n_coeffs_other = other.get(0).get(0).size();
-        assert(n_coeffs == n_coeffs_other);
-        U_element sum; // Reset sum for each row
-        // Initialize sum to additive identity (all polys set to 0)
-        for (size_t j = 0; j < n_coeffs; ++j) {
-            poly p(n_coeffs);
-            sum.set(j, p);
-        }
-        // for each element in the row
-        for (size_t j = 0; j < cols; j++) {
-            auto val = self.get(i, j) * other.get(j);
-            sum = sum + val;
-        }
-        res.set(i, sum);
-    }
-    return res;
-}
+// template<typename T, typename T1, typename U>
+// U vec_mat_mult(const T& self, const T1& other) {
+//     size_t rows = self.size();
+//     size_t cols = self.size(0);
+//     assert(cols == other.size());
+//     U res(rows);
+//     // NOTE get type of array element. Remove reference from type
+//     using U_element = std::remove_reference_t<decltype(res.get(0))>;
+//     for (size_t i = 0; i < rows; i++) {
+//         size_t n_coeffs = self.get(0, 0).get(0).get(0).size();
+//         size_t n_coeffs_other = other.get(0).get(0).size();
+//         assert(n_coeffs == n_coeffs_other);
+//         U_element sum; // Reset sum for each row
+//         // Initialize sum to additive identity (all polys set to 0)
+//         for (size_t j = 0; j < n_coeffs; ++j) {
+//             poly p(n_coeffs);
+//             sum.set(j, p);
+//         }
+//         // for each element in the row
+//         for (size_t j = 0; j < cols; j++) {
+//             auto val = self.get(i, j) * other.get(j);
+//             sum = sum + val;
+//         }
+//         res.set(i, sum);
+//     }
+//     return res;
+// }
 
 class rgsw_mat : public array2d<rgsw> {
 private:
-    size_t n_rlwes_;
-    size_t n_polys_;
-    size_t n_coeffs_;
+    // size_t n_rlwes_;
+    // size_t n_polys_;
+    // size_t n_coeffs_;
 public:
     // constexpr static size_t DEFAULT_M = 3;
     // constexpr static size_t DEFAULT_N = 4;
     rgsw_mat() : array2d<rgsw>() {}
     rgsw_mat(size_t rows, size_t cols) : array2d<rgsw>(rows, cols) {}
     rgsw_mat(size_t rows, size_t cols, size_t n_rlwes, size_t n_polys, size_t n_coeffs) : array2d<rgsw>(rows, cols) {
-        n_rlwes_ = n_rlwes;
-        n_polys_ = n_polys;
-        n_coeffs_ = n_coeffs;
+        // n_rlwes_ = n_rlwes;
+        // n_polys_ = n_polys;
+        // n_coeffs_ = n_coeffs;
         for (size_t i = 0; i < rows; i++) {
             for (size_t j = 0; j < cols; j++) {
                 set(i, j, rgsw(n_rlwes, n_polys, n_coeffs));
@@ -547,6 +583,7 @@ public:
         }
     }
     ~rgsw_mat() {}
+
     // rlwe_vec operator*(const rlwe_decomp_vec& other) const {
     //     return vec_mat_mult<rgsw_mat, rlwe_decomp_vec, rlwe_vec>(*this, other);
     // }
@@ -554,14 +591,17 @@ public:
         size_t rows = size();
         size_t cols = size(0);
         assert(cols == other.size());
-        rlwe_vec res(rows, n_polys_, n_coeffs_);
+        size_t n_polys = get_n_polys();
+        size_t n_coeffs = get_n_coeffs();
+        size_t n_coeffs_other = other.get_n_coeffs();
+        assert(n_coeffs == n_coeffs_other);
+
+        rlwe_vec res(rows, n_polys, n_coeffs);
         // NOTE get type of array element. Remove reference from type
         // using U_element = std::remove_reference_t<decltype(res.get(0))>;
         for (size_t i = 0; i < rows; i++) {
             // size_t n_coeffs = self.get(0, 0).get(0).get(0).size();
-            size_t n_coeffs_other = other.get(0).get(0).size();
-            assert(n_coeffs_ == n_coeffs_other);
-            rlwe sum(n_polys_, n_coeffs_); // Reset sum for each row
+            rlwe sum(n_polys, n_coeffs); // Reset sum for each row
             // for each element in the row
             for (size_t j = 0; j < cols; j++) {
                 auto val = get(i, j) * other.get(j);
@@ -575,9 +615,16 @@ public:
         size_t rows = size();
         size_t cols = size(0);
         assert(cols == other.size());
-        rlwe_vec res;
+        rgsw& rg = get(0, 0);
+        size_t n_coeffs = rg.get_n_coeffs();
+        size_t n_polys = rg.get_n_polys();
+        rlwe_vec res(rows, n_polys, n_coeffs);
         for (size_t i = 0; i < rows; i++) {
-            rlwe sum; // Reset sum for each row
+            rlwe sum(n_polys, n_coeffs); // Reset sum for each row
+            for (auto& p : sum) {
+                for (size_t k = 0; k < p.size(); ++k)
+                    p.set(0, 1); // Initialize coefficients to 1
+            }
             for (size_t j = 0; j < cols; j++) {
                 auto val = get(i, j).pow(other.get(j));
                 sum = sum * val;
@@ -586,14 +633,17 @@ public:
         }
         return res;
     }
+    rgsw& get_rgsw(size_t row, size_t col) const {
+        return get(row, col);
+    }
     size_t get_n_rlwes() const {
-        return n_rlwes_;
+        return get_rgsw(0, 0).size();
     }
     size_t get_n_polys() const {
-        return n_polys_;
+        return get_rgsw(0, 0).get_n_polys();
     }
     size_t get_n_coeffs() const {
-        return n_coeffs_;
+        return get_rgsw(0, 0).get_n_coeffs();
     }
 };
 
@@ -612,10 +662,12 @@ public:
         size_t rows = other.size();
         size_t cols = other.size(0);
         assert(rows == size());
-        size_t n_coeffs = other.get_n_coeffs(); // Get number of coefficients in the first rgsw
-        rgsw_vec res(cols, other.get_n_rlwes(), other.get_n_polys(), other.get_n_coeffs());
+        size_t n_rlwes = other.get_n_rlwes();
+        size_t n_polys = other.get_n_polys();
+        size_t n_coeffs = other.get_n_coeffs();
+        rgsw_vec res(cols, n_rlwes, n_polys, n_coeffs);
         for (size_t j = 0; j < cols; j++) {
-            rgsw sum(other.get_n_rlwes(), other.get_n_polys(), other.get_n_coeffs()); // Reset sum for each column
+            rgsw sum(n_rlwes, n_polys, n_coeffs); // Reset sum for each column
             for (size_t i = 0; i < rows; i++) {
             // for each element in the row
                 // scalar mult member function from rgsw_vec
@@ -630,10 +682,9 @@ public:
     rlwe operator*(const rlwe_vec& other) const {
         size_t n = other.size();
         assert(size() == n);
-        size_t n_coeffs = other.get(0).get(0).size(); // Get number of coefficients in the first rlwe
-        assert(n_coeffs == other.get(0).get(1).size()); // Ensure
-        // FIXME
-        rlwe sum(2, n_coeffs); // Initialize sum to default rlwe (all elements zero)
+        size_t n_polys = other.get(0).size();
+        size_t n_coeffs = other.get(0).get(0).size();
+        rlwe sum(n_polys, n_coeffs);
         // Initialize sum to additive identity (all polys set to 0)
         for (size_t j = 0; j < sum.size(); ++j) {
             poly p(n_coeffs);
@@ -650,14 +701,14 @@ public:
     rlwe pow(const rlwe_vec& other) const {
         size_t n = other.size();
         assert(size() == n);
-        rlwe product;
+        size_t n_polys = other.get(0).size();
+        size_t n_coeffs = other.get(0).get(0).size();
+        rlwe product(n_polys, n_coeffs);
         // Initialize product to multiplicative identity (all polys set to 1)
-        for (size_t j = 0; j < product.size(); ++j) {
-            poly ident_poly(product.get(j).size());
-            for (size_t k = 0; k < ident_poly.size(); ++k) {
-                ident_poly.set(k, 1);
+        for (auto& p : product) {
+            for (size_t k = 0; k < p.size(); ++k) {
+                p.set(k, 1);
             }
-            product.set(j, ident_poly);
         }
         for (size_t i = 0; i < n; i++) {
             auto val = other.get(i).pow(get(i));
@@ -836,6 +887,15 @@ void test_rlwe_decomp() {
     rlwe rrl = rl * r; // scalar * rlwe
     std::cout << "rlwe from scalar * rlwe:\n";
     rrl.print();
+
+
+    rlwe grrl = rrl.pow();
+    std::cout << "grrl";
+    grrl.print();
+    i128 gr = 16; // g^r = 4^2 % 23 = 16
+    rlwe grl = rl.pow(gr); // g^r.pow(rlwe)
+    std::cout << "grl:\n";
+    grl.print();
 }
 
 void test_rlwe_decomp_vec() {
@@ -904,9 +964,24 @@ void test_rlwe_decomp_vec() {
     std::cout << "rF:\n";
     rF.print();
 
+
+    rgsw_vec grF = rF.pow(); // g^r
+    std::cout << "grF:\n";
+    grF.print();
+    rlwe grFx = grF.pow(x); // g^r.pow(Fx)
+    std::cout << "grFx:\n";
+    grFx.print();
+
+    std::cout << "rF (again):\n";
+    rF.print();
+
     rlwe rFx1 = rF * x; // rgsw_vec * rlwe_decomp_vec
     std::cout << "rFx1:\n";
     rFx1.print();
+
+    rlwe grFx1 = rFx1.pow(); // g^rFx1
+    std::cout << "grFx1:\n";
+    grFx1.print();
 }
 
 void test_full() {
@@ -939,7 +1014,7 @@ void test_full() {
 
     // Compute rFx = rF * x
     rlwe rFx = rF * x;
-    rlwe rFx1 = r * Fx;
+    // rlwe rFx1 = r * Fx;
 
     // Compute grFx2 = g^{rFx}
     rlwe grFx2 = rFx.pow();
