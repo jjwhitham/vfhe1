@@ -32,6 +32,7 @@ su = sHu
 #include <type_traits>
 #include <chrono>
 #include <random>
+#include "omp.h"
 
 typedef __int128_t i128;
 // constexpr i128 GROUP_MODULUS = 23;
@@ -524,13 +525,20 @@ public:
         assert(size() == n);
         size_t n_polys = get_n_polys();
         size_t n_coeffs = get_n_coeffs();
-        rlwe sum(n_polys, n_coeffs);
-        sum.set_coeffs_to_one();
+        rlwe_vec res_vec(n, n_polys, n_coeffs);
+        rlwe res(n_polys, n_coeffs);
+        res.set_coeffs_to_one();
+        // size_t n_threads_max = omp_get_max_threads();
+        // std::cout << "Max threads: " << n_threads_max << std::endl;
+        #pragma omp parallel for num_threads(omp_get_max_threads())
         for (size_t i = 0; i < n; i++) {
             auto val = get(i).pow(other.get(i));
-            sum = sum.group_mult(val);
+            res_vec.set(i, val);
         }
-        return sum;
+        for (auto& prod : res_vec) {
+            res = res.group_mult(prod);
+        }
+        return res;
     }
 };
 
@@ -920,7 +928,7 @@ void test_full() {
     size_t n_polys = 2; // XXX must be 2
     size_t n_coeffs = 4096;
     size_t rows = 5;
-    size_t cols = 5;
+    size_t cols = 12;
     rgsw_mat F(rows, cols, n_rlwes, n_polys, n_coeffs);
     rlwe_decomp_vec x(cols, n_rlwes, n_coeffs);
     veri_vec_scalar r(rows);
@@ -935,7 +943,6 @@ void test_full() {
     // r.print();
     // std::cout << "\n";
 
-    auto start = std::chrono::high_resolution_clock::now();
     // Compute Fx = F * x
     rlwe_vec Fx = F * x;
 
@@ -945,9 +952,12 @@ void test_full() {
     // Compute grF = g^{rF}
     rgsw_vec grF = rF.pow();
 
+    auto start = std::chrono::high_resolution_clock::now();
     // Compute grFx = (g^{rF})^x = g^{rF * x}
     rlwe grFx = grF.pow(x);
-
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::nano> elapsed = end - start;
+    std::cout << "Elapsed time: " << elapsed.count() << " ns\n";
     // init(F, x, r); // reinitialize F, x, r
 
     // Compute rFx = rF * x
@@ -1006,9 +1016,6 @@ void test_full() {
         }
     }
 
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::nano> elapsed = end - start;
-    std::cout << "Elapsed time: " << elapsed.count() << " ns\n";
 }
 
 int main() {
