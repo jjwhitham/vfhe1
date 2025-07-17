@@ -81,7 +81,7 @@ public:
         }
     }
     T& get(size_t n) const {
-        check_index_bounds(n);
+        // check_index_bounds(n);
         return arr[n];
     }
     void check_value_bounds(T val) {
@@ -97,8 +97,8 @@ public:
         }
     }
     void set(int n, T val) {
-        check_index_bounds(n);
-        check_value_bounds(val);
+        // check_index_bounds(n);
+        // check_value_bounds(val);
         arr[n] = val;
     }
     size_t size() const {
@@ -294,7 +294,7 @@ public:
         }
     }
     T& get(size_t row, size_t col) const {
-        check_index_bounds(row, col);
+        // check_index_bounds(row, col);
         return arr[row][col];
     }
 
@@ -311,8 +311,8 @@ public:
         }
     }
     void set(size_t row, size_t col, T val) {
-        check_index_bounds(row, col);
-        check_value_bounds(val);
+        // check_index_bounds(row, col);
+        // check_value_bounds(val);
         arr[row][col] = val;
     }
     size_t get_rows() const {
