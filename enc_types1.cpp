@@ -42,6 +42,15 @@ constexpr i128 GROUP_MODULUS = 540431955285196831;
 constexpr i128 FIELD_MODULUS = 18014398509506561;
 constexpr i128 GENERATOR = 1073741824;
 
+// FIXME make types __uint128 so that regular modding works
+i128 mod(i128 val, i128 q) {
+    val %= q;
+    if (val < 0) {
+        val = (val + q) % q;
+    }
+    return val;
+}
+
 std::string print_to_string_i128(i128 n) {
     if (n == 0) {
         return "0";
@@ -321,10 +330,20 @@ public:
     size_t get_cols() const {
         return cols_;
     }
+    void print() const {
+        for (size_t i = 0; i < rows_; i++) {
+            std::cout << "{";
+            for (size_t j = 0; j < cols_ - 1; j++) {
+                std::cout << print_to_string_i128(arr[i][j]) << ", ";
+            }
+            std::cout << print_to_string_i128(arr[i][cols_ - 1]) << "}\n";
+        }
+    }
 };
 
 class poly : public array1d<i128, poly> {
 private:
+    bool isNTT = false;
 public:
     poly() : array1d<i128, poly>() {}
     poly(size_t N) : array1d<i128, poly>(N) {
@@ -682,6 +701,16 @@ public:
     }
 };
 
+i128 random_i128(i128 from, i128 to_inclusive) {
+    // random int in range [from, to_inclusive]
+    // TODO docs suggest the above inclusive range. Double check
+    std::random_device rd;  // Non-deterministic seed
+    std::mt19937 gen(rd()); // Mersenne Twister engine
+    std::uniform_int_distribution<i128> distrib(from, to_inclusive); // Range: 0 to 100
+    i128 random_number = distrib(gen);
+    return random_number;
+}
+
 void init(rgsw_mat& F, rlwe_decomp_vec& x, veri_vec_scalar& r) {
     std::random_device rd;  // Non-deterministic seed
     std::mt19937 gen(rd()); // Mersenne Twister engine
@@ -716,9 +745,175 @@ void init(rgsw_mat& F, rlwe_decomp_vec& x, veri_vec_scalar& r) {
     }
 }
 
-void print_rgsw_mat() {
+struct Params {
+private:
+    // ======== Controller matrices ========
+    std::vector<std::vector<double>> G = {
+        {0.0816, 0.0047, 1.6504, -0.0931, 0.4047},
+        {-1.4165, -0.3163, -0.4329, 0.1405, 0.8263},
+        {-1.4979, -0.2089, -0.6394, 0.3682, 0.7396},
+        {0.0459, 0.0152, 1.1004, -0.1187, 0.6563},
+        {0.0020, 0.0931, 0.0302, -0.0035, 0.0177}
+    };
 
-}
+    std::vector<std::vector<double>> R = {
+        {-3.5321, 23.1563},
+        {-0.5080, -2.3350},
+        {2.5496, 0.9680},
+        {0.0436, -1.1227},
+        {-0.7560, 0.7144}
+    };
+
+    std::vector<std::vector<double>> H = {
+        {0.0399, -0.3269, -0.2171, 0.0165, -0.0655},
+        {-0.0615, -0.0492, -0.0322, -0.0077, -0.0084}
+    };
+
+    // ======== Scale up G, R, and H to integers ========
+    array2d<i128> scalar_mat_mult(i128 scalar, std::vector<std::vector<double>>& mat, i128 q, size_t rows, size_t cols) {
+        array2d<i128> result(rows, cols);
+        for (size_t i = 0; i < rows; ++i) {
+            for (size_t j = 0; j < cols; ++j) {
+                result.set(i, j, mod(static_cast<i128>(std::round(scalar * mat[i][j])), q));
+            }
+        }
+        return result;
+    }
+
+    array1d<i128, poly> scalar_vec_mult(i128 scalar, std::vector<double>& vec, i128 q) {
+        array1d<i128, poly> result(vec.size());
+        for (size_t i = 0; i < vec.size(); ++i) {
+            result.set(i, mod(static_cast<i128>(std::round(scalar * vec[i])), q));
+        }
+        return result;
+    }
+
+    void generate_field_and_group_params() {
+        // TODO use NTL and add funcs from Python implementation
+        p = 540431955285196831;
+        q = 18014398509506561;
+        g = 1073741824;
+    }
+
+public:
+    Params() :
+        p(540431955285196831),
+        q(18014398509506561),
+        g(1073741824),
+        s(10000),
+        L(10000),
+        r(10000),
+        iter_(100),
+        // G_bar(5, 5),
+        G_bar(scalar_mat_mult(s, G, q, 5, 5)),
+        R_bar(scalar_mat_mult(s, R, q, 5, 2)),
+        H_bar(scalar_mat_mult(s, H, q, 2, 5))
+    {
+        // generate_field_and_group_params();
+        x_cont_init_scaled = scalar_vec_mult(r * s * L, x_cont_init, q);
+    }
+    i128 p, q, g, s, L, r, iter_;
+    array2d<i128> G_bar, R_bar, H_bar;
+    array1d<i128, poly> x_cont_init_scaled;
+
+    // ======== Plant matrices ========
+    std::vector<std::vector<double>> A = {
+        {1.0, 0.0020, 0.0663, 0.0047, 0.0076},
+        {0.0, 1.0077, 2.0328, -0.5496, -0.0591},
+        {0.0, 0.0478, 0.9850, -0.0205, -0.0092},
+        {0.0, 0.0, 0.0, 0.3679, 0.0},
+        {0.0, 0.0, 0.0, 0.0, 0.3679}
+    };
+    std::vector<std::vector<double>> B = {
+        {0.0029, 0.0045},
+        {-0.3178, -0.0323},
+        {-0.0086, -0.0051},
+        {0.6321, 0},
+        {0, 0.6321}
+    };
+    std::vector<std::vector<double>> C = {
+        {0, 1, 0, 0, 0},
+        {0, -0.2680, 47.7600, -4.5600, 4.4500},
+        {1, 0, 0, 0, 0},
+        {0, 0, 0, 1, 0},
+        {0, 0, 0, 0, 1}
+    };
+
+    // ======== Controller matrices ========
+    std::vector<std::vector<int>> F = {
+        {2, 0, 0, 0, 0},
+        {0, -1, 0, 0, 0},
+        {0, 0, 1, 0, 0},
+        {0, 0, 0, 0, 0},
+        {0, 0, 0, 0, 0}
+    };
+
+
+    // ======== Plant and Controller initial state ========
+    std::vector<double> x_plant_init = {
+        1,
+        -1,
+        0,
+        0.7,
+        2,
+    };
+    std::vector<double> x_cont_init = {
+        -0.001,
+        0.013,
+        0.2,
+        -0.02,
+        0,
+    };
+    void print() {
+        // print these: p, q, g, s, L, r, iter_;
+        std::cout << "p: " << print_to_string_i128(p) << "\n";
+        std::cout << "q: " << print_to_string_i128(q) << "\n";
+        std::cout << "g: " << print_to_string_i128(g) << "\n";
+        std::cout << "s: " << print_to_string_i128(s) << "\n";
+        std::cout << "L: " << print_to_string_i128(L) << "\n";
+        std::cout << "r: " << print_to_string_i128(r) << "\n";
+        std::cout << "iter: " << print_to_string_i128(iter_) << "\n";
+        std::cout << "G_bar:\n";
+        G_bar.print();
+        std::cout << "R_bar:\n";
+        R_bar.print();
+        std::cout << "H_bar:\n";
+        H_bar.print();
+        std::cout << "x_cont_init_scaled:\n";
+        x_cont_init_scaled.print();
+        // print these: G_bar, R_bar, H_bar;
+        // print this: x_cont_init_scaled;
+    }
+    // TODO pass in gen as a param
+    std::vector<i128> sample_knowledge_exponents(i128 from, i128 to_inclusive) {
+        i128 N = 6;
+        std::vector<i128> res(N);
+        for (size_t i = 0; i < N; i++) {
+            // TODO update range
+            res.at(i) = random_i128(from, to_inclusive);
+        }
+        // res <- {alpha_0, alpha_1, gamma_0, gamma_1, rho_0, rho_1}
+        return res;
+    }
+
+    // TODO pass in gen as a param
+    std::vector<std::vector<i128>> sample_verification_vectors(i128 m, i128 n, i128 from, i128 to_inclusive) {
+        i128 N = 3;
+        std::vector<std::vector<i128>> res(N);
+        for (size_t i = 0; i < N - 1; i++) {
+            res.at(i) = std::vector<i128>(n);
+        }
+        res.at(N - 1) = std::vector<i128>(m);
+
+        for (auto& x : res) {
+            for (size_t i = 0; i < x.size(); i++) {
+                x.at(i) = random_i128(from, to_inclusive);
+            }
+        }
+        // res <- {r_0, r_1, s}
+        return res;
+    }
+};
 
 void test() {
     rlwe_vec u(2, 2, 2);
@@ -1031,11 +1226,30 @@ int main() {
     // test();
     omp_set_nested(1);
     // omp_set_num_threads(1);
-    std::cout << "omp num threads: " << omp_get_max_threads() << std::endl;
-    std::cout << " omp num threads: " << omp_get_num_threads() << std::endl;
-    test_full();
-    // test_rlwe_decomp();
-    // test_rlwe_decomp_vec();
+    // std::cout << "omp num threads: " << omp_get_max_threads() << std::endl;
+    // std::cout << " omp num threads: " << omp_get_num_threads() << std::endl;
+    // test_full();
+
+    Params params;
+    params.print();
+    i128 from = 1;
+    i128 to_inclusive = 3;
+    auto knowledge_exps = params.sample_knowledge_exponents(from, to_inclusive);
+    std::cout << "Knowledge exponents:\n";
+    for (const auto& exp : knowledge_exps) {
+        std::cout << print_to_string_i128(exp) << " ";
+    }
+    std::cout << "\n";
+    i128 m = 2;
+    i128 n = 3;
+    auto verification_vectors = params.sample_verification_vectors(m, n, from, to_inclusive);
+    std::cout << "Verification vectors:\n";
+    for (const auto& vec : verification_vectors) {
+        for (const auto& val : vec) {
+            std::cout << print_to_string_i128(val) << " ";
+        }
+        std::cout << "\n";
+    }
     return 0;
 }
 

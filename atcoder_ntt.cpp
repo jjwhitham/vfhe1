@@ -46,6 +46,18 @@ vector<i128> negacyclic_convolution(const vector<i128>& a, const vector<i128>& b
     return res;
 }
 
+// class arr {
+// private:
+//     int size_;
+//     int* arr_;
+// public:
+//     arr() : size_(0) {}
+//     arr(size_t size) : size_(size) {
+//         arr_ = new int[size]();
+//     }
+//     ~arr() = default;
+// };
+
 int main() {
     vector<i128> a = {1, 2};
     vector<i128> b = {3, 4};
@@ -58,4 +70,12 @@ int main() {
     cout << "negacyclic convolution result: ";
     for (i128 x : c1) cout << print_to_string_i128(x) << " ";
     cout << "\n";
+    // arr ar(2);
+    // arr aconv = convolution<MOD>(a, b);
 }
+
+// TODO change vector to array, or modify enc_types to take vector?
+// TODO add isNTT flag
+// TODO add hashed
+// TODO add convolution
+// TODO
