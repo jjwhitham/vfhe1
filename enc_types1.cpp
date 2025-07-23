@@ -43,11 +43,11 @@ constexpr i128 FIELD_MODULUS = 18014398509506561;
 constexpr i128 GENERATOR = 1073741824;
 
 // FIXME make types __uint128 so that regular modding works
-i128 mod(i128 val, i128 q) {
+i128 mod_(__int128_t val, i128 q) {
     val %= q;
-    // if (val < 0) {
-    //     val = (val + q) % q;
-    // }
+    if (val < 0) {
+        val = (val + q) % q;
+    }
     return val;
 }
 
@@ -98,10 +98,10 @@ std::string print_to_string_i128(i128 n) {
         return "0";
     }
     bool neg = false;
-    if (n < 0) {
-        neg = true;
-        n = -n;
-    }
+    // if (n < 0) {
+    //     neg = true;
+    //     n = -n;
+    // }
     std::string buf;
     while (n > 0) {
         buf += '0' + (n % 10);
@@ -790,6 +790,14 @@ void init(rgsw_mat& F, rlwe_decomp_vec& x, veri_vec_scalar& r) {
 struct Params {
 private:
     // ======== Controller matrices ========
+    std::vector<std::vector<double>> F_ = {
+        {2, 0, 0, 0, 0},
+        {0, -1, 0, 0, 0},
+        {0, 0, 1, 0, 0},
+        {0, 0, 0, 0, 0},
+        {0, 0, 0, 0, 0}
+    };
+
     std::vector<std::vector<double>> G = {
         {0.0816, 0.0047, 1.6504, -0.0931, 0.4047},
         {-1.4165, -0.3163, -0.4329, 0.1405, 0.8263},
@@ -816,16 +824,18 @@ private:
         array2d<i128> result(rows, cols);
         for (size_t i = 0; i < rows; ++i) {
             for (size_t j = 0; j < cols; ++j) {
-                result.set(i, j, mod(static_cast<i128>(std::round(scalar * mat[i][j])), q));
+                result.set(i, j, mod_(static_cast<__int128_t>(std::round(scalar * mat[i][j])), q));
             }
         }
         return result;
     }
 
-    array1d<i128, poly> scalar_vec_mult(i128 scalar, std::vector<double>& vec, i128 q) {
-        array1d<i128, poly> result(vec.size());
+    // TODO update to array1d<i128> (add as another class?)
+    poly scalar_vec_mult(i128 scalar, std::vector<double>& vec, i128 q) {
+        // TODO update to array1d<i128> (add as another class?)
+        poly result(vec.size());
         for (size_t i = 0; i < vec.size(); ++i) {
-            result.set(i, mod(static_cast<i128>(std::round(scalar * vec[i])), q));
+            result.set(i, mod_(static_cast<__int128_t>(std::round(scalar * vec[i])), q));
         }
         return result;
     }
@@ -846,17 +856,21 @@ public:
         L(10000),
         r(10000),
         iter_(100),
-        // G_bar(5, 5),
-        G_bar(scalar_mat_mult(s, G, q, 5, 5)),
-        R_bar(scalar_mat_mult(s, R, q, 5, 2)),
-        H_bar(scalar_mat_mult(s, H, q, 2, 5))
+        F(scalar_mat_mult(s, F_, q, F_.size(), F_.at(0).size())),
+        G_bar(scalar_mat_mult(s, G, q, G.size(), G.at(0).size())),
+        R_bar(scalar_mat_mult(s, R, q, R.size(), R.at(0).size())),
+        H_bar(scalar_mat_mult(s, H, q, H.size(), H.at(0).size()))
     {
         // generate_field_and_group_params();
         x_cont_init_scaled = scalar_vec_mult(r * s * L, x_cont_init, q);
+        // TODO update or remove
+        assert(A.size() == B.size());
+        assert(A.size() == F_.size());
     }
-    i128 p, q, g, s, L, r, iter_;
-    array2d<i128> G_bar, R_bar, H_bar;
-    array1d<i128, poly> x_cont_init_scaled;
+    i128 p, q, g, s, L, r, iter_, x_dim, y_dim, u_dim;
+    array2d<i128> F, G_bar, R_bar, H_bar;
+    // TODO update to array1d<i128> (add as another class?)
+    poly x_cont_init_scaled;
 
     // ======== Plant matrices ========
     std::vector<std::vector<double>> A = {
@@ -881,14 +895,7 @@ public:
         {0, 0, 0, 0, 1}
     };
 
-    // ======== Controller matrices ========
-    std::vector<std::vector<int>> F = {
-        {2, 0, 0, 0, 0},
-        {0, -1, 0, 0, 0},
-        {0, 0, 1, 0, 0},
-        {0, 0, 0, 0, 0},
-        {0, 0, 0, 0, 0}
-    };
+
 
 
     // ======== Plant and Controller initial state ========
@@ -1264,6 +1271,64 @@ void test_full() {
 
 }
 
+void run_control_loop() {
+    Params pms;
+    // params.print();
+
+    using matrix_double = std::vector<std::vector<double>>;
+    using matrix_i128 = array2d<i128>;
+    using vector_double = std::vector<double>;
+    using vector_i128 = std::vector<i128>;
+    matrix_double A = pms.A;
+    matrix_double B = pms.B;
+    matrix_double C = pms.C;
+    matrix_i128 F = pms.F;
+    matrix_i128 G_bar = pms.G_bar;
+    matrix_i128 H_bar = pms.H_bar;
+    matrix_i128 R_bar = pms.R_bar;
+    vector_double x_plant = pms.x_plant_init;
+    poly x_cont = pms.x_cont_init_scaled;
+
+    i128 rr = pms.r;
+    i128 ss = pms.s;
+    i128 L = pms.L;
+    i128 iter_ = pms.iter_;
+
+    i128 from = 1;
+    i128 to_inclusive = 100;
+    auto knowledge_exps = pms.sample_knowledge_exponents(from, to_inclusive);
+    i128 alpha_0 = knowledge_exps.at(0);
+    i128 alpha_1 = knowledge_exps.at(1);
+    i128 gamma_0 = knowledge_exps.at(2);
+    i128 gamma_1 = knowledge_exps.at(3);
+    i128 rho_0 = knowledge_exps.at(4);
+    i128 rho_1 = knowledge_exps.at(5);
+    // std::cout << "Knowledge exponents:\n";
+    // for (const auto& exp : knowledge_exps) {
+    //     std::cout << print_to_string_i128(exp) << " ";
+    // }
+    // std::cout << "\n";
+    i128 m = 2;
+    i128 n = 3;
+    auto verification_vectors = pms.sample_verification_vectors(m, n, from, to_inclusive);
+    vector_i128 r_0 = verification_vectors.at(0);
+    vector_i128 r_1 = verification_vectors.at(1);
+    vector_i128 s = verification_vectors.at(2);
+    std::cout << "Verification vectors:\n";
+    // for (const auto& vec : verification_vectors) {
+    //     for (const auto& val : vec) {
+    //         std::cout << print_to_string_i128(val) << " ";
+    //     }
+    //     std::cout << "\n";
+    // }
+    const i128 N = 4;
+    vector_i128 sk = sample_secret_key(N);
+    const i128 d = 4;
+    double log2q = std::log2(static_cast<double>(FIELD_MODULUS));
+    int power = static_cast<int>(std::ceil(log2q / static_cast<double>(d)));
+    i128 v = static_cast<i128>(1) << power;
+}
+
 int main() {
     // test();
     omp_set_nested(1);
@@ -1272,27 +1337,8 @@ int main() {
     // std::cout << " omp num threads: " << omp_get_num_threads() << std::endl;
     // test_full();
 
-    Params params;
-    params.print();
-    i128 from = 1;
-    i128 to_inclusive = 3;
-    auto knowledge_exps = params.sample_knowledge_exponents(from, to_inclusive);
-    std::cout << "Knowledge exponents:\n";
-    for (const auto& exp : knowledge_exps) {
-        std::cout << print_to_string_i128(exp) << " ";
-    }
-    std::cout << "\n";
-    i128 m = 2;
-    i128 n = 3;
-    auto verification_vectors = params.sample_verification_vectors(m, n, from, to_inclusive);
-    std::cout << "Verification vectors:\n";
-    for (const auto& vec : verification_vectors) {
-        for (const auto& val : vec) {
-            std::cout << print_to_string_i128(val) << " ";
-        }
-        std::cout << "\n";
-    }
+
     return 0;
 }
 
-// TODO update either i128 to u128, or replace % with mod()
+// DONE update either i128 to u128, or replace % with mod()
