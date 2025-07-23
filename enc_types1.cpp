@@ -34,7 +34,7 @@ su = sHu
 #include <random>
 #include "omp.h"
 
-typedef __int128_t i128;
+typedef __uint128_t i128;
 // constexpr i128 GROUP_MODULUS = 23;
 // constexpr i128 FIELD_MODULUS = 11;
 // constexpr i128 GENERATOR = 4;
@@ -45,10 +45,52 @@ constexpr i128 GENERATOR = 1073741824;
 // FIXME make types __uint128 so that regular modding works
 i128 mod(i128 val, i128 q) {
     val %= q;
-    if (val < 0) {
-        val = (val + q) % q;
-    }
+    // if (val < 0) {
+    //     val = (val + q) % q;
+    // }
     return val;
+}
+
+std::vector<i128> sample_discrete_gaussian(size_t N, double mu = 3.2, double sigma = 19.2) {
+    std::vector<i128> result(N);
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::normal_distribution<double> dist(mu, sigma);
+    for (size_t i = 0; i < N; ++i) {
+        result[i] = static_cast<i128>(std::round(dist(gen)));
+    }
+    return result;
+}
+std::vector<i128> sample_secret_key(size_t N) {
+    // Sample a secret key for the RGSW scheme.
+    // Each entry is -1, 0, or 1, with probabilities 0.25, 0.5, 0.25 respectively.
+    std::vector<i128> s(N);
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::discrete_distribution<int> dist({0.25, 0.5, 0.25});
+    for (size_t i = 0; i < N; ++i) {
+        int val = dist(gen);
+        if (val == 0) s[i] = -1;
+        else if (val == 1) s[i] = 0;
+        else s[i] = 1;
+    }
+    return s;
+}
+// Sample a random polynomial of degree N-1 with coefficients in the range [0, q).
+std::vector<i128> sample_random_polynomial(size_t N, i128 q) {
+    std::vector<i128> poly(N);
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<i128> dist(0, q - 1);
+    for (size_t i = 0; i < N; ++i) {
+        poly[i] = dist(gen);
+    }
+    return poly;
+}
+
+// Sample a noise polynomial of degree N-1 with coefficients from the discrete Gaussian distribution.
+std::vector<i128> sample_noise_polynomial(size_t N, double mu = 3.2, double sigma = 19.2) {
+    return sample_discrete_gaussian(N, mu, sigma);
 }
 
 std::string print_to_string_i128(i128 n) {
@@ -1253,3 +1295,4 @@ int main() {
     return 0;
 }
 
+// TODO update either i128 to u128, or replace % with mod()
