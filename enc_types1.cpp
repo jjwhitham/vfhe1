@@ -366,10 +366,10 @@ public:
         // check_value_bounds(val);
         arr[row][col] = val;
     }
-    size_t get_rows() const {
+    size_t n_rows() const {
         return rows_;
     }
-    size_t get_cols() const {
+    size_t n_cols() const {
         return cols_;
     }
     void print() const {
@@ -635,8 +635,8 @@ public:
     ~rgsw_mat() {}
 
     rlwe_vec operator*(const rlwe_decomp_vec& other) const {
-        size_t rows = get_rows();
-        size_t cols = get_cols();
+        size_t rows = n_rows();
+        size_t cols = n_cols();
         assert(cols == other.size());
         size_t n_polys = get_n_polys();
         size_t n_coeffs = get_n_coeffs();
@@ -655,8 +655,8 @@ public:
         return res;
     }
     rlwe_vec pow(const rlwe_decomp_vec& other) const {
-        size_t rows = get_rows();
-        size_t cols = get_cols();
+        size_t rows = n_rows();
+        size_t cols = n_cols();
         assert(cols == other.size());
         rgsw& rg = get(0, 0);
         size_t n_coeffs = rg.get_n_coeffs();
@@ -697,8 +697,8 @@ public:
     ~veri_vec_scalar() {}
 
     rgsw_vec operator*(const rgsw_mat& other) const {
-        size_t rows = other.get_rows();
-        size_t cols = other.get_cols();
+        size_t rows = other.n_rows();
+        size_t cols = other.n_cols();
         assert(rows == size());
         size_t n_rlwes = other.get_n_rlwes();
         size_t n_polys = other.get_n_polys();
@@ -759,8 +759,8 @@ void init(rgsw_mat& F, rlwe_decomp_vec& x, veri_vec_scalar& r) {
     std::uniform_int_distribution<i128> distrib(0, FIELD_MODULUS - 1); // Range: 0 to 100
     i128 random_number = distrib(gen);
     i128 counter = random_number;
-    for (size_t i = 0; i < F.get_rows(); ++i) {
-        for (size_t j = 0; j < F.get_cols(); ++j) {
+    for (size_t i = 0; i < F.n_rows(); ++i) {
+        for (size_t j = 0; j < F.n_cols(); ++j) {
             rgsw& rg = F.get_rgsw(i, j);
             for (rlwe& rl : rg) {
                 for (poly& p : rl) {
@@ -964,6 +964,146 @@ public:
     }
 };
 
+class Encryptor {
+private:
+i128 v, d, N, q;
+std::vector<i128> sk;
+
+public:
+    Encryptor(i128 v_, i128 d_, i128 N_, i128 q_, std::vector<i128> sk_)
+        : v(v_), d(d_), N(N_), q(q_), sk(sk_) {}
+    // Encrypts an RLWE ciphertext of message m
+    // m: message polynomial (poly), N: degree, sk: secret key, q: modulus, dth_pows: unused here
+    rlwe encrypt_rlwe(const poly& m) {
+        poly noise = poly(N);
+        auto noise_vec = sample_noise_polynomial(N);
+        for (size_t i = 0; i < N; ++i) noise.set(i, noise_vec[i]);
+
+        poly a = poly(N);
+        auto a_vec = sample_random_polynomial(N, q);
+        for (size_t i = 0; i < N; ++i) a.set(i, a_vec[i]);
+
+        // poly_mult_mod(a, sk, q)
+        poly ask(N);
+        for (size_t i = 0; i < N; ++i) {
+            i128 sum = 0;
+            for (size_t j = 0; j < N; ++j) {
+                sum += a.get(j) * sk[(i - j + N) % N];
+            }
+            ask.set(i, mod_(sum, q));
+        }
+
+        poly b(N);
+        for (size_t i = 0; i < N; ++i) {
+            i128 val = m.get(i) + noise.get(i) + ask.get(i);
+            b.set(i, mod_(val, q));
+        }
+
+        rlwe res(2, N);
+        res.set(0, b);
+        res.set(1, a);
+        return res;
+    }
+
+    // Encrypts an RGSW ciphertext of message M (poly)
+    rgsw encrypt_rgsw(const poly& M) {
+        // Compute v powers: v^0, v^1, ..., v^{d-1}
+        std::vector<i128> v_powers(d);
+        for (i128 i = 0; i < d; ++i) {
+            v_powers[i] = 1;
+            for (i128 j = 0; j < i; ++j) {
+                v_powers[i] = (v_powers[i] * v) % q;
+            }
+        }
+
+        // Build G matrix: 2 x 2d, each row is [v_powers, 0...], [0..., v_powers]
+        std::vector<std::vector<i128>> G(2, std::vector<i128>(2 * d, 0));
+        for (i128 i = 0; i < d; ++i) {
+            G[0][i] = v_powers[i];
+            G[1][d + i] = v_powers[i];
+        }
+
+        // Encryptions of zero
+        std::vector<rlwe> encs_of_zero(2 * d);
+        poly zero_poly(N);
+        for (i128 i = 0; i < 2 * d; ++i) {
+            encs_of_zero[i] = encrypt_rlwe(zero_poly);
+        }
+
+        // Compute M * G and add to RLWE encryptions
+        // NOTE needs modification for
+        // FIXME
+        for (i128 i = 0; i < N; ++i) {
+            for (i128 j = 0; j < 2 * d; ++j) {
+                // Add M[i] * G[row][j] to b poly of RLWE
+                i128 val = (M.get(i) * G[i < d ? 0 : 1][j]) % q;
+                rlwe& ct = encs_of_zero[j];
+                poly& b_poly = ct.get_poly(0);
+                b_poly.set(i, (b_poly.get(i) + val) % q);
+            }
+        }
+
+        // Pack RLWE encryptions into RGSW
+        rgsw res(2 * d, 2, N);
+        for (i128 i = 0; i < 2 * d; ++i) {
+            res.set(i, encs_of_zero[i]);
+        }
+        return res;
+    }
+    // takes an array2d<i128> and returns an encrypted rgsw_mat
+    rgsw_mat encrypt_rgsw_mat(const array2d<i128>& mat) {
+        size_t rows = mat.n_rows();
+        size_t cols = mat.n_cols();
+        rgsw_mat res(rows, cols, 2 * d, 2, N);
+        for (size_t i = 0; i < rows; ++i) {
+            for (size_t j = 0; j < cols; ++j) {
+                poly p(N);
+                for (size_t k = 0; k < N; ++k) {
+                    p.set(k, mat.get(i, j)); // fill all coeffs with mat(i, j)
+                }
+                rgsw enc_rgsw = encrypt_rgsw(p);
+                res.set(i, j, enc_rgsw);
+            }
+        }
+        return res;
+    }
+
+    // Encodes an RGSW plaintext (not encryption, just encoding)
+    rgsw encode_rgsw(const poly& M) {
+        // Compute v powers: v^0, v^1, ..., v^{d-1}
+        std::vector<i128> v_powers(d);
+        for (i128 i = 0; i < d; ++i) {
+            v_powers[i] = 1;
+            for (i128 j = 0; j < i; ++j) {
+                v_powers[i] = (v_powers[i] * v) % q;
+            }
+        }
+
+        // Build G matrix: 2 x 2d, each row is [v_powers, 0...], [0..., v_powers]
+        std::vector<std::vector<i128>> G(2, std::vector<i128>(2 * d, 0));
+        for (i128 i = 0; i < d; ++i) {
+            G[0][i] = v_powers[i];
+            G[1][d + i] = v_powers[i];
+        }
+
+        // Create rgsw object
+        rgsw res(2 * d, 2, N);
+        for (i128 j = 0; j < 2 * d; ++j) {
+            rlwe ct(2, N);
+            for (i128 row = 0; row < 2; ++row) {
+                poly p(N);
+                for (i128 i = 0; i < N; ++i) {
+                    i128 val = (M.get(i) * G[row][j]) % q;
+                    p.set(i, val);
+                }
+                ct.set(row, p);
+            }
+            res.set(j, ct);
+        }
+        return res;
+    }
+};
+
 void test() {
     rlwe_vec u(2, 2, 2);
     for (size_t i = 0; i < u.size(); i++) {
@@ -1110,8 +1250,8 @@ void test_rlwe_decomp_vec() {
     size_t cols = 2;
     counter = 0;
     rgsw_mat F(rows, cols, n_rlwes, n_polys, n_coeffs);
-    for (size_t m = 0; m < F.get_rows(); m++) {
-        for (size_t n = 0; n < F.get_cols(); n++) {
+    for (size_t m = 0; m < F.n_rows(); m++) {
+        for (size_t n = 0; n < F.n_cols(); n++) {
             rgsw& rg = F.get(m, n);
             for (size_t i = 0; i < rg.size(); i++) {
                 rlwe& r = rg.get(i);
@@ -1125,8 +1265,8 @@ void test_rlwe_decomp_vec() {
         }
     }
     std::cout << "F:\n";
-    for (size_t i = 0; i < F.get_rows(); i++) {
-        for (size_t j = 0; j < F.get_cols(); j++) {
+    for (size_t i = 0; i < F.n_rows(); i++) {
+        for (size_t j = 0; j < F.n_cols(); j++) {
             F.get(i, j).print();
             std::cout << "\n";
         }
@@ -1186,8 +1326,8 @@ void test_full() {
     rlwe_decomp_vec x(cols, n_rlwes, n_coeffs);
     veri_vec_scalar r(rows);
     init(F, x, r);
-    // for (size_t i = 0; i < F.get_rows(); i++) {
-    //     for (size_t j = 0; j < F.get_cols(); j++) {
+    // for (size_t i = 0; i < F.n_rows(); i++) {
+    //     for (size_t j = 0; j < F.n_cols(); j++) {
     //         F.get(i, j).print();
     //         std::cout << "\n";
     //     }
@@ -1249,8 +1389,8 @@ void test_full() {
     // // std::cout << "r:\n";
     // // r.print();
     // // std::cout << "F:\n";
-    // // for (size_t i = 0; i < F.get_rows(); i++) {
-    // //     for (size_t j = 0; j < F.get_cols(); j++) {
+    // // for (size_t i = 0; i < F.n_rows(); i++) {
+    // //     for (size_t j = 0; j < F.n_cols(); j++) {
     // //         F.get(i, j).print();
     // //         std::cout << "\n";
     // //     }
@@ -1327,6 +1467,17 @@ void run_control_loop() {
     double log2q = std::log2(static_cast<double>(FIELD_MODULUS));
     int power = static_cast<int>(std::ceil(log2q / static_cast<double>(d)));
     i128 v = static_cast<i128>(1) << power;
+
+    Encryptor enc(v, d, N, pms.q, sk);
+    i128 n_rlwes = 2 * d;
+    i128 n_polys = 2;
+    i128 n_coeffs = N;
+    rgsw_mat F_ctx(F.n_rows(), F.n_cols(), n_rlwes, n_polys, n_coeffs);
+    // poly p(n_coeffs);
+    // for (size_t i = 0; i < n_coeffs; i++)
+    //     p.set(i, 42);
+    // rgsw test = enc.encrypt_rgsw(p);
+    F_ctx = enc.encrypt_rgsw_mat(F);
 }
 
 int main() {
