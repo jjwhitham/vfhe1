@@ -1036,10 +1036,12 @@ public:
         for (i128 i = 0; i < N; ++i) {
             for (i128 j = 0; j < 2 * d; ++j) {
                 // Add M[i] * G[row][j] to b poly of RLWE
-                i128 val = (M.get(i) * G[i < d ? 0 : 1][j]) % q;
-                rlwe& ct = encs_of_zero[j];
-                poly& b_poly = ct.get_poly(0);
-                b_poly.set(i, (b_poly.get(i) + val) % q);
+                for (i128 k = 0; k < 2; k++) {
+                    i128 val = (M.get(i) * G.at(k).at(j)) % q;
+                    rlwe& ct = encs_of_zero.at(j);
+                    poly& rlwe_component = ct.get_poly(k);
+                    rlwe_component.set(i, (rlwe_component.get(i) + val) % q);
+                }
             }
         }
 
@@ -1487,7 +1489,7 @@ int main() {
     // std::cout << "omp num threads: " << omp_get_max_threads() << std::endl;
     // std::cout << " omp num threads: " << omp_get_num_threads() << std::endl;
     // test_full();
-
+    run_control_loop();
 
     return 0;
 }
