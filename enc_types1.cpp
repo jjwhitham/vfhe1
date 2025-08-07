@@ -1687,11 +1687,15 @@ std::tuple<eval_key, veri_key> compute_eval_and_veri_keys(
         return v;
     };
 
-    rgsw_vec grFr_0 = convert_vec_to_cyclic_enc(g, rF_0_r_1, d, q, p);
-    rgsw_vec grFr_1 = convert_vec_to_cyclic_enc(g, rF_1_r_0, d, q, p);
+    rgsw_vec grFr_0 = rF_0_r_1.pow(g);
+    // = convert_vec_to_cyclic_enc(g, rF_0_r_1, d, q, p);
+    rgsw_vec grFr_1 = rF_1_r_0.pow(g);
+    // convert_vec_to_cyclic_enc(g, rF_1_r_0, d, q, p);
 
-    rgsw_vec grFr_alpha_0 = convert_vec_to_cyclic_enc(g, rF_0_r_1 * alpha_1, d, q, p);
-    rgsw_vec grFr_alpha_1 = convert_vec_to_cyclic_enc(g, rF_1_r_0 * alpha_0, d, q, p);
+    rgsw_vec grFr_alpha_0 = (rF_0_r_1 * alpha_1).pow(g);
+    // convert_vec_to_cyclic_enc(g, rF_0_r_1 * alpha_1, d, q, p);
+    rgsw_vec grFr_alpha_1 = (rF_1_r_0 * alpha_0).pow(g);
+    // convert_vec_to_cyclic_enc(g, rF_1_r_0 * alpha_0, d, q, p);
 
     rgsw_vec rG_0 = vec_mat_mult(r_0, G_bar_ctx, q);
     rgsw_vec rG_1 = vec_mat_mult(r_1, G_bar_ctx, q);
