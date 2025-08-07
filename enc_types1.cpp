@@ -34,6 +34,7 @@ su = sHu
 #include <random>
 #include "omp.h"
 
+// FIXME check if this is being used correctly, i.e. are some negs required?
 typedef __uint128_t i128;
 // constexpr i128 GROUP_MODULUS = 23;
 // constexpr i128 FIELD_MODULUS = 11;
@@ -41,6 +42,9 @@ typedef __uint128_t i128;
 constexpr i128 GROUP_MODULUS = 540431955285196831;
 constexpr i128 FIELD_MODULUS = 18014398509506561;
 constexpr i128 GENERATOR = 1073741824;
+using matrix_double = std::vector<std::vector<double>>;
+using vector_double = std::vector<double>;
+using vector_i128 = std::vector<i128>;
 
 // FIXME make types __uint128 so that regular modding works
 i128 mod_(__int128_t val, i128 q) {
@@ -51,8 +55,8 @@ i128 mod_(__int128_t val, i128 q) {
     return val;
 }
 
-std::vector<i128> sample_discrete_gaussian(size_t N, double mu = 3.2, double sigma = 19.2) {
-    std::vector<i128> result(N);
+vector_i128 sample_discrete_gaussian(size_t N, double mu = 3.2, double sigma = 19.2) {
+    vector_i128 result(N);
     std::random_device rd;
     std::mt19937 gen(rd());
     std::normal_distribution<double> dist(mu, sigma);
@@ -61,10 +65,10 @@ std::vector<i128> sample_discrete_gaussian(size_t N, double mu = 3.2, double sig
     }
     return result;
 }
-std::vector<i128> sample_secret_key(size_t N) {
+vector_i128 sample_secret_key(size_t N) {
     // Sample a secret key for the RGSW scheme.
     // Each entry is -1, 0, or 1, with probabilities 0.25, 0.5, 0.25 respectively.
-    std::vector<i128> s(N);
+    vector_i128 s(N);
     std::random_device rd;
     std::mt19937 gen(rd());
     std::discrete_distribution<int> dist({0.25, 0.5, 0.25});
@@ -77,8 +81,8 @@ std::vector<i128> sample_secret_key(size_t N) {
     return s;
 }
 // Sample a random polynomial of degree N-1 with coefficients in the range [0, q).
-std::vector<i128> sample_random_polynomial(size_t N, i128 q) {
-    std::vector<i128> poly(N);
+vector_i128 sample_random_polynomial(size_t N, i128 q) {
+    vector_i128 poly(N);
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<i128> dist(0, q - 1);
@@ -89,7 +93,7 @@ std::vector<i128> sample_random_polynomial(size_t N, i128 q) {
 }
 
 // Sample a noise polynomial of degree N-1 with coefficients from the discrete Gaussian distribution.
-std::vector<i128> sample_noise_polynomial(size_t N, double mu = 3.2, double sigma = 19.2) {
+vector_i128 sample_noise_polynomial(size_t N, double mu = 3.2, double sigma = 19.2) {
     return sample_discrete_gaussian(N, mu, sigma);
 }
 
@@ -122,6 +126,13 @@ public:
     array1d(size_t size) : size_(size) {
         arr = new T[size]();
     }
+    // // copy constructor
+    // array1d(const array1d& other) : size_(other.size_) {
+    //     arr = new T[size_];
+    //     for (size_t i = 0; i < size_; ++i) {
+    //         arr[i] = other.arr[i];
+    //     }
+    // }
     ~array1d() = default;
     void check_index_bounds(size_t n) const {
         if (n >= size_) {
@@ -161,7 +172,7 @@ public:
         for (size_t i = 0; i < N; i++) {
             auto val = (get(i) * other.get(i));
             if constexpr (std::is_same_v<T, i128>)
-                val %= FIELD_MODULUS;
+                val = mod_(val, FIELD_MODULUS);
             res.set(i, val);
         }
         return res;
@@ -172,7 +183,7 @@ public:
         for (size_t i = 0; i < N; i++) {
             auto val = get(i) * scalar;
             if constexpr (std::is_same_v<T, i128>)
-                val %= FIELD_MODULUS;
+                val = mod_(val, FIELD_MODULUS);
             res.set(i, val);
         }
         return res;
@@ -184,7 +195,7 @@ public:
             T val;
             if constexpr (std::is_same_v<T, i128>) {
                 val = (get(i) * other.get(i));
-                val %= GROUP_MODULUS;
+                val = mod_(val, GROUP_MODULUS);
             } else {
                 val = get(i).group_mult(other.get(i));
             }
@@ -199,7 +210,7 @@ public:
             T val;
             if constexpr (std::is_same_v<T, i128>) {
                 val = get(i) * scalar;
-                val %= GROUP_MODULUS;
+                val = mod_(val, GROUP_MODULUS);
             } else {
                 val = get(i).group_mult(scalar);
             }
@@ -213,7 +224,7 @@ public:
         for (size_t i = 0; i < N; i++) {
             auto val = get(i) + other.get(i);
             if constexpr (std::is_same_v<T, i128>)
-                val %= FIELD_MODULUS;
+                val = mod_(val, FIELD_MODULUS);
             res.set(i, val);
         }
         return res;
@@ -274,13 +285,12 @@ public:
     }
     // base case binary modular exponentiation
     i128 pow_(i128 base, i128 power) const {
-        power %= FIELD_MODULUS;
-        base %= GROUP_MODULUS;
+        power = mod_(power, FIELD_MODULUS);
+        base = mod_(base, GROUP_MODULUS);
         i128 result = 1;
-        i128 one = 1;
-        i128 two = 2;
         while (power > 0) {
-            if ((power % two) == one)
+            bool is_power_odd = (power % 2) == 1;
+            if (is_power_odd)
                 result = (result * base) % GROUP_MODULUS;
             power >>= 1;
             base = (base * base) % GROUP_MODULUS;
@@ -322,7 +332,7 @@ private:
     T* data;
     T** arr;
 public:
-    array2d() : rows_(0), cols_(0) {}
+    array2d() : rows_(0), cols_(0), data(nullptr), arr(nullptr) {}
     array2d(size_t rows, size_t cols) : rows_(rows), cols_(cols) {
         data = new T[rows * cols]();
         arr = new T*[rows];
@@ -331,8 +341,9 @@ public:
         }
     }
     ~array2d() {
-        delete[] data;
-        delete[] arr;
+        // FIXME
+        // if (arr) delete[] *arr;
+        // if (arr) delete[] arr;
     }
     void check_index_bounds(size_t row, size_t col) const {
         if (row >= rows_ || col >= cols_) {
@@ -393,6 +404,19 @@ public:
             set(i, 0);
         }
     }
+    // // deep copy constructor
+    // poly(const poly& other) : array1d<i128, poly>(other.size()) {
+    //     for (size_t i = 0; i < other.size(); ++i) {
+    //         set(i, other.get(i));
+    //     }
+    // }
+    // poly& operator=(const poly& other) {
+    //     if (this != &other) {
+    //         array1d<i128, poly>::operator=(other);
+    //         // Copy any poly-specific members here if needed
+    //     }
+    //     return *this;
+    // }
     auto& get_coeff(size_t n) const {
         return get(n);
     }
@@ -410,6 +434,12 @@ public:
         assert(n_polys == 2);
         for (size_t i = 0; i < n_polys; i++) {
             set(i, poly(n_coeffs));
+        }
+    }
+    // deep copy constructor
+    rlwe(const rlwe& other) : array1d<poly, rlwe>(other.size()) {
+        for (size_t i = 0; i < other.size(); ++i) {
+            set(i, poly(other.get(i)));
         }
     }
     auto& get_poly(size_t n) const {
@@ -435,6 +465,12 @@ public:
         for (size_t i = 0; i < n_rlwes; i++)
             set(i, rlwe(n_polys, n_coeffs));
     }
+    // // Deep copy constructor
+    // rlwe_vec(const rlwe_vec& other) : array1d<rlwe, rlwe_vec>(other.size()) {
+    //     for (size_t i = 0; i < other.size(); ++i) {
+    //         set(i, rlwe(other.get(i)));
+    //     }
+    // }
     auto& get_rlwe(size_t n) const {
         return get(n);
     }
@@ -632,7 +668,6 @@ public:
             }
         }
     }
-    ~rgsw_mat() {}
 
     rlwe_vec operator*(const rlwe_decomp_vec& other) const {
         size_t rows = n_rows();
@@ -831,11 +866,14 @@ private:
     }
 
     // TODO update to array1d<i128> (add as another class?)
-    poly scalar_vec_mult(i128 scalar, std::vector<double>& vec, i128 q) {
+    vector_i128 scalar_vec_mult(i128 scalar, vector_double& vec, i128 q) {
         // TODO update to array1d<i128> (add as another class?)
-        poly result(vec.size());
+        vector_i128 result(vec.size());
+        assert(result.size() == vec.size()); // FIXME remove after assert passes
+        assert(result.capacity() == result.size());
         for (size_t i = 0; i < vec.size(); ++i) {
-            result.set(i, mod_(static_cast<__int128_t>(std::round(scalar * vec[i])), q));
+            // FIXME usage of __int128_t, as per FIXME for i128 at top
+            result.at(i) = mod_(static_cast<__int128_t>(std::round(scalar * vec[i])), q);
         }
         return result;
     }
@@ -870,7 +908,7 @@ public:
     i128 p, q, g, s, L, r, iter_, x_dim, y_dim, u_dim;
     array2d<i128> F, G_bar, R_bar, H_bar;
     // TODO update to array1d<i128> (add as another class?)
-    poly x_cont_init_scaled;
+    vector_i128 x_cont_init_scaled;
 
     // ======== Plant matrices ========
     std::vector<std::vector<double>> A = {
@@ -929,14 +967,15 @@ public:
         std::cout << "H_bar:\n";
         H_bar.print();
         std::cout << "x_cont_init_scaled:\n";
-        x_cont_init_scaled.print();
+        // TODO print_vec()
+        // x_cont_init_scaled.print();
         // print these: G_bar, R_bar, H_bar;
         // print this: x_cont_init_scaled;
     }
     // TODO pass in gen as a param
-    std::vector<i128> sample_knowledge_exponents(i128 from, i128 to_inclusive) {
+    vector_i128 sample_knowledge_exponents(i128 from, i128 to_inclusive) {
         i128 N = 6;
-        std::vector<i128> res(N);
+        vector_i128 res(N);
         for (size_t i = 0; i < N; i++) {
             // TODO update range
             res.at(i) = random_i128(from, to_inclusive);
@@ -946,13 +985,13 @@ public:
     }
 
     // TODO pass in gen as a param
-    std::vector<std::vector<i128>> sample_verification_vectors(i128 m, i128 n, i128 from, i128 to_inclusive) {
+    std::vector<vector_i128> sample_verification_vectors(i128 m, i128 n, i128 from, i128 to_inclusive) {
         i128 N = 3;
-        std::vector<std::vector<i128>> res(N);
+        std::vector<vector_i128> res(N);
         for (size_t i = 0; i < N - 1; i++) {
-            res.at(i) = std::vector<i128>(n);
+            res.at(i) = vector_i128(n);
         }
-        res.at(N - 1) = std::vector<i128>(m);
+        res.at(N - 1) = vector_i128(m);
 
         for (auto& x : res) {
             for (size_t i = 0; i < x.size(); i++) {
@@ -967,10 +1006,10 @@ public:
 class Encryptor {
 private:
 i128 v, d, N, q;
-std::vector<i128> sk;
+vector_i128 sk;
 
 public:
-    Encryptor(i128 v_, i128 d_, i128 N_, i128 q_, std::vector<i128> sk_)
+    Encryptor(i128 v_, i128 d_, i128 N_, i128 q_, vector_i128 sk_)
         : v(v_), d(d_), N(N_), q(q_), sk(sk_) {}
     // Encrypts an RLWE ciphertext of message m
     // m: message polynomial (poly), N: degree, sk: secret key, q: modulus, dth_pows: unused here
@@ -988,7 +1027,7 @@ public:
         for (size_t i = 0; i < N; ++i) {
             i128 sum = 0;
             for (size_t j = 0; j < N; ++j) {
-                sum += a.get(j) * sk[(i - j + N) % N];
+                sum += a.get(j) * sk[mod_((i - j + N), N)];
             }
             ask.set(i, mod_(sum, q));
         }
@@ -1005,19 +1044,30 @@ public:
         return res;
     }
 
+    rlwe_vec encrypt_rlwe_vec(const vector_i128& vec) {
+        rlwe_vec res(vec.size());
+        for (size_t i = 0; i < vec.size(); i++) {
+            poly p(N);
+            p.set(0, vec.at(i)); // set the first coefficient to the value
+            rlwe r = encrypt_rlwe(p);
+            res.set(i, r);
+        }
+        return res;
+    }
+
     // Encrypts an RGSW ciphertext of message M (poly)
     rgsw encrypt_rgsw(const poly& M) {
         // Compute v powers: v^0, v^1, ..., v^{d-1}
-        std::vector<i128> v_powers(d);
+        vector_i128 v_powers(d);
         for (i128 i = 0; i < d; ++i) {
             v_powers[i] = 1;
             for (i128 j = 0; j < i; ++j) {
-                v_powers[i] = (v_powers[i] * v) % q;
+                v_powers[i] = mod_((v_powers[i] * v), q);
             }
         }
 
         // Build G matrix: 2 x 2d, each row is [v_powers, 0...], [0..., v_powers]
-        std::vector<std::vector<i128>> G(2, std::vector<i128>(2 * d, 0));
+        std::vector<vector_i128> G(2, vector_i128(2 * d, 0));
         for (i128 i = 0; i < d; ++i) {
             G[0][i] = v_powers[i];
             G[1][d + i] = v_powers[i];
@@ -1037,10 +1087,10 @@ public:
             for (i128 j = 0; j < 2 * d; ++j) {
                 // Add M[i] * G[row][j] to b poly of RLWE
                 for (i128 k = 0; k < 2; k++) {
-                    i128 val = (M.get(i) * G.at(k).at(j)) % q;
+                    i128 val = mod_(M.get(i) * G.at(k).at(j), q);
                     rlwe& ct = encs_of_zero.at(j);
                     poly& rlwe_component = ct.get_poly(k);
-                    rlwe_component.set(i, (rlwe_component.get(i) + val) % q);
+                    rlwe_component.set(i, mod_(rlwe_component.get(i) + val, q));
                 }
             }
         }
@@ -1073,16 +1123,16 @@ public:
     // Encodes an RGSW plaintext (not encryption, just encoding)
     rgsw encode_rgsw(const poly& M) {
         // Compute v powers: v^0, v^1, ..., v^{d-1}
-        std::vector<i128> v_powers(d);
+        vector_i128 v_powers(d);
         for (i128 i = 0; i < d; ++i) {
             v_powers[i] = 1;
             for (i128 j = 0; j < i; ++j) {
-                v_powers[i] = (v_powers[i] * v) % q;
+                v_powers[i] = mod_(v_powers[i] * v, q);
             }
         }
 
         // Build G matrix: 2 x 2d, each row is [v_powers, 0...], [0..., v_powers]
-        std::vector<std::vector<i128>> G(2, std::vector<i128>(2 * d, 0));
+        std::vector<vector_i128> G(2, vector_i128(2 * d, 0));
         for (i128 i = 0; i < d; ++i) {
             G[0][i] = v_powers[i];
             G[1][d + i] = v_powers[i];
@@ -1095,7 +1145,7 @@ public:
             for (i128 row = 0; row < 2; ++row) {
                 poly p(N);
                 for (i128 i = 0; i < N; ++i) {
-                    i128 val = (M.get(i) * G[row][j]) % q;
+                    i128 val = mod_(M.get(i) * G[row][j], q);
                     p.set(i, val);
                 }
                 ct.set(row, p);
@@ -1413,14 +1463,21 @@ void test_full() {
 
 }
 
+vector_i128 eval_poly_pows(size_t n, i128 base, i128 q) {
+    vector_i128 res(n);
+    res.at(0) = 1; // base^0 = 1
+    for (size_t i = 1; i < n; i++) {
+        res.at(i) = mod_(res.at(i - 1) * base, q);
+    }
+    return res;
+}
+
 void run_control_loop() {
     Params pms;
     // params.print();
-
-    using matrix_double = std::vector<std::vector<double>>;
     using matrix_i128 = array2d<i128>;
-    using vector_double = std::vector<double>;
-    using vector_i128 = std::vector<i128>;
+
+    i128 q = pms.q;
     matrix_double A = pms.A;
     matrix_double B = pms.B;
     matrix_double C = pms.C;
@@ -1429,7 +1486,7 @@ void run_control_loop() {
     matrix_i128 H_bar = pms.H_bar;
     matrix_i128 R_bar = pms.R_bar;
     vector_double x_plant = pms.x_plant_init;
-    poly x_cont = pms.x_cont_init_scaled;
+    vector_i128 x_cont = pms.x_cont_init_scaled;
 
     i128 rr = pms.r;
     i128 ss = pms.s;
@@ -1470,7 +1527,7 @@ void run_control_loop() {
     int power = static_cast<int>(std::ceil(log2q / static_cast<double>(d)));
     i128 v = static_cast<i128>(1) << power;
 
-    Encryptor enc(v, d, N, pms.q, sk);
+    Encryptor enc(v, d, N, q, sk);
     i128 n_rlwes = 2 * d;
     i128 n_polys = 2;
     i128 n_coeffs = N;
@@ -1480,6 +1537,16 @@ void run_control_loop() {
     //     p.set(i, 42);
     // rgsw test = enc.encrypt_rgsw(p);
     F_ctx = enc.encrypt_rgsw_mat(F);
+    rgsw_mat G_bar_ctx(G_bar.n_rows(), G_bar.n_cols(), n_rlwes, n_polys, n_coeffs);
+    G_bar_ctx = enc.encrypt_rgsw_mat(G_bar);
+    rgsw_mat R_bar_ctx(R_bar.n_rows(), R_bar.n_cols(), n_rlwes, n_polys, n_coeffs);
+    R_bar_ctx = enc.encrypt_rgsw_mat(R_bar);
+    rgsw_mat H_bar_ctx(H_bar.n_rows(), H_bar.n_cols(), n_rlwes, n_polys, n_coeffs);
+    H_bar_ctx = enc.encrypt_rgsw_mat(H_bar);
+    rlwe_vec x_cont_ctx(x_cont.size(), n_polys, n_coeffs);
+    x_cont_ctx = enc.encrypt_rlwe_vec(x_cont);
+    rlwe_vec x_cont_ctx_convolved(x_cont_ctx); // copy x_cont_ctx
+    vector_i128 eval_pows = eval_poly_pows(2 * N, 42, q);
 }
 
 int main() {
@@ -1495,3 +1562,4 @@ int main() {
 }
 
 // DONE update either i128 to u128, or replace % with mod()
+// TODO test encryptor funcs (perhaps set moduli small and compare with Python)
