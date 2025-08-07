@@ -55,6 +55,14 @@ i128 mod_(__int128_t val, i128 q) {
     return val;
 }
 
+vector_i128 mod_(const vector_i128& vals, i128 q) {
+    vector_i128 res(vals.size());
+    for (size_t i = 0; i < vals.size(); ++i) {
+        res[i] = mod_(vals[i], q);
+    }
+    return res;
+}
+
 vector_i128 sample_discrete_gaussian(size_t N, double mu = 3.2, double sigma = 19.2) {
     vector_i128 result(N);
     std::random_device rd;
@@ -228,6 +236,18 @@ public:
             res.set(i, val);
         }
         return res;
+    }
+
+    Derived operator-(const Derived& other) const {
+        size_t N = size();
+        Derived neg_other(N);
+        for (size_t i = 0; i < N; i++) {
+            auto val = get(i) - other.get(i);
+            if constexpr (std::is_same_v<T, i128>)
+                val = mod_(val, FIELD_MODULUS);
+            neg_other.set(i, val);
+        }
+        return *this + neg_other;
     }
     // raise self to other
     Derived pow(const Derived& other) const {
@@ -616,6 +636,7 @@ public:
     size_t get_n_coeffs() const {
         return get_rgsw(0).get_n_coeffs();
     }
+    using array1d<rgsw, rgsw_vec>::operator*;
     rlwe operator*(const rlwe_decomp_vec& other) const {
         size_t n = other.size();
         assert(size() == n);
@@ -1472,6 +1493,262 @@ vector_i128 eval_poly_pows(size_t n, i128 base, i128 q) {
     return res;
 }
 
+struct eval_key {
+        vector_i128 gr_0;
+        rgsw_vec grFr_0;
+        rgsw_vec gsHr_0;
+        vector_i128 gr_rho_0;
+        rgsw_vec grFr_alpha_0;
+        rgsw_vec gsHr_gamma_0;
+        vector_i128 gr_1;
+        rgsw_vec grFr_1;
+        rgsw_vec gsHr_1;
+        vector_i128 gr_rho_1;
+        rgsw_vec grFr_alpha_1;
+        rgsw_vec gsHr_gamma_1;
+};
+
+struct veri_key {
+    vector_i128 s;
+    rgsw_vec rG_0;
+    rgsw_vec rG_1;
+    rgsw_vec rR_0;
+    rgsw_vec rR_1;
+    i128 rho_0;
+    i128 rho_1;
+    i128 alpha_0;
+    i128 alpha_1;
+    i128 gamma_0;
+    i128 gamma_1;
+};
+
+std::tuple<eval_key, veri_key> compute_eval_and_veri_keys(
+    rgsw_mat F_ctx, rgsw_mat G_bar_ctx, rgsw_mat R_bar_ctx, rgsw_mat H_bar_ctx,
+    vector_i128 r_0, vector_i128 r_1, vector_i128 s,
+    i128 rho_0, i128 rho_1, i128 alpha_0, i128 alpha_1, i128 gamma_0, i128 gamma_1,
+    i128 g, i128 d, i128 q, i128 p, i128 v, i128 N, vector_i128 eval_pows, Encryptor enc
+) {
+    // Helper function for scalar-vector multiplication (mod q)
+    auto scalar_vec_mult = [](i128 scalar, const vector_i128& vec, i128 q) -> vector_i128 {
+        vector_i128 result(vec.size());
+        for (size_t i = 0; i < vec.size(); ++i) {
+            result[i] = mod_(scalar * vec[i], q);
+        }
+        return result;
+    };
+    // Assume helper functions are already defined:
+    // convert_vec_to_cyclic, convert_vec_to_cyclic_enc, vec_mat_mult, hash_rgsw_vector, encode_rgsw
+
+    size_t n = F_ctx.n_rows();
+    size_t m = H_bar_ctx.n_rows();
+
+    // Anonymous function for cyclic exponentiation: (g^e1)^e2 mod p
+    auto cyclic_exp = [](i128 base, i128 exp, i128 q, i128 p) -> i128 {
+        // Compute base^exp mod p
+        i128 result = 1;
+        base = mod_(base, p);
+        exp = mod_(exp, q);
+        while (exp > 0) {
+            if (exp & 1)
+                result = mod_(result * base, p);
+            exp >>= 1;
+            base = mod_(base * base, p);
+        }
+        return result;
+    };
+
+    // Anonymous function for vectorized cyclic exponentiation: (g^e1)^e2 for each pair
+    auto cyclic_exp_vec = [&](const vector_i128& v1, const vector_i128& v2, i128 q, i128 p) -> vector_i128 {
+        assert(v1.size() == v2.size());
+        vector_i128 res(v1.size());
+        for (size_t i = 0; i < v1.size(); ++i)
+            res[i] = cyclic_exp(v1[i], v2[i], q, p);
+        return res;
+    };
+
+    // Converts a vector v to a vector where each element is g^v[i] mod p
+    auto convert_vec_to_cyclic = [&](i128 g, const vector_i128& v, i128 q, i128 p) -> vector_i128 {
+        vector_i128 res(v.size());
+        for (size_t i = 0; i < v.size(); ++i) {
+            res[i] = cyclic_exp(g, v[i], q, p);
+        }
+        return res;
+    };
+
+    vector_i128 gr_0 = convert_vec_to_cyclic(g, r_0, q, p);
+    vector_i128 gr_1 = convert_vec_to_cyclic(g, r_1, q, p);
+    vector_i128 gr_rho_0 = convert_vec_to_cyclic(g, scalar_vec_mult(rho_0, r_0, q), q, p); // Example for first element
+    vector_i128 gr_rho_1 = convert_vec_to_cyclic(g, scalar_vec_mult(rho_1, r_1, q), q, p);
+
+    // Anonymous function for vector-matrix multiplication: vector_i128 * rgsw_mat
+    auto vec_mat_mult = [](const vector_i128& vec, const rgsw_mat& mat, i128 q) -> rgsw_vec {
+        size_t rows = mat.n_rows();
+        size_t cols = mat.n_cols();
+        assert(vec.size() == rows);
+        rgsw_vec res(cols, mat.get_n_rlwes(), mat.get_n_polys(), mat.get_n_coeffs());
+        for (size_t j = 0; j < cols; ++j) {
+            rgsw sum(mat.get_n_rlwes(), mat.get_n_polys(), mat.get_n_coeffs());
+            for (size_t i = 0; i < rows; ++i) {
+                sum = sum + (mat.get(i, j) * vec[i]);
+            }
+            res.set(j, sum);
+        }
+        return res;
+    };
+
+    // Hashes a poly using eval_pows and q
+    auto hash_poly = [](const poly& p, const vector_i128& eval_pows, i128 q) -> i128 {
+        i128 sum = 0;
+        for (size_t i = 0; i < p.size() && i < eval_pows.size(); ++i) {
+            sum = mod_(sum + mod_(p.get(i) * eval_pows[i], q), q);
+        }
+        return sum;
+    };
+
+    // Hashes an rgsw_vec using eval_pows and q
+    auto hash_rgsw_vector = [&](const rgsw_vec& rgsw_v, const vector_i128& eval_pows, i128 q) -> rgsw_vec {
+        rgsw_vec hashed(rgsw_v.size(), rgsw_v.get_n_rlwes(), rgsw_v.get_n_polys(), rgsw_v.get_n_coeffs());
+        for (size_t i = 0; i < rgsw_v.size(); ++i) {
+            const rgsw& rgsw_elem = rgsw_v.get(i);
+            rgsw hashed_rgsw(rgsw_elem.size(), rgsw_elem.get_n_polys(), rgsw_elem.get_n_coeffs());
+            for (size_t j = 0; j < rgsw_elem.size(); ++j) {
+                const rlwe& rlwe_elem = rgsw_elem.get(j);
+                rlwe hashed_rlwe(rlwe_elem.size(), rlwe_elem.get(0).size());
+                for (size_t k = 0; k < rlwe_elem.size(); ++k) {
+                    const poly& poly_elem = rlwe_elem.get(k);
+                    i128 hash_val = hash_poly(poly_elem, eval_pows, q);
+                    poly hashed_poly(poly_elem.size());
+                    for (size_t l = 0; l < poly_elem.size(); ++l) {
+                        hashed_poly.set(l, hash_val);
+                    }
+                    hashed_rlwe.set(k, hashed_poly);
+                }
+                hashed_rgsw.set(j, hashed_rlwe);
+            }
+            hashed.set(i, hashed_rgsw);
+        }
+        return hashed;
+    };
+
+    rgsw_vec rF_0 = vec_mat_mult(r_0, F_ctx, q);
+    rgsw_vec rF_1 = vec_mat_mult(r_1, F_ctx, q);
+    rF_0 = hash_rgsw_vector(rF_0, eval_pows, q);
+    rF_1 = hash_rgsw_vector(rF_1, eval_pows, q);
+
+    // Make rgsw_vec for r_0 and r_1
+    rgsw_vec r_0_rgsw(r_0.size(), 2 * d, 2, N), r_1_rgsw(r_1.size(), 2 * d, 2, N);
+    for (size_t i = 0; i < r_0.size(); ++i) {
+        poly p(N);
+        p.set(0, r_0[i]);
+        r_0_rgsw.set(i, enc.encode_rgsw(p));
+    }
+    for (size_t i = 0; i < r_1.size(); ++i) {
+        poly p(N);
+        p.set(0, r_1[i]);
+        r_1_rgsw.set(i, enc.encode_rgsw(p));
+    }
+    assert(r_0_rgsw.size() == rF_0.size());
+    // assert(r_0_rgsw[0].rows() == rF_0[0].rows()); // FIXME
+
+    rgsw_vec rF_0_r_1(rF_0.size()), rF_1_r_0(rF_1.size());
+    for (size_t i = 0; i < rF_0.size(); ++i)
+        rF_0_r_1.set(i, rF_0.get(i) - r_1_rgsw.get(i));
+    for (size_t i = 0; i < rF_1.size(); ++i)
+        rF_1_r_0.set(i, rF_1.get(i) - r_0_rgsw.get(i));
+
+    // Helper to reduce all coefficients in an rgsw_vec modulo q
+    // FIXME
+    auto mod_rgsw_vec = [](const rgsw_vec& v, i128 q) -> rgsw_vec {
+        rgsw_vec res(v.size(), v.get_n_rlwes(), v.get_n_polys(), v.get_n_coeffs());
+        for (size_t i = 0; i < v.size(); ++i) {
+            const rgsw& rgsw_elem = v.get(i);
+            rgsw rgsw_mod(rgsw_elem.size(), rgsw_elem.get_n_polys(), rgsw_elem.get_n_coeffs());
+            for (size_t j = 0; j < rgsw_elem.size(); ++j) {
+                const rlwe& rlwe_elem = rgsw_elem.get(j);
+                rlwe rlwe_mod(rlwe_elem.size(), rlwe_elem.get(0).size());
+                for (size_t k = 0; k < rlwe_elem.size(); ++k) {
+                    const poly& poly_elem = rlwe_elem.get(k);
+                    poly poly_mod(poly_elem.size());
+                    for (size_t l = 0; l < poly_elem.size(); ++l) {
+                        poly_mod.set(l, mod_(poly_elem.get(l), q));
+                    }
+                    rlwe_mod.set(k, poly_mod);
+                }
+                rgsw_mod.set(j, rlwe_mod);
+            }
+            res.set(i, rgsw_mod);
+        }
+        return res;
+    };
+
+    // TODO implement
+    auto convert_vec_to_cyclic_enc = [](i128 g, const rgsw_vec& v, i128 d, i128 q, i128 p) -> rgsw_vec {
+        // Just return the input for now (dummy)
+        return v;
+    };
+
+    rgsw_vec grFr_0 = convert_vec_to_cyclic_enc(g, rF_0_r_1, d, q, p);
+    rgsw_vec grFr_1 = convert_vec_to_cyclic_enc(g, rF_1_r_0, d, q, p);
+
+    rgsw_vec grFr_alpha_0 = convert_vec_to_cyclic_enc(g, rF_0_r_1 * alpha_1, d, q, p);
+    rgsw_vec grFr_alpha_1 = convert_vec_to_cyclic_enc(g, rF_1_r_0 * alpha_0, d, q, p);
+
+    rgsw_vec rG_0 = vec_mat_mult(r_0, G_bar_ctx, q);
+    rgsw_vec rG_1 = vec_mat_mult(r_1, G_bar_ctx, q);
+    rgsw_vec rR_0 = vec_mat_mult(r_0, R_bar_ctx, q);
+    rgsw_vec rR_1 = vec_mat_mult(r_1, R_bar_ctx, q);
+    rG_0 = hash_rgsw_vector(rG_0, eval_pows, q);
+    rG_1 = hash_rgsw_vector(rG_1, eval_pows, q);
+    rR_0 = hash_rgsw_vector(rR_0, eval_pows, q);
+    rR_1 = hash_rgsw_vector(rR_1, eval_pows, q);
+
+    rgsw_vec sH = vec_mat_mult(s, H_bar_ctx, q);
+    sH = hash_rgsw_vector(sH, eval_pows, q);
+
+    rgsw_vec sH_r_1(sH.size()), sH_r_0(sH.size());
+    for (size_t i = 0; i < sH.size(); ++i)
+        sH_r_1.set(i, sH.get(i) - r_1_rgsw.get(i));
+    for (size_t i = 0; i < sH.size(); ++i)
+        sH_r_0.set(i, sH.get(i) - r_0_rgsw.get(i));
+
+    rgsw_vec gsHr_0 = convert_vec_to_cyclic_enc(g, mod_rgsw_vec(sH_r_1, q), d, q, p);
+    rgsw_vec gsHr_1 = convert_vec_to_cyclic_enc(g, mod_rgsw_vec(sH_r_0, q), d, q, p);
+
+    rgsw_vec gsHr_gamma_0 = convert_vec_to_cyclic_enc(g, mod_rgsw_vec(sH_r_1 * gamma_1, q), d, q, p);
+    rgsw_vec gsHr_gamma_1 = convert_vec_to_cyclic_enc(g, mod_rgsw_vec(sH_r_0 * gamma_0, q), d, q, p);
+
+    eval_key ek {
+        gr_0,
+        grFr_0,
+        gsHr_0,
+        gr_rho_0,
+        grFr_alpha_0,
+        gsHr_gamma_0,
+        gr_1,
+        grFr_1,
+        gsHr_1,
+        gr_rho_1,
+        grFr_alpha_1,
+        gsHr_gamma_1
+    };
+
+    veri_key vk {
+        s,
+        rG_0,
+        rG_1,
+        rR_0,
+        rR_1,
+        rho_0,
+        rho_1,
+        alpha_0,
+        alpha_1,
+        gamma_0,
+        gamma_1
+    };
+
+    return std::make_tuple(ek, vk);
+}
+
 void run_control_loop() {
     Params pms;
     // params.print();
@@ -1547,6 +1824,11 @@ void run_control_loop() {
     x_cont_ctx = enc.encrypt_rlwe_vec(x_cont);
     rlwe_vec x_cont_ctx_convolved(x_cont_ctx); // copy x_cont_ctx
     vector_i128 eval_pows = eval_poly_pows(2 * N, 42, q);
+    std::tuple<eval_key, veri_key> keys = compute_eval_and_veri_keys(
+        F_ctx, G_bar_ctx, R_bar_ctx, H_bar_ctx,
+        r_0, r_1, s, rho_0, rho_1, alpha_0, alpha_1, gamma_0, gamma_1,
+        pms.g, d, q, pms.p, v, N, eval_pows, enc
+    );
 }
 
 int main() {
