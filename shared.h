@@ -5,7 +5,8 @@
 #include <algorithm>
 
 // FIXME check if this is being used correctly, i.e. are some negs required?
-typedef __uint128_t i128;
+// typedef __uint128_t i128;
+typedef __int128_t i128;
 // constexpr i128 GROUP_MODULUS = 23;
 // constexpr i128 FIELD_MODULUS = 11;
 // constexpr i128 GENERATOR = 4;

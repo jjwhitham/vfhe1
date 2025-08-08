@@ -74,9 +74,10 @@ public:
             );
         }
     }
-    T& get(size_t n) const {
+    T& get(size_t n, bool disable_value_check = true) const {
         check_index_bounds(n);
-        check_value_bounds(arr[n]);
+        if (!disable_value_check)
+            check_value_bounds(arr[n]);
         return arr[n];
     }
     void check_value_bounds(T& val) const {
@@ -93,9 +94,10 @@ public:
             }
         }
     }
-    void set(int n, T val) { // FIXME should be T& ?
+    void set(int n, T val, bool disable_value_check = false) { // FIXME should be T& ?
         check_index_bounds(n);
-        check_value_bounds(val);
+        if (!disable_value_check)
+            check_value_bounds(val);
         arr[n] = val;
     }
     size_t size() const {
@@ -384,7 +386,7 @@ public:
     auto get_hash(vector_i128 eval_pows) const {
         i128 hash = 0;
         for (size_t i = 0; i < size(); i++) {
-            hash += get(i) * eval_pows.at(i);
+            hash = mod_(hash + get(i) * eval_pows.at(i), FIELD_MODULUS);
         }
         return hash;
     }

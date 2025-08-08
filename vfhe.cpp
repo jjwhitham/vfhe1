@@ -306,7 +306,7 @@ void run_control_loop() {
         hashed_rlwe dot_prod(rv.n_hashed_polys());
         for (const auto& [x, y] : std::views::zip(scalar_vec, rv)) {
             for (size_t i = 0; i < y.size(); ++i) {
-                dot_prod.set(i, dot_prod.get(i) + y.get(i) * x);
+                dot_prod.set(i, mod_(dot_prod.get(i) + y.get(i) * x, FIELD_MODULUS));
             }
         }
         return dot_prod;
@@ -349,6 +349,7 @@ void run_control_loop() {
         rlwe_vec y_out_ctx = enc.encrypt_rlwe_vec(y_out_rounded_modded);
 
         // Controller output
+        // FIXME index out of bounds
         rlwe_vec u_out_ctx_convolved = H_bar_ctx.convolve(x_cont_ctx.decompose(v, d));
         hashed_rlwe_vec u_out_ctx_hashed = u_out_ctx_convolved.get_hash(eval_pows);
         rlwe_vec u_out_ctx = u_out_ctx_convolved.conv_to_nega(N);
@@ -364,23 +365,19 @@ void run_control_loop() {
         // x_plant = vec_add(mat_vec_mult(A, x_plant, q), mat_vec_mult(B, u_in, q), q)
         vector_double x_plant = mat_vec_mult(A, x_plant);
 
-        // # Controller state update
-        // x_cont_old_ctx = [ctx.copy() for ctx in x_cont_ctx]# XXX deepcopy when extending
+        // Controller state update
         rlwe_vec x_cont_old_ctx = x_cont_ctx; // TODO check deepcopy not required
-        //         x_cont_ctx_convolved = vec_add_enc(mat_vec_mult_enc(F_ctx, x_cont_ctx, d, q), mat_vec_mult_enc(G_bar_ctx, y_out_ctx, d, q), q)
         rlwe_vec x_cont_ctx_convolved =
             F_ctx.convolve(x_cont_ctx.decompose(v, d))
             + G_bar_ctx.convolve(y_out_ctx.decompose(v, d))
             + R_bar_ctx.convolve(u_reenc_ctx.decompose(v, d));
         // # u_out is scaled by r * s * s * L, so we need to scale it down
-        // x_cont_ctx_convolved = vec_add_enc(x_cont_ctx_convolved, mat_vec_mult_enc(R_bar_ctx, u_reenc_ctx, d, q), q)
-        // x_cont_ctx = convert_convolved_to_negacyclic_vec(x_cont_ctx_convolved, N, q)
         x_cont_ctx = x_cont_ctx_convolved.conv_to_nega(N);
+
         // # controller creates proofs
         // proof = compute_proof(*eval_key[k % 2], x_cont_ctx, x_cont_ctx_convolved, x_cont_old_ctx, d, q, p, eval_pows)
         Proof proof;
-        // # old_proof[0] = g_1
-        // # Plant verifies
+        // Plant verifies
         // verify_with_lin_and_dyn_checks(veri_key, proof, old_proof, k, y_out_ctx, u_out_ctx_hashed, u_reenc_ctx, g, d, q, p, eval_pows)
         old_proof = proof;
     }
