@@ -26,6 +26,7 @@ su = sHu
 #include "shared.h"
 #include "enc.h"
 #include "vfhe.h"
+#include <ranges>
 
 
 vector_i128 eval_poly_pows(size_t n, i128 base, i128 q) {
@@ -44,17 +45,6 @@ std::tuple<eval_key, veri_key> compute_eval_and_veri_keys(
     i128 g, i128 d, i128 q, i128 p, i128 N, vector_i128 eval_pows, Encryptor enc
     // i128 g, i128 d, i128 q, i128 p, i128 v, i128 N, vector_i128 eval_pows, Encryptor enc
 ) {
-    // Helper function for scalar-vector multiplication (mod q)
-    auto scalar_vec_mult = [](i128 scalar, const vector_i128& vec, i128 q) -> vector_i128 {
-        vector_i128 result(vec.size());
-        for (size_t i = 0; i < vec.size(); ++i) {
-            result[i] = mod_(scalar * vec[i], q);
-        }
-        return result;
-    };
-    // Assume helper functions are already defined:
-    // convert_vec_to_cyclic, convert_vec_to_cyclic_enc, vec_mat_mult, hash_rgsw_vector, encode_rgsw
-
     // size_t n = F_ctx.n_rows();
     // size_t m = H_bar_ctx.n_rows();
 
@@ -72,15 +62,6 @@ std::tuple<eval_key, veri_key> compute_eval_and_veri_keys(
         }
         return result;
     };
-
-    // // Anonymous function for vectorized cyclic exponentiation: (g^e1)^e2 for each pair
-    // auto cyclic_exp_vec = [&](const vector_i128& v1, const vector_i128& v2, i128 q, i128 p) -> vector_i128 {
-    //     assert(v1.size() == v2.size());
-    //     vector_i128 res(v1.size());
-    //     for (size_t i = 0; i < v1.size(); ++i)
-    //         res[i] = cyclic_exp(v1[i], v2[i], q, p);
-    //     return res;
-    // };
 
     // Converts a vector v to a vector where each element is g^v[i] mod p
     auto convert_vec_to_cyclic = [&](i128 g, const vector_i128& v, i128 q, i128 p) -> vector_i128 {
@@ -126,7 +107,7 @@ std::tuple<eval_key, veri_key> compute_eval_and_veri_keys(
         rgsw_vec hashed(rgsw_v.size(), rgsw_v.get_n_rlwes(), rgsw_v.get_n_polys(), rgsw_v.get_n_coeffs());
         for (size_t i = 0; i < rgsw_v.size(); ++i) {
             const rgsw& rgsw_elem = rgsw_v.get(i);
-            rgsw hashed_rgsw(rgsw_elem.size(), rgsw_elem.get_n_polys(), rgsw_elem.get_n_coeffs());
+            rgsw hashed_rgsw(rgsw_elem.size(), rgsw_elem.n_polys(), rgsw_elem.n_coeffs());
             for (size_t j = 0; j < rgsw_elem.size(); ++j) {
                 const rlwe& rlwe_elem = rgsw_elem.get(j);
                 rlwe hashed_rlwe(rlwe_elem.size(), rlwe_elem.get(0).size());
@@ -242,12 +223,25 @@ std::tuple<eval_key, veri_key> compute_eval_and_veri_keys(
     return std::make_tuple(ek, vk);
 }
 
+// TODO
+// g, q, p = generate_field_and_group_params()
+
 void run_control_loop() {
     Params pms;
-    // params.print();
     using matrix_i128 = array2d<i128>;
 
+    // Helper function for scalar-vector multiplication (mod q)
+    auto scalar_vec_mult = [](i128 scalar, const vector_i128& vec, i128 q) -> vector_i128 {
+        vector_i128 result(vec.size());
+        for (size_t i = 0; i < vec.size(); ++i) {
+            result[i] = mod_(scalar * vec[i], q);
+        }
+        return result;
+    };
+
     i128 q = pms.q;
+    i128 p = pms.p;
+    i128 g = pms.g;
     matrix_double A = pms.A;
     matrix_double B = pms.B;
     matrix_double C = pms.C;
@@ -272,24 +266,13 @@ void run_control_loop() {
     i128 gamma_1 = knowledge_exps.at(3);
     i128 rho_0 = knowledge_exps.at(4);
     i128 rho_1 = knowledge_exps.at(5);
-    // std::cout << "Knowledge exponents:\n";
-    // for (const auto& exp : knowledge_exps) {
-    //     std::cout << print_to_string_i128(exp) << " ";
-    // }
-    // std::cout << "\n";
     i128 m = H_bar.n_rows();
     i128 n = F.n_rows();
     auto verification_vectors = pms.sample_verification_vectors(m, n, from, to_inclusive);
     vector_i128 r_0 = verification_vectors.at(0);
     vector_i128 r_1 = verification_vectors.at(1);
     vector_i128 s = verification_vectors.at(2);
-    std::cout << "Verification vectors:\n";
-    // for (const auto& vec : verification_vectors) {
-    //     for (const auto& val : vec) {
-    //         std::cout << print_to_string_i128(val) << " ";
-    //     }
-    //     std::cout << "\n";
-    // }
+
     const i128 N = 4;
     vector_i128 sk = sample_secret_key(N);
     const i128 d = 4;
@@ -302,10 +285,6 @@ void run_control_loop() {
     i128 n_polys = 2;
     i128 n_coeffs = N;
     rgsw_mat F_ctx(F.n_rows(), F.n_cols(), n_rlwes, n_polys, n_coeffs);
-    // poly p(n_coeffs);
-    // for (size_t i = 0; i < n_coeffs; i++)
-    //     p.set(i, 42);
-    // rgsw test = enc.encrypt_rgsw(p);
     F_ctx = enc.encrypt_rgsw_mat(F);
     rgsw_mat G_bar_ctx(G_bar.n_rows(), G_bar.n_cols(), n_rlwes, n_polys, n_coeffs);
     G_bar_ctx = enc.encrypt_rgsw_mat(G_bar);
@@ -316,13 +295,69 @@ void run_control_loop() {
     rlwe_vec x_cont_ctx(x_cont.size(), n_polys, n_coeffs);
     x_cont_ctx = enc.encrypt_rlwe_vec(x_cont);
     rlwe_vec x_cont_ctx_convolved(x_cont_ctx); // copy x_cont_ctx
+
     vector_i128 eval_pows = eval_poly_pows(2 * N, 42, q);
     std::tuple<eval_key, veri_key> keys = compute_eval_and_veri_keys(
         F_ctx, G_bar_ctx, R_bar_ctx, H_bar_ctx,
         r_0, r_1, s, rho_0, rho_1, alpha_0, alpha_1, gamma_0, gamma_1,
         // pms.g, d, q, pms.p, v, N, eval_pows, enc
-        pms.g, d, q, pms.p, N, eval_pows, enc
+        g, d, q, p, N, eval_pows, enc
     );
+
+    auto x_cont_ctx_hashed = x_cont_ctx_convolved.get_hash(eval_pows);
+    // auto vec_dot_prod = [](vector_i128 scalar_vec, rlwe_vec rv) -> rlwe {
+    //     assert(scalar_vec.size() == rv.size());
+    //     rlwe dot_prod(rv.n_polys(), rv.n_coeffs());
+    //     for (const auto& [x, y] : std::views::zip(scalar_vec, rv)) {
+    //         for (size_t i = 0; i < y.size(); ++i) {
+    //             dot_prod.set(i, dot_prod.get(i) + y.get(i) * x);
+    //         }
+    //     }
+    //     return dot_prod;
+    // };
+    auto vec_dot_prod = [](vector_i128 scalar_vec, hashed_rlwe_vec rv) -> hashed_rlwe {
+        assert(scalar_vec.size() == rv.size());
+        hashed_rlwe dot_prod(rv.n_hashed_polys());
+        for (const auto& [x, y] : std::views::zip(scalar_vec, rv)) {
+            for (size_t i = 0; i < y.size(); ++i) {
+                dot_prod.set(i, dot_prod.get(i) + y.get(i) * x);
+            }
+        }
+        return dot_prod;
+    };
+    auto rx_0 = vec_dot_prod(r_1, x_cont_ctx_hashed);
+    auto g1 = rx_0.pow();
+    Proof old_proof {};
+    old_proof.g_1 = g1;
+
+    for (size_t k = 0; k < pms.iter_; k++) {
+        // Helper function for matrix-vector multiplication (mod q)
+        auto mat_vec_mult = [](const matrix_double& mat, const vector_double& vec, i128 q) -> vector_i128 {
+            assert(mat[0].size() == vec.size());
+            vector_i128 result(mat.size());
+            for (size_t i = 0; i < mat.size(); ++i) {
+                i128 sum = 0;
+                for (size_t j = 0; j < mat[i].size(); ++j) {
+                    sum = mod_(sum + static_cast<i128>(mat[i][j] * vec[j]), q);
+                }
+                result[i] = sum;
+            }
+            return result;
+        };
+
+        vector_i128 y_out = mat_vec_mult(C, x_plant, q);
+        // Define round_vec to round each element of a vector<double> to i128
+        auto round_vec = [](const vector_i128& vec) -> vector_i128 {
+            vector_i128 res(vec.size());
+            for (size_t i = 0; i < vec.size(); ++i) {
+                res[i] = static_cast<i128>(std::llround(static_cast<double>(vec[i])));
+            }
+            return res;
+        };
+        y_out = scalar_vec_mult(pms.L, round_vec(scalar_vec_mult(pms.r, y_out, q)), q);
+        rlwe_vec y_out_ctx = enc.encrypt_rlwe_vec(y_out);
+        
+    }
 }
 
 int main() {

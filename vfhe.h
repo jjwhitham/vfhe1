@@ -6,6 +6,7 @@
 #include "omp.h"
 #include "shared.h"
 
+
 vector_i128 sample_discrete_gaussian(size_t N, double mu = 3.2, double sigma = 19.2) {
     vector_i128 result(N);
     std::random_device rd;
@@ -366,6 +367,32 @@ public:
     auto& get_coeff(size_t n) const {
         return get(n);
     }
+    size_t n_coeffs() const {
+        return size();
+    }
+    auto get_hash(vector_i128 eval_pows) const {
+        i128 hash = 0;
+        for (size_t i = 0; i < size(); i++) {
+            hash += get(i) * eval_pows.at(i);
+        }
+        return hash;
+    }
+};
+
+class hashed_rlwe : public array1d<i128, hashed_rlwe> {
+private:
+public:
+    // NOTE hashed_rlwe always has two hashed_polys
+    hashed_rlwe() : array1d<i128, hashed_rlwe>() {}
+    hashed_rlwe(size_t n_hashed_polys) : array1d<i128, hashed_rlwe>(n_hashed_polys) {
+        assert(n_hashed_polys == 2);
+    }
+    auto& get_hashed_poly(size_t n) const {
+        return get(n);
+    }
+    size_t n_hashed_polys() const {
+        return size();
+    }
 };
 
 class rlwe : public array1d<poly, rlwe> {
@@ -391,12 +418,46 @@ public:
     auto& get_poly(size_t n) const {
         return get(n);
     }
+    // TODO move all get_hash() to array1d?
+    // calls poly's get_hash and returns hashed_rlwe
+    auto get_hash(vector_i128 eval_pows) const {
+        hashed_rlwe hash(2); // FIXME n_polys, do better (global?)
+        for (size_t i = 0; i < size(); i++) {
+            hash.set(i, get(i).get_hash(eval_pows));
+        }
+        return hash;
+    }
     void set_coeffs_to_one() {
         for (auto& p : *this) {
             for (size_t j = 0; j < p.size(); j++) {
                 p.set(j, 1);
             }
         }
+    }
+    size_t n_polys() const {
+        return size();
+    }
+};
+
+class hashed_rlwe_vec : public array1d<hashed_rlwe, hashed_rlwe_vec> {
+private:
+public:
+    hashed_rlwe_vec() : array1d<hashed_rlwe, hashed_rlwe_vec>() {}
+    hashed_rlwe_vec(size_t n_hashed_rlwes) : array1d<hashed_rlwe, hashed_rlwe_vec>(n_hashed_rlwes) {}
+    hashed_rlwe_vec(
+        size_t n_hashed_rlwes, size_t n_hashed_polys
+    ) : array1d<hashed_rlwe, hashed_rlwe_vec>(n_hashed_rlwes) {
+        for (size_t i = 0; i < n_hashed_rlwes; i++)
+            set(i, hashed_rlwe(n_hashed_polys));
+    }
+    auto& get_hashed_rlwe(size_t n) const {
+        return get(n);
+    }
+    size_t n_hashed_rlwes() const {
+        return size();
+    }
+    size_t n_hashed_polys() const {
+        return get_hashed_rlwe(0).n_hashed_polys();
     }
 };
 
@@ -419,6 +480,24 @@ public:
     // }
     auto& get_rlwe(size_t n) const {
         return get(n);
+    }
+    // TODO move all get_hash() to array1d?
+    // calls rlwe's get_hash and returns hashed_rlwe_vec
+    auto get_hash(vector_i128 eval_pows) const {
+        hashed_rlwe_vec hash(size(), get(0).size()); // FIXME n_polys, do better (global?)
+        for (size_t i = 0; i < size(); i++) {
+            hash.set(i, get(i).get_hash(eval_pows));
+        }
+        return hash;
+    }
+    size_t n_rlwes() const {
+        return size();
+    }
+    size_t n_polys() const {
+        return get_rlwe(0).size();
+    }
+    size_t n_coeffs() const {
+        return get_rlwe(0).get_poly(0).size();
     }
 };
 
@@ -458,10 +537,13 @@ public:
     rlwe_decomp& get_rlwe_decomp(size_t n) const {
         return get(n);
     }
-    size_t get_n_polys() const {
+    size_t n_rlwe_decomps() const {
+        return size();
+    }
+    size_t n_polys() const {
         return get_rlwe_decomp(0).size();
     }
-    size_t get_n_coeffs() const {
+    size_t n_coeffs() const {
         return get_rlwe_decomp(0).get_poly(0).size();
     }
 };
@@ -484,16 +566,19 @@ public:
     rlwe& get_rlwe(size_t n) const {
         return get(n);
     }
-    size_t get_n_polys() const {
-        return get_rlwe(0).size();
+    size_t n_rlwes() const {
+        return size();
     }
-    size_t get_n_coeffs() const {
-        return get_rlwe(0).get_poly(0).size();
+    size_t n_polys() const {
+        return get_rlwe(0).n_polys();
+    }
+    size_t n_coeffs() const {
+        return get_rlwe(0).get_poly(0).n_coeffs();
     }
     rlwe operator*(const rlwe_decomp& other) const {
         size_t N = size();
         assert(N == other.size());
-        rlwe res(get_n_polys(), get_n_coeffs());
+        rlwe res(n_polys(), n_coeffs());
         poly& p0 = res.get(0);
         poly& p1 = res.get(1);
         for (size_t i = 0; i < N; i++) {
@@ -508,11 +593,11 @@ public:
     }
 
     rlwe pow(const rlwe_decomp& other) const {
-        size_t n_polys = get_n_polys();
-        size_t n_coeffs = get_n_coeffs();
+        size_t n_polys_ = n_polys();
+        size_t n_coeffs_ = n_coeffs();
         size_t N = size();
         assert(N == other.size());
-        rlwe_vec res_vec(N, n_polys, n_coeffs);
+        rlwe_vec res_vec(N, n_polys_, n_coeffs_);
         #pragma omp parallel for num_threads(2)
         for (size_t i = 0; i < N; i++) {
             // int thread_id = omp_get_thread_num();
@@ -528,7 +613,7 @@ public:
             res.set(1, val1);
         }
 
-        rlwe res(n_polys, n_coeffs);
+        rlwe res(n_polys_, n_coeffs_);
         res.set_coeffs_to_one();
         for (auto& rlwe_ : res_vec) {
             res = res.group_mult(rlwe_);
@@ -557,10 +642,10 @@ public:
         return get_rgsw(0).size();
     }
     size_t get_n_polys() const {
-        return get_rgsw(0).get_n_polys();
+        return get_rgsw(0).n_polys();
     }
     size_t get_n_coeffs() const {
-        return get_rgsw(0).get_n_coeffs();
+        return get_rgsw(0).n_coeffs();
     }
     using array1d<rgsw, rgsw_vec>::operator*;
     rlwe operator*(const rlwe_decomp_vec& other) const {
@@ -622,7 +707,7 @@ public:
         assert(cols == other.size());
         size_t n_polys = get_n_polys();
         size_t n_coeffs = get_n_coeffs();
-        size_t n_coeffs_other = other.get_n_coeffs();
+        size_t n_coeffs_other = other.n_coeffs();
         assert(n_coeffs == n_coeffs_other);
 
         rlwe_vec res(rows, n_polys, n_coeffs);
@@ -641,8 +726,8 @@ public:
         size_t cols = n_cols();
         assert(cols == other.size());
         rgsw& rg = get(0, 0);
-        size_t n_coeffs = rg.get_n_coeffs();
-        size_t n_polys = rg.get_n_polys();
+        size_t n_coeffs = rg.n_coeffs();
+        size_t n_polys = rg.n_polys();
         rlwe_vec res(rows, n_polys, n_coeffs);
         for (size_t i = 0; i < rows; i++) {
             rlwe sum(n_polys, n_coeffs);
@@ -662,10 +747,10 @@ public:
         return get_rgsw(0, 0).size();
     }
     size_t get_n_polys() const {
-        return get_rgsw(0, 0).get_n_polys();
+        return get_rgsw(0, 0).n_polys();
     }
     size_t get_n_coeffs() const {
-        return get_rgsw(0, 0).get_n_coeffs();
+        return get_rgsw(0, 0).n_coeffs();
     }
 };
 
@@ -827,16 +912,16 @@ private:
 
     void generate_field_and_group_params() {
         // TODO use NTL and add funcs from Python implementation
-        p = 540431955285196831;
-        q = 18014398509506561;
-        g = 1073741824;
+        p = GROUP_MODULUS;
+        q = FIELD_MODULUS;
+        g = GENERATOR;
     }
 
 public:
     Params() :
-        p(540431955285196831),
-        q(18014398509506561),
-        g(1073741824),
+        p(GROUP_MODULUS),
+        q(FIELD_MODULUS),
+        g(GENERATOR),
         s(10000),
         L(10000),
         r(10000),
@@ -951,18 +1036,18 @@ public:
 };
 
 struct eval_key {
-        vector_i128 gr_0;
-        rgsw_vec grFr_0;
-        rgsw_vec gsHr_0;
-        vector_i128 gr_rho_0;
-        rgsw_vec grFr_alpha_0;
-        rgsw_vec gsHr_gamma_0;
-        vector_i128 gr_1;
-        rgsw_vec grFr_1;
-        rgsw_vec gsHr_1;
-        vector_i128 gr_rho_1;
-        rgsw_vec grFr_alpha_1;
-        rgsw_vec gsHr_gamma_1;
+    vector_i128 gr_0;
+    rgsw_vec grFr_0;
+    rgsw_vec gsHr_0;
+    vector_i128 gr_rho_0;
+    rgsw_vec grFr_alpha_0;
+    rgsw_vec gsHr_gamma_0;
+    vector_i128 gr_1;
+    rgsw_vec grFr_1;
+    rgsw_vec gsHr_1;
+    vector_i128 gr_rho_1;
+    rgsw_vec grFr_alpha_1;
+    rgsw_vec gsHr_gamma_1;
 };
 
 struct veri_key {
@@ -977,4 +1062,15 @@ struct veri_key {
     i128 alpha_1;
     i128 gamma_0;
     i128 gamma_1;
+};
+
+struct Proof {
+    hashed_rlwe grx_;
+    hashed_rlwe grFrx;
+    hashed_rlwe gsHrx;
+
+    hashed_rlwe gr_rho_x_;
+    hashed_rlwe grFr_alpha_x;
+    hashed_rlwe gsHr_gamma_x;
+    hashed_rlwe g_1;
 };

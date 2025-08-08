@@ -12,6 +12,7 @@ typedef __uint128_t i128;
 constexpr i128 GROUP_MODULUS = 540431955285196831;
 constexpr i128 FIELD_MODULUS = 18014398509506561;
 constexpr i128 GENERATOR = 1073741824;
+constexpr i128 N_POLYS = 2;
 using matrix_double = std::vector<std::vector<double>>;
 using vector_double = std::vector<double>;
 using vector_i128 = std::vector<i128>;
@@ -51,4 +52,10 @@ std::string print_to_string_i128(i128 n) {
     std::reverse(buf.begin(), buf.end());
     return buf;
 }
-
+vector_i128 scalar_vec_mult (i128 scalar, const vector_i128& vec, i128 q) {
+    vector_i128 result(vec.size());
+    for (size_t i = 0; i < vec.size(); ++i) {
+        result[i] = mod_(scalar * vec[i], q);
+    }
+    return result;
+};
