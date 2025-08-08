@@ -226,18 +226,20 @@ std::tuple<eval_key, veri_key> compute_eval_and_veri_keys(
 // TODO
 // g, q, p = generate_field_and_group_params()
 
+// Helper function for scalar-vector multiplication (mod q)
+template<typename vector_T>
+auto scalar_vec_mult (double scalar, const vector_T& vec) {
+    vector_double result(vec.size());
+    for (size_t i = 0; i < vec.size(); ++i) {
+        result[i] = scalar * vec[i];
+    }
+    return result;
+};
+
 void run_control_loop() {
     Params pms;
     using matrix_i128 = array2d<i128>;
 
-    // Helper function for scalar-vector multiplication (mod q)
-    auto scalar_vec_mult = [](i128 scalar, const vector_i128& vec, i128 q) -> vector_i128 {
-        vector_i128 result(vec.size());
-        for (size_t i = 0; i < vec.size(); ++i) {
-            result[i] = mod_(scalar * vec[i], q);
-        }
-        return result;
-    };
 
     i128 q = pms.q;
     i128 p = pms.p;
@@ -252,10 +254,10 @@ void run_control_loop() {
     vector_double x_plant = pms.x_plant_init;
     vector_i128 x_cont = pms.x_cont_init_scaled;
 
-    // i128 rr = pms.r;
-    // i128 ss = pms.s;
-    // i128 L = pms.L;
-    // i128 iter_ = pms.iter_;
+    i128 rr = pms.r;
+    i128 ss = pms.s;
+    i128 L = pms.L;
+    i128 iter_ = pms.iter_;
 
     i128 from = 1;
     i128 to_inclusive = 100;
@@ -281,22 +283,15 @@ void run_control_loop() {
     i128 v = static_cast<i128>(1) << power;
 
     Encryptor enc(v, d, N, q, sk);
-    i128 n_rlwes = 2 * d;
-    i128 n_polys = 2;
-    i128 n_coeffs = N;
-    rgsw_mat F_ctx(F.n_rows(), F.n_cols(), n_rlwes, n_polys, n_coeffs);
-    F_ctx = enc.encrypt_rgsw_mat(F);
-    rgsw_mat G_bar_ctx(G_bar.n_rows(), G_bar.n_cols(), n_rlwes, n_polys, n_coeffs);
-    G_bar_ctx = enc.encrypt_rgsw_mat(G_bar);
-    rgsw_mat R_bar_ctx(R_bar.n_rows(), R_bar.n_cols(), n_rlwes, n_polys, n_coeffs);
-    R_bar_ctx = enc.encrypt_rgsw_mat(R_bar);
-    rgsw_mat H_bar_ctx(H_bar.n_rows(), H_bar.n_cols(), n_rlwes, n_polys, n_coeffs);
-    H_bar_ctx = enc.encrypt_rgsw_mat(H_bar);
-    rlwe_vec x_cont_ctx(x_cont.size(), n_polys, n_coeffs);
-    x_cont_ctx = enc.encrypt_rlwe_vec(x_cont);
-    rlwe_vec x_cont_ctx_convolved(x_cont_ctx); // copy x_cont_ctx
+    rgsw_mat F_ctx = enc.encrypt_rgsw_mat(F);
+    rgsw_mat G_bar_ctx = enc.encrypt_rgsw_mat(G_bar);
+    rgsw_mat R_bar_ctx = enc.encrypt_rgsw_mat(R_bar);
+    rgsw_mat H_bar_ctx = enc.encrypt_rgsw_mat(H_bar);
+    rlwe_vec x_cont_ctx = enc.encrypt_rlwe_vec(x_cont);
+    rlwe_vec x_cont_ctx_convolved(x_cont_ctx);
 
-    vector_i128 eval_pows = eval_poly_pows(2 * N, 42, q);
+    i128 eval_point = 42;
+    vector_i128 eval_pows = eval_poly_pows(2 * N, eval_point, q);
     std::tuple<eval_key, veri_key> keys = compute_eval_and_veri_keys(
         F_ctx, G_bar_ctx, R_bar_ctx, H_bar_ctx,
         r_0, r_1, s, rho_0, rho_1, alpha_0, alpha_1, gamma_0, gamma_1,
@@ -305,16 +300,7 @@ void run_control_loop() {
     );
 
     auto x_cont_ctx_hashed = x_cont_ctx_convolved.get_hash(eval_pows);
-    // auto vec_dot_prod = [](vector_i128 scalar_vec, rlwe_vec rv) -> rlwe {
-    //     assert(scalar_vec.size() == rv.size());
-    //     rlwe dot_prod(rv.n_polys(), rv.n_coeffs());
-    //     for (const auto& [x, y] : std::views::zip(scalar_vec, rv)) {
-    //         for (size_t i = 0; i < y.size(); ++i) {
-    //             dot_prod.set(i, dot_prod.get(i) + y.get(i) * x);
-    //         }
-    //     }
-    //     return dot_prod;
-    // };
+
     auto vec_dot_prod = [](vector_i128 scalar_vec, hashed_rlwe_vec rv) -> hashed_rlwe {
         assert(scalar_vec.size() == rv.size());
         hashed_rlwe dot_prod(rv.n_hashed_polys());
@@ -330,33 +316,73 @@ void run_control_loop() {
     Proof old_proof {};
     old_proof.g_1 = g1;
 
-    for (size_t k = 0; k < pms.iter_; k++) {
-        // Helper function for matrix-vector multiplication (mod q)
-        auto mat_vec_mult = [](const matrix_double& mat, const vector_double& vec, i128 q) -> vector_i128 {
-            assert(mat[0].size() == vec.size());
-            vector_i128 result(mat.size());
-            for (size_t i = 0; i < mat.size(); ++i) {
-                i128 sum = 0;
-                for (size_t j = 0; j < mat[i].size(); ++j) {
-                    sum = mod_(sum + static_cast<i128>(mat[i][j] * vec[j]), q);
-                }
-                result[i] = sum;
+    auto mat_vec_mult = [](const matrix_double& mat, const vector_double& vec) -> vector_double {
+        assert(mat[0].size() == vec.size());
+        vector_double result(mat.size());
+        for (size_t i = 0; i < mat.size(); ++i) {
+            double sum = 0;
+            for (size_t j = 0; j < mat[i].size(); ++j) {
+                sum += mat[i][j] * vec[j];
             }
-            return result;
-        };
+            result[i] = sum;
+        }
+        return result;
+    };
 
-        vector_i128 y_out = mat_vec_mult(C, x_plant, q);
-        // Define round_vec to round each element of a vector<double> to i128
-        auto round_vec = [](const vector_i128& vec) -> vector_i128 {
-            vector_i128 res(vec.size());
-            for (size_t i = 0; i < vec.size(); ++i) {
-                res[i] = static_cast<i128>(std::llround(static_cast<double>(vec[i])));
-            }
-            return res;
-        };
-        y_out = scalar_vec_mult(pms.L, round_vec(scalar_vec_mult(pms.r, y_out, q)), q);
-        rlwe_vec y_out_ctx = enc.encrypt_rlwe_vec(y_out);
-        
+    // Define round_vec to round each element of a vector<double> to i128
+    auto round_and_mod_vec = [](const vector_double& vec) -> vector_i128 {
+        vector_i128 res(vec.size());
+        for (size_t i = 0; i < vec.size(); ++i) {
+            i128 rounded = static_cast<i128>(std::round(vec[i]));
+            i128 modded = mod_(rounded, FIELD_MODULUS);
+            res[i] = modded;
+        }
+        return res;
+    };
+
+    for (size_t k = 0; k < iter_; k++) {
+        // Plant output
+        vector_double y_out = mat_vec_mult(C, x_plant);
+        // Quantise plant output (scale by r, round, then scale by L)
+        // XXX different to Python and Go code...
+        vector_i128 y_out_rounded_modded = round_and_mod_vec(scalar_vec_mult(L * rr, y_out));
+        rlwe_vec y_out_ctx = enc.encrypt_rlwe_vec(y_out_rounded_modded);
+
+        // Controller output
+        rlwe_vec u_out_ctx_convolved = H_bar_ctx.convolve(x_cont_ctx.decompose(v, d));
+        hashed_rlwe_vec u_out_ctx_hashed = u_out_ctx_convolved.get_hash(eval_pows);
+        rlwe_vec u_out_ctx = u_out_ctx_convolved.conv_to_nega(N);
+
+        // Plant state update
+        // u_out_ptx = [decrypt_rlwe(ctx, sk, q, dth_inv_pows)[0] for ctx in u_out_ctx]
+        vector_i128 u_out_ptx = enc.decrypt_rlwe_vec(u_out_ctx);
+        // u_in = scalar_vec_mult(1.0 / (rr * ss * ss * L), u_out_ptx, q)
+        vector_double u_in = scalar_vec_mult(1.0 / (rr * ss * ss * L), u_out_ptx);
+        // u_reenc_ctx = [encrypt_rlwe(int(np.round(ptx * rr * L)), N, sk, q, dth_pows) for ptx in u_in]
+        vector_i128 u_in_rounded_modded = round_and_mod_vec(scalar_vec_mult(rr * L, u_in));
+        rlwe_vec u_reenc_ctx = enc.encrypt_rlwe_vec(u_in_rounded_modded);
+        // x_plant = vec_add(mat_vec_mult(A, x_plant, q), mat_vec_mult(B, u_in, q), q)
+        vector_double x_plant = mat_vec_mult(A, x_plant);
+
+        // # Controller state update
+        // x_cont_old_ctx = [ctx.copy() for ctx in x_cont_ctx]# XXX deepcopy when extending
+        rlwe_vec x_cont_old_ctx = x_cont_ctx; // TODO check deepcopy not required
+        //         x_cont_ctx_convolved = vec_add_enc(mat_vec_mult_enc(F_ctx, x_cont_ctx, d, q), mat_vec_mult_enc(G_bar_ctx, y_out_ctx, d, q), q)
+        rlwe_vec x_cont_ctx_convolved =
+            F_ctx.convolve(x_cont_ctx.decompose(v, d))
+            + G_bar_ctx.convolve(y_out_ctx.decompose(v, d))
+            + R_bar_ctx.convolve(u_reenc_ctx.decompose(v, d));
+        // # u_out is scaled by r * s * s * L, so we need to scale it down
+        // x_cont_ctx_convolved = vec_add_enc(x_cont_ctx_convolved, mat_vec_mult_enc(R_bar_ctx, u_reenc_ctx, d, q), q)
+        // x_cont_ctx = convert_convolved_to_negacyclic_vec(x_cont_ctx_convolved, N, q)
+        x_cont_ctx = x_cont_ctx_convolved.conv_to_nega(N);
+        // # controller creates proofs
+        // proof = compute_proof(*eval_key[k % 2], x_cont_ctx, x_cont_ctx_convolved, x_cont_old_ctx, d, q, p, eval_pows)
+        Proof proof;
+        // # old_proof[0] = g_1
+        // # Plant verifies
+        // verify_with_lin_and_dyn_checks(veri_key, proof, old_proof, k, y_out_ctx, u_out_ctx_hashed, u_reenc_ctx, g, d, q, p, eval_pows)
+        old_proof = proof;
     }
 }
 

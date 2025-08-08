@@ -12,7 +12,7 @@ typedef __uint128_t i128;
 constexpr i128 GROUP_MODULUS = 540431955285196831;
 constexpr i128 FIELD_MODULUS = 18014398509506561;
 constexpr i128 GENERATOR = 1073741824;
-constexpr i128 N_POLYS = 2;
+constexpr i128 N_POLYS_IN_RLWE = 2;
 using matrix_double = std::vector<std::vector<double>>;
 using vector_double = std::vector<double>;
 using vector_i128 = std::vector<i128>;

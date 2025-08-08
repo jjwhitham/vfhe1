@@ -101,6 +101,17 @@ public:
     size_t size() const {
         return size_;
     }
+    // Derived operator*(const Derived& other) const {
+    //     size_t N = size();
+    //     Derived res(N);
+    //     for (size_t i = 0; i < N; i++) {
+    //         auto val = (get(i) * other.get(i));
+    //         if constexpr (std::is_same_v<T, i128>)
+    //             val = mod_(val, FIELD_MODULUS);
+    //         res.set(i, val);
+    //     }
+    //     return res;
+    // }
     Derived operator*(const Derived& other) const {
         size_t N = size();
         Derived res(N);
@@ -377,6 +388,92 @@ public:
         }
         return hash;
     }
+    auto convolve(poly& other) const {
+        assert(n_coeffs() == other.n_coeffs());
+        poly convolved(2 * n_coeffs() - 1);
+        for (size_t i = 0; i < n_coeffs(); i++) {
+            for (size_t j = 0; j < n_coeffs(); j++) {
+                convolved.set(i + j, mod_(convolved.get(i + j) + get_coeff(i) * other.get_coeff(j), FIELD_MODULUS));
+            }
+        }
+        return convolved;
+    }
+    using array1d<i128, poly>::operator*;
+    auto operator*(poly& other) const {
+        i128 N = n_coeffs();
+        assert(N == other.n_coeffs());
+        poly neg_conv(N);
+        for (size_t i = 0; i < N; i++) {
+            for (size_t j = 0; j < i + 1; j++) {
+                neg_conv.set(i, mod_(neg_conv.get(i) + get_coeff(j) * other.get_coeff(i - j), FIELD_MODULUS));
+            }
+            for (size_t j = i + 1; j < N; j++) {
+                neg_conv.set(i, mod_(neg_conv.get(i) - get_coeff(j) * other.get_coeff(N + i - j), FIELD_MODULUS));
+            }
+        }
+        return neg_conv;
+    }
+    auto conv_to_nega(size_t N) const {
+        assert(n_coeffs() == 2 * N + 1);
+        i128 conv_degree = n_coeffs() - 1;
+        if (conv_degree < N)
+        return *this;
+        poly negacyclic(N);
+        for (size_t i = 0; i < N; i++)
+            negacyclic.set(i, get_coeff(i));
+        for (size_t i = N; i < conv_degree + 1; i++) {
+            i128 coeff = negacyclic.get_coeff(i - N) - get_coeff(i);
+            negacyclic.set(i - N, coeff);
+        }
+        return negacyclic;
+    }
+};
+
+class rlwe_decomp : public array1d<poly, rlwe_decomp> {
+private:
+public:
+    rlwe_decomp() : array1d<poly, rlwe_decomp>() {}
+    rlwe_decomp(size_t n_polys) : array1d<poly, rlwe_decomp>(n_polys) {}
+    rlwe_decomp(
+        size_t n_polys, size_t n_coeffs
+    ) : array1d<poly, rlwe_decomp>(n_polys) {
+        for (size_t i = 0; i < n_polys; i++) {
+            set(i, poly(n_coeffs));
+        }
+    }
+    ~rlwe_decomp() {}
+    poly& get_poly(size_t n) const {
+        return get(n);
+    }
+};
+
+class rlwe_decomp_vec : public array1d<rlwe_decomp, rlwe_decomp_vec> {
+private:
+public:
+    rlwe_decomp_vec() : array1d<rlwe_decomp, rlwe_decomp_vec>() {}
+    rlwe_decomp_vec(
+        size_t n_rlwe_decomps
+    ) : array1d<rlwe_decomp, rlwe_decomp_vec>(n_rlwe_decomps) {}
+    rlwe_decomp_vec(
+        size_t n_rlwe_decomps, size_t n_polys, size_t n_coeffs
+    ) : array1d<rlwe_decomp, rlwe_decomp_vec>(n_rlwe_decomps) {
+        for (size_t i = 0; i < n_rlwe_decomps; i++)
+            // FIXME n_polys should match n_rlwes for rgsw. rethink terminology
+            set(i, rlwe_decomp(n_polys, n_coeffs));
+    }
+    ~rlwe_decomp_vec() {}
+    rlwe_decomp& get_rlwe_decomp(size_t n) const {
+        return get(n);
+    }
+    size_t n_rlwe_decomps() const {
+        return size();
+    }
+    size_t n_polys() const {
+        return get_rlwe_decomp(0).size();
+    }
+    size_t n_coeffs() const {
+        return get_rlwe_decomp(0).get_poly(0).size();
+    }
 };
 
 class hashed_rlwe : public array1d<i128, hashed_rlwe> {
@@ -436,6 +533,52 @@ public:
     }
     size_t n_polys() const {
         return size();
+    }
+    size_t n_coeffs() const {
+        return get_poly(0).size();
+    }
+    // creates d polynomials for each of the two polynomials in the rlwe object,
+    // where the i'th coefficient has been decomposed with base v and depth d.
+    // The i'th coefficient is spread across the i'th coefficients of the d polynomials.
+    rlwe_decomp decompose(const i128& v_, const i128& d) const {
+        // v - power of 2, s.t. v^{d-1} < q < v^d
+        i128 power = static_cast<i128>(std::ceil((std::log2(FIELD_MODULUS) / d)));
+        i128 v = 1 << power;
+        assert(v == v_);
+        assert(d >= 1);
+        // FIXME not sure if we really need the lower bounds check. Fails sometimes
+        // assert(v**(d-1) < q and q <= v**d)
+        assert(FIELD_MODULUS <= static_cast<i128>(std::pow(v, d)));
+
+        // decompose poly into d polynomials of degree d-1
+        // polys = []
+        auto pow_ = [](i128 base, i128 exp) {
+            i128 res = 1;
+            for (i128 i = 0; i < exp; ++i) {
+                res *= base;
+            }
+            return res;
+        };
+        rlwe_decomp polys(2 * d, n_coeffs());
+        for (size_t k = 0; k < N_POLYS_IN_RLWE; k++) {
+            poly pol = get_poly(k);
+            for (size_t i = 0; i < n_coeffs(); i++) {
+                for (size_t j = 0; j < d; j++) {
+                    i128 decomped_coeff = (v - 1) & (pol.get_coeff(i) / pow_(v, j));
+                    assert(decomped_coeff < v);
+                    polys.get_poly(k + j).set(i, decomped_coeff);
+                }
+            }
+        }
+        return polys;
+    }
+    auto conv_to_nega(size_t N) const {
+        rlwe conv(N_POLYS_IN_RLWE);
+        for (size_t i = 0; i < N_POLYS_IN_RLWE; i++) {
+            poly p = get_poly(i).conv_to_nega(N);
+            conv.set(i, p);
+        }
+        return conv;
     }
 };
 
@@ -499,55 +642,22 @@ public:
     size_t n_coeffs() const {
         return get_rlwe(0).get_poly(0).size();
     }
-};
-
-class rlwe_decomp : public array1d<poly, rlwe_decomp> {
-private:
-public:
-    rlwe_decomp() : array1d<poly, rlwe_decomp>() {}
-    rlwe_decomp(size_t n_polys) : array1d<poly, rlwe_decomp>(n_polys) {}
-    rlwe_decomp(
-        size_t n_polys, size_t n_coeffs
-    ) : array1d<poly, rlwe_decomp>(n_polys) {
-        for (size_t i = 0; i < n_polys; i++) {
-            set(i, poly(n_coeffs));
+    // calls rlwe's decompose on each rlwe element and returns a rlwe_decomp_vec
+    auto decompose(const i128& v, const i128& d) const {
+        rlwe_decomp_vec decomps(size(), 2 * d, n_coeffs());
+        for (size_t i = 0; i < size(); i++)
+            decomps.set(i, get_rlwe(i).decompose(v, d));
+        return decomps;
+    }
+    auto conv_to_nega(size_t N) const {
+        rlwe_vec conv(n_rlwes());
+        for (size_t i = 0; i < n_rlwes(); i++) {
+            rlwe r = get_rlwe(i).conv_to_nega(N);
+            conv.set(i, r);
         }
-    }
-    ~rlwe_decomp() {}
-    poly& get_poly(size_t n) const {
-        return get(n);
+        return conv;
     }
 };
-
-class rlwe_decomp_vec : public array1d<rlwe_decomp, rlwe_decomp_vec> {
-private:
-public:
-    rlwe_decomp_vec() : array1d<rlwe_decomp, rlwe_decomp_vec>() {}
-    rlwe_decomp_vec(
-        size_t n_rlwe_decomps
-    ) : array1d<rlwe_decomp, rlwe_decomp_vec>(n_rlwe_decomps) {}
-    rlwe_decomp_vec(
-        size_t n_rlwe_decomps, size_t n_polys, size_t n_coeffs
-    ) : array1d<rlwe_decomp, rlwe_decomp_vec>(n_rlwe_decomps) {
-        for (size_t i = 0; i < n_rlwe_decomps; i++)
-            // FIXME n_polys should match n_rlwes for rgsw. rethink terminology
-            set(i, rlwe_decomp(n_polys, n_coeffs));
-    }
-    ~rlwe_decomp_vec() {}
-    rlwe_decomp& get_rlwe_decomp(size_t n) const {
-        return get(n);
-    }
-    size_t n_rlwe_decomps() const {
-        return size();
-    }
-    size_t n_polys() const {
-        return get_rlwe_decomp(0).size();
-    }
-    size_t n_coeffs() const {
-        return get_rlwe_decomp(0).get_poly(0).size();
-    }
-};
-
 
 class rgsw : public array1d<rlwe, rgsw> {
 private:
@@ -584,6 +694,23 @@ public:
         for (size_t i = 0; i < N; i++) {
             auto val0 = get(i).get(0) * other.get(i);
             auto val1 = get(i).get(1) * other.get(i);
+            p0 = p0 + val0;
+            p1 = p1 + val1;
+        }
+        res.set(0, p0);
+        res.set(1, p1);
+        return res;
+    }
+
+    rlwe convolve(const rlwe_decomp& other) const {
+        size_t N = size();
+        assert(N == other.size());
+        rlwe res(n_polys(), n_coeffs());
+        poly& p0 = res.get(0);
+        poly& p1 = res.get(1);
+        for (size_t i = 0; i < N; i++) {
+            auto val0 = get(i).get(0).convolve(other.get(i));
+            auto val1 = get(i).get(1).convolve(other.get(i));
             p0 = p0 + val0;
             p1 = p1 + val1;
         }
@@ -721,6 +848,26 @@ public:
         }
         return res;
     }
+    rlwe_vec convolve(const rlwe_decomp_vec& other) const {
+        size_t rows = n_rows();
+        size_t cols = n_cols();
+        assert(cols == other.size());
+        size_t n_polys = get_n_polys();
+        size_t n_coeffs = get_n_coeffs();
+        size_t n_coeffs_other = other.n_coeffs();
+        assert(n_coeffs == n_coeffs_other);
+
+        rlwe_vec res(rows, n_polys, 2 * n_coeffs - 1);
+        for (size_t i = 0; i < rows; i++) {
+            rlwe sum(n_polys, 2 * n_coeffs - 1);
+            for (size_t j = 0; j < cols; j++) {
+                auto val = get(i, j).convolve(other.get(j));
+                sum = sum + val;
+            }
+            res.set(i, sum);
+        }
+        return res;
+    }
     rlwe_vec pow(const rlwe_decomp_vec& other) const {
         size_t rows = n_rows();
         size_t cols = n_cols();
@@ -752,6 +899,7 @@ public:
     size_t get_n_coeffs() const {
         return get_rgsw(0, 0).n_coeffs();
     }
+
 };
 
 

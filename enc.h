@@ -16,24 +16,23 @@ public:
     rlwe encrypt_rlwe(const poly& m) {
         poly noise = poly(N);
         auto noise_vec = sample_noise_polynomial(N);
-        for (size_t i = 0; i < N; ++i) noise.set(i, noise_vec[i]);
+        for (size_t i = 0; i < N; i++)
+            noise.set(i, noise_vec[i]);
 
         poly a = poly(N);
         auto a_vec = sample_random_polynomial(N, q);
-        for (size_t i = 0; i < N; ++i) a.set(i, a_vec[i]);
+        for (size_t i = 0; i < N; i++)
+            a.set(i, a_vec[i]);
 
-        // poly_mult_mod(a, sk, q)
-        poly ask(N);
-        for (size_t i = 0; i < N; ++i) {
-            i128 sum = 0;
-            for (size_t j = 0; j < N; ++j) {
-                sum += a.get(j) * sk[mod_((i - j + N), N)];
-            }
-            ask.set(i, mod_(sum, q));
-        }
+        // make poly from sk
+        // FIXME polys all the way through
+        poly sk_poly(N);
+        for (size_t i = 0; i < N; i++)
+            sk_poly.set(i, sk.at(i));
+        poly ask = a * sk_poly;
 
         poly b(N);
-        for (size_t i = 0; i < N; ++i) {
+        for (size_t i = 0; i < N; i++) {
             i128 val = m.get(i) + noise.get(i) + ask.get(i);
             b.set(i, mod_(val, q));
         }
@@ -55,6 +54,29 @@ public:
         return res;
     }
 
+    poly decrypt_rlwe(const rlwe& ctx) const {
+        assert(ctx.n_polys() == 2);
+        poly b = ctx.get_poly(0);
+        poly a = ctx.get_poly(1);
+
+        // Compute the inverse of the secret key
+        poly sk_poly(N);
+        for (size_t i = 0; i < N; i++)
+            sk_poly.set(i, sk.at(i));
+
+        // Compute the plaintext polynomial
+        poly m = b - a * sk_poly;
+        return m;
+    }
+
+    vector_i128 decrypt_rlwe_vec(const rlwe_vec& ctxs) const {
+        vector_i128 ptxs(ctxs.size());
+        for (size_t i = 0; i < ctxs.size(); i++) {
+            poly m = decrypt_rlwe(ctxs.get(i));
+            ptxs.at(i) = m.get(0);
+        }
+        return ptxs;
+    }
     // Encrypts an RGSW ciphertext of message M (poly)
     rgsw encrypt_rgsw(const poly& M) {
         // Compute v powers: v^0, v^1, ..., v^{d-1}
@@ -96,7 +118,7 @@ public:
         }
 
         // Pack RLWE encryptions into RGSW
-        rgsw res(2 * d, 2, N);
+        rgsw res(2 * d, N_POLYS_IN_RLWE, N);
         for (i128 i = 0; i < 2 * d; ++i) {
             res.set(i, encs_of_zero[i]);
         }
@@ -106,7 +128,7 @@ public:
     rgsw_mat encrypt_rgsw_mat(const array2d<i128>& mat) {
         size_t rows = mat.n_rows();
         size_t cols = mat.n_cols();
-        rgsw_mat res(rows, cols, 2 * d, 2, N);
+        rgsw_mat res(rows, cols, 2 * d, N_POLYS_IN_RLWE, N);
         for (size_t i = 0; i < rows; ++i) {
             for (size_t j = 0; j < cols; ++j) {
                 poly p(N);
