@@ -1,0 +1,54 @@
+#pragma once
+
+#include <vector>
+#include <string>
+#include <algorithm>
+
+// FIXME check if this is being used correctly, i.e. are some negs required?
+typedef __uint128_t i128;
+// constexpr i128 GROUP_MODULUS = 23;
+// constexpr i128 FIELD_MODULUS = 11;
+// constexpr i128 GENERATOR = 4;
+constexpr i128 GROUP_MODULUS = 540431955285196831;
+constexpr i128 FIELD_MODULUS = 18014398509506561;
+constexpr i128 GENERATOR = 1073741824;
+using matrix_double = std::vector<std::vector<double>>;
+using vector_double = std::vector<double>;
+using vector_i128 = std::vector<i128>;
+
+// FIXME make types __uint128 so that regular modding works
+i128 mod_(__int128_t val, i128 q) {
+    val %= q;
+    if (val < 0) {
+        val = (val + q) % q;
+    }
+    return val;
+}
+
+vector_i128 mod_(const vector_i128& vals, i128 q) {
+    vector_i128 res(vals.size());
+    for (size_t i = 0; i < vals.size(); ++i) {
+        res[i] = mod_(vals[i], q);
+    }
+    return res;
+}
+
+std::string print_to_string_i128(i128 n) {
+    if (n == 0) {
+        return "0";
+    }
+    bool neg = false;
+    // if (n < 0) {
+    //     neg = true;
+    //     n = -n;
+    // }
+    std::string buf;
+    while (n > 0) {
+        buf += '0' + (n % 10);
+        n /= 10;
+    }
+    if (neg) buf += '-';
+    std::reverse(buf.begin(), buf.end());
+    return buf;
+}
+
