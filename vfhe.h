@@ -74,29 +74,29 @@ public:
             );
         }
     }
-    T& get(size_t n, bool disable_value_check = true) const {
+    // T& get(size_t n, bool disable_value_check = true) const {
+    T& get(size_t n) const {
         check_index_bounds(n);
-        if (!disable_value_check)
+        // if (!disable_value_check)
             check_value_bounds(arr[n]);
         return arr[n];
     }
     void check_value_bounds(T& val) const {
         if constexpr (std::is_same_v<T, i128>) {
-            i128 min_val = 0;
-            // i128 min_val = -1;
-            // min_val <<= 63;
-            // i128 max_val = (1UL << 63) - 1;
+            // i128 min_val = 0;
             i128 max_val = GROUP_MODULUS - 1;
-            if (val < min_val || val > max_val) {
+            // if (val < min_val || val > max_val) {
+            if (val > max_val) {
                 throw std::out_of_range(
                     "(array1d) Value out of range: " + print_to_string_i128(val)
                 );
             }
         }
     }
-    void set(int n, T val, bool disable_value_check = false) { // FIXME should be T& ?
+    // void set(int n, T val, bool disable_value_check = false) { // FIXME should be T& ?
+    void set(int n, T val) {
         check_index_bounds(n);
-        if (!disable_value_check)
+        // if (!disable_value_check)
             check_value_bounds(val);
         arr[n] = val;
     }
@@ -431,6 +431,20 @@ public:
     }
 };
 
+class hashed_rlwe_decomp : public array1d<i128, hashed_rlwe_decomp> {
+private:
+public:
+    // NOTE hashed_rlwe always has two hashed_polys
+    hashed_rlwe_decomp() : array1d<i128, hashed_rlwe_decomp>() {}
+    hashed_rlwe_decomp(size_t n_hashed_polys) : array1d<i128, hashed_rlwe_decomp>(n_hashed_polys) {}
+    auto& get_hashed_poly(size_t n) const {
+        return get(n);
+    }
+    size_t n_hashed_polys() const {
+        return size();
+    }
+};
+
 class rlwe_decomp : public array1d<poly, rlwe_decomp> {
 private:
 public:
@@ -446,6 +460,42 @@ public:
     ~rlwe_decomp() {}
     poly& get_poly(size_t n) const {
         return get(n);
+    }
+    // calls poly's get_hash and returns hashed_rlwe_decomp
+    auto get_hash(vector_i128 eval_pows) const {
+        hashed_rlwe_decomp hash(size()); // FIXME n_polys, do better
+        for (size_t i = 0; i < size(); i++) {
+            hash.set(i, get(i).get_hash(eval_pows));
+        }
+        return hash;
+    }
+    size_t n_polys() const {
+        return size();
+    }
+    size_t n_coeffs() const {
+        return get_poly(0).size();
+    }
+};
+
+class hashed_rlwe_decomp_vec : public array1d<hashed_rlwe_decomp, hashed_rlwe_decomp_vec> {
+private:
+public:
+    hashed_rlwe_decomp_vec() : array1d<hashed_rlwe_decomp, hashed_rlwe_decomp_vec>() {}
+    hashed_rlwe_decomp_vec(size_t n_hashed_rlwe_decomps) : array1d<hashed_rlwe_decomp, hashed_rlwe_decomp_vec>(n_hashed_rlwe_decomps) {}
+    hashed_rlwe_decomp_vec(
+        size_t n_hashed_rlwe_decomps, size_t n_hashed_polys
+    ) : array1d<hashed_rlwe_decomp, hashed_rlwe_decomp_vec>(n_hashed_rlwe_decomps) {
+        for (size_t i = 0; i < n_hashed_rlwe_decomps; i++)
+            set(i, hashed_rlwe_decomp(n_hashed_polys));
+    }
+    auto& get_hashed_rlwe_decomp(size_t n) const {
+        return get(n);
+    }
+    size_t n_hashed_rlwe_decomps() const {
+        return size();
+    }
+    size_t n_hashed_polys() const {
+        return get_hashed_rlwe_decomp(0).n_hashed_polys();
     }
 };
 
@@ -476,6 +526,14 @@ public:
     size_t n_coeffs() const {
         return get_rlwe_decomp(0).get_poly(0).size();
     }
+    // calls rlwe_decomp's get_hash and returns hashed_rlwe_decomp_vec
+    auto get_hash(vector_i128 eval_pows) const {
+        hashed_rlwe_decomp_vec hash(n_rlwe_decomps(), get(0).size()); // FIXME n_polys, do better (global?)
+        for (size_t i = 0; i < size(); i++) {
+            hash.set(i, get(i).get_hash(eval_pows));
+        }
+        return hash;
+    }
 };
 
 class hashed_rlwe : public array1d<i128, hashed_rlwe> {
@@ -491,6 +549,11 @@ public:
     }
     size_t n_hashed_polys() const {
         return size();
+    }
+    void set_coeffs_to_one() {
+        for (size_t i = 0; i < size(); i++) {
+            set(i, 1);
+        }
     }
 };
 
@@ -592,8 +655,10 @@ public:
     hashed_rlwe_vec(
         size_t n_hashed_rlwes, size_t n_hashed_polys
     ) : array1d<hashed_rlwe, hashed_rlwe_vec>(n_hashed_rlwes) {
-        for (size_t i = 0; i < n_hashed_rlwes; i++)
+        for (size_t i = 0; i < n_hashed_rlwes; i++) {
+            assert(n_hashed_polys == 2);
             set(i, hashed_rlwe(n_hashed_polys));
+        }
     }
     auto& get_hashed_rlwe(size_t n) const {
         return get(n);
@@ -661,11 +726,51 @@ public:
     }
 };
 
+class hashed_rgsw : public array1d<hashed_rlwe, hashed_rgsw> {
+private:
+public:
+    hashed_rgsw() : array1d<hashed_rlwe, hashed_rgsw>() {}
+    hashed_rgsw(size_t n_hashed_rlwes) : array1d<hashed_rlwe, hashed_rgsw>(n_hashed_rlwes) {
+    }
+    hashed_rgsw(
+        size_t n_hashed_rlwes, size_t n_hashed_polys
+    ) : array1d<hashed_rlwe, hashed_rgsw>(n_hashed_rlwes) {
+        for (size_t i = 0; i < n_hashed_rlwes; i++)
+            set(i, hashed_rlwe(n_hashed_polys));
+    }
+    auto& get_hashed_rlwe(size_t n) const {
+        return get(n);
+    }
+    size_t n_hashed_rlwes() const {
+        return size();
+    }
+    size_t n_hashed_polys() const {
+        return get_hashed_rlwe(0).n_hashed_polys();
+    }
+    using array1d<hashed_rlwe, hashed_rgsw>::pow;
+    hashed_rlwe pow(const hashed_rlwe_decomp& other) const {
+        size_t n_polys_ = n_hashed_polys();
+        size_t N = size();
+        assert(N == other.size());
+        hashed_rlwe_vec res_vec(N, n_polys_);
+        #pragma omp parallel for num_threads(2)
+        for (size_t i = 0; i < N; i++) {
+            auto val0 = get(i).pow(other.get(i));
+            res_vec.set(i, val0);
+        }
+
+        hashed_rlwe res(n_polys_);
+        res.set_coeffs_to_one();
+        for (auto& hashed_rlwe_ : res_vec) {
+            res = res.group_mult(hashed_rlwe_);
+        }
+        return res;
+    }
+};
+
 class rgsw : public array1d<rlwe, rgsw> {
 private:
 public:
-    using array1d<rlwe, rgsw>::operator*;
-    using array1d<rlwe, rgsw>::pow;
     rgsw() : array1d<rlwe, rgsw>() {}
     rgsw(size_t n_rlwes) : array1d<rlwe, rgsw>(n_rlwes) {}
     rgsw(
@@ -687,6 +792,7 @@ public:
     size_t n_coeffs() const {
         return get_rlwe(0).get_poly(0).n_coeffs();
     }
+    using array1d<rlwe, rgsw>::operator*;
     rlwe operator*(const rlwe_decomp& other) const {
         size_t N = size();
         assert(N == other.size());
@@ -721,6 +827,7 @@ public:
         return res;
     }
 
+    using array1d<rlwe, rgsw>::pow;
     rlwe pow(const rlwe_decomp& other) const {
         size_t n_polys_ = n_polys();
         size_t n_coeffs_ = n_coeffs();
@@ -749,12 +856,67 @@ public:
         }
         return res;
     }
+    // calls rlwe's get_hash for all the rlwe's in (*this)
+    auto get_hash(vector_i128 eval_pows) const {
+        hashed_rgsw hash(size(), n_polys()); // FIXME n_polys, do better (global?)
+        for (size_t i = 0; i < size(); i++) {
+            hash.set(i, get(i).get_hash(eval_pows));
+        }
+        return hash;
+    }
+};
+
+class hashed_rgsw_vec : public array1d<hashed_rgsw, hashed_rgsw_vec> {
+private:
+public:
+    hashed_rgsw_vec() : array1d<hashed_rgsw, hashed_rgsw_vec>() {}
+    hashed_rgsw_vec(size_t n_hashed_rgsws) : array1d<hashed_rgsw, hashed_rgsw_vec>(n_hashed_rgsws) {}
+    hashed_rgsw_vec(
+        size_t n_hashed_rgsws, size_t n_hashed_rlwes, size_t n_hashed_polys
+    ) : array1d<hashed_rgsw, hashed_rgsw_vec>(n_hashed_rgsws) {
+        for (size_t i = 0; i < n_hashed_rgsws; i++)
+            set(i, hashed_rgsw(n_hashed_rlwes, n_hashed_polys));
+    }
+    ~hashed_rgsw_vec() {}
+    hashed_rgsw& get_hashed_rgsw(size_t n) const {
+        return get(n);
+    }
+    size_t n_hashed_rgsws() const {
+        return size();
+    }
+    size_t n_hashed_rlwes() const {
+        size_t n_hashed_rlwes = get_hashed_rgsw(0).n_hashed_rlwes();
+        return n_hashed_rlwes;
+    }
+    size_t n_hashed_polys() const {
+        size_t n_hashed_polys = get_hashed_rgsw(0).n_hashed_polys();
+        assert(n_hashed_polys == 2);
+        return n_hashed_polys;
+    }
+    using array1d<hashed_rgsw, hashed_rgsw_vec>::pow;
+    hashed_rlwe pow(const hashed_rlwe_decomp_vec& other) const {
+        size_t n = other.size();
+        assert(size() == n);
+        size_t n_hashed_polys_ = n_hashed_polys();
+        assert(n_hashed_polys_ == 2);
+        hashed_rlwe_vec res_vec(n, n_hashed_polys_);
+        hashed_rlwe res(n_hashed_polys_);
+        res.set_coeffs_to_one();
+        #pragma omp parallel for num_threads(12)
+        for (size_t i = 0; i < n; i++) {
+            auto val = get(i).pow(other.get(i));
+            res_vec.set(i, val);
+        }
+        for (auto& prod : res_vec) {
+            res = res.group_mult(prod);
+        }
+        return res;
+    }
 };
 
 class rgsw_vec : public array1d<rgsw, rgsw_vec> {
 private:
 public:
-    using array1d<rgsw, rgsw_vec>::pow;
     rgsw_vec() : array1d<rgsw, rgsw_vec>() {}
     rgsw_vec(size_t n_rgsws) : array1d<rgsw, rgsw_vec>(n_rgsws) {}
     rgsw_vec(
@@ -767,33 +929,37 @@ public:
     rgsw& get_rgsw(size_t n) const {
         return get(n);
     }
-    size_t get_n_rlwes() const {
+    size_t n_rgsws() const {
+        return size();
+    }
+    size_t n_rlwes() const {
         return get_rgsw(0).size();
     }
-    size_t get_n_polys() const {
+    size_t n_polys() const {
         return get_rgsw(0).n_polys();
     }
-    size_t get_n_coeffs() const {
+    size_t n_coeffs() const {
         return get_rgsw(0).n_coeffs();
     }
     using array1d<rgsw, rgsw_vec>::operator*;
     rlwe operator*(const rlwe_decomp_vec& other) const {
         size_t n = other.size();
         assert(size() == n);
-        rlwe sum(get_n_polys(), get_n_coeffs());
+        rlwe sum(n_polys(), n_coeffs());
         for (size_t i = 0; i < n; i++) {
             auto val = get(i) * other.get(i);
             sum = sum + val;
         }
         return sum;
     }
+    using array1d<rgsw, rgsw_vec>::pow;
     rlwe pow(const rlwe_decomp_vec& other) const {
         size_t n = other.size();
         assert(size() == n);
-        size_t n_polys = get_n_polys();
-        size_t n_coeffs = get_n_coeffs();
-        rlwe_vec res_vec(n, n_polys, n_coeffs);
-        rlwe res(n_polys, n_coeffs);
+        size_t n_polys_ = n_polys();
+        size_t n_coeffs_ = n_coeffs();
+        rlwe_vec res_vec(n, n_polys_, n_coeffs_);
+        rlwe res(n_polys_, n_coeffs_);
         res.set_coeffs_to_one();
         // size_t n_threads_max = omp_get_max_threads();
         // std::cout << "Max threads: " << n_threads_max << std::endl;
@@ -811,6 +977,14 @@ public:
             res = res.group_mult(prod);
         }
         return res;
+    }
+    // calls rgsw's get_hash
+    auto get_hash(vector_i128 eval_pows) const {
+        hashed_rgsw_vec hash(size(), n_rlwes(), n_polys()); // FIXME n_polys, do better (global?)
+        for (size_t i = 0; i < size(); i++) {
+            hash.set(i, get(i).get_hash(eval_pows));
+        }
+        return hash;
     }
 };
 
@@ -1186,26 +1360,20 @@ public:
 };
 
 struct eval_key {
-    vector_i128 gr_0;
-    rgsw_vec grFr_0;
-    rgsw_vec gsHr_0;
-    vector_i128 gr_rho_0;
-    rgsw_vec grFr_alpha_0;
-    rgsw_vec gsHr_gamma_0;
-    vector_i128 gr_1;
-    rgsw_vec grFr_1;
-    rgsw_vec gsHr_1;
-    vector_i128 gr_rho_1;
-    rgsw_vec grFr_alpha_1;
-    rgsw_vec gsHr_gamma_1;
+    vector_i128 gr;
+    hashed_rgsw_vec grFr;
+    hashed_rgsw_vec gsHr;
+    vector_i128 gr_rho;
+    hashed_rgsw_vec grFr_alpha;
+    hashed_rgsw_vec gsHr_gamma;
 };
 
 struct veri_key {
     vector_i128 s;
-    rgsw_vec rG_0;
-    rgsw_vec rG_1;
-    rgsw_vec rR_0;
-    rgsw_vec rR_1;
+    hashed_rgsw_vec rG_0;
+    hashed_rgsw_vec rG_1;
+    hashed_rgsw_vec rR_0;
+    hashed_rgsw_vec rR_1;
     i128 rho_0;
     i128 rho_1;
     i128 alpha_0;

@@ -17,7 +17,8 @@ public:
         poly noise = poly(N);
         auto noise_vec = sample_noise_polynomial(N);
         for (size_t i = 0; i < N; i++)
-            noise.set(i, noise_vec[i], true);
+            // noise.set(i, noise_vec[i], true);
+            noise.set(i, noise_vec[i]);
 
         poly a = poly(N);
         auto a_vec = sample_random_polynomial(N, q);
@@ -28,7 +29,8 @@ public:
         // FIXME polys all the way through
         poly sk_poly(N);
         for (size_t i = 0; i < N; i++)
-            sk_poly.set(i, sk.at(i), true);
+            // sk_poly.set(i, sk.at(i), true);
+            sk_poly.set(i, sk.at(i));
         poly ask = a * sk_poly;
 
         poly b(N);
