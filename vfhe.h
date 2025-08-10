@@ -5,7 +5,9 @@
 #include <random>
 #include "omp.h"
 #include "shared.h"
+#include "atcoder/convolution.hpp" // Download from AtCoder ACL
 
+using namespace atcoder;
 
 vector_i128 sample_discrete_gaussian(size_t N, double mu = 3.2, double sigma = 19.2) {
     vector_i128 result(N);
@@ -27,7 +29,8 @@ vector_i128 sample_secret_key(size_t N) {
     std::discrete_distribution<int> dist({0.25, 0.5, 0.25});
     for (size_t i = 0; i < N; ++i) {
         int val = dist(gen);
-        if (val == 0) s[i] = -1;
+        // if (val == 0) s[i] = -1;
+        if (val == 0) s[i] = 1;
         else if (val == 1) s[i] = 0;
         else s[i] = 1;
     }
@@ -84,10 +87,10 @@ public:
     }
     void check_value_bounds(T& val) const {
         if constexpr (std::is_same_v<T, i128>) {
-            // i128 min_val = 0;
+            i128 min_val = 0;
             i128 max_val = GROUP_MODULUS - 1;
-            // if (val < min_val || val > max_val) {
-            if (val > max_val) {
+            if (val < min_val || val > max_val) {
+            // if (val > max_val) {
                 throw std::out_of_range(
                     "(array1d) Value out of range: " + print_to_string_i128(val)
                 );
@@ -391,8 +394,32 @@ public:
         }
         return hash;
     }
-    poly convolve(const poly& other) const {
-        assert(n_coeffs() == other.n_coeffs());
+    std::vector<i128> convolution_(const std::vector<i128>& a, const std::vector<i128>& b) const {
+        i128 n = a.size();
+        std::vector<i128> a_pad = a, b_pad = b;
+        // a_pad.resize(2 * n);
+        // b_pad.resize(2 * n);
+        std::vector<i128> conv = convolution<FIELD_MODULUS>(a_pad, b_pad);
+        assert(conv.size() == 2 * n - 1);
+        return conv;
+    }
+
+    std::vector<i128> conv_to_nega_(const std::vector<i128> conv) const {
+        i128 n = (conv.size() + 1) / 2;
+        std::vector<i128> res(n);
+        for (i128 i = 0; i < n - 1; i++) {
+            i128 val = mod_(conv[i] - conv[i + n], FIELD_MODULUS);
+            res[i] = val;
+        }
+        res.at(n - 1) = conv.at(n - 1);
+        return res;
+    }
+    std::vector<i128> negacyclic_convolution_(const std::vector<i128>& a, const std::vector<i128>& b) const {
+        std::vector<i128> res = convolution_(a, b);
+        std::vector<i128> res1 = conv_to_nega_(res);
+        return res1;
+    }
+    poly convolve_schoolbook(const poly& other) const {
         poly convolved(2 * n_coeffs() - 1);
         for (size_t i = 0; i < n_coeffs(); i++) {
             for (size_t j = 0; j < n_coeffs(); j++) {
@@ -403,10 +430,53 @@ public:
         }
         return convolved;
     }
-    using array1d<i128, poly>::operator*;
-    poly operator*(const poly& other) const {
+    poly convolve_ntt(const poly& other) const {
+        // turn *this and other into vector_i128's
+        size_t n = n_coeffs();
+        vector_i128 a(n);
+        vector_i128 b(n);
+        for (size_t i = 0; i < n; i++) {
+            a.at(i) = get(i);
+            b.at(i) = other.get(i);
+        }
+        // call negacyclic_convolution_()
+        vector_i128 conv = convolution_(a, b);
+        size_t n_conv = 2 * n - 1;
+        assert(conv.size() == n_conv);
+        // create poly of result
+        poly res(n_conv);
+        for (size_t i = 0; i < n_conv; i++)
+            res.set(i, conv.at(i));
+        return res;
+    }
+    poly convolve(const poly& other) const {
+        assert(n_coeffs() == other.n_coeffs());
+        bool using_ntt = true;
+        if (using_ntt)
+            return convolve_ntt(other);
+        else
+            return convolve_schoolbook(other);
+    }
+    poly nega_ntt(const poly& other) const {
+        // turn *this and other into vector_i128's
+        size_t n = n_coeffs();
+        vector_i128 a(n);
+        vector_i128 b(n);
+        for (size_t i = 0; i < n; i++) {
+            a.at(i) = get(i);
+            b.at(i) = other.get(i);
+        }
+        // call negacyclic_convolution_()
+        vector_i128 conv = negacyclic_convolution_(a, b);
+        assert(conv.size() == n);
+        // create poly of result
+        poly res(n);
+        for (size_t i = 0; i < n; i++)
+            res.set(i, conv.at(i));
+        return res;
+    }
+    poly nega_naive(const poly& other) const {
         size_t N = n_coeffs();
-        assert(N == other.n_coeffs());
         poly neg_conv(N);
         for (size_t i = 0; i < N; i++) {
             for (size_t j = 0; j < i + 1; j++) {
@@ -421,6 +491,16 @@ public:
             }
         }
         return neg_conv;
+    }
+    using array1d<i128, poly>::operator*;
+    poly operator*(const poly& other) const {
+        size_t N = n_coeffs();
+        assert(N == other.n_coeffs());
+        bool using_ntt = true;
+        if (using_ntt)
+            return nega_ntt(other);
+        else
+            return nega_naive(other);
     }
     auto conv_to_nega(size_t N) const {
         assert(n_coeffs() == 2 * N - 1);
@@ -1228,7 +1308,7 @@ public:
         s(10000),
         L(10000),
         r(10000),
-        iter_(100),
+        iter_(10),
         F(scalar_mat_mult(s, F_, q, F_.size(), F_.at(0).size())),
         G_bar(scalar_mat_mult(s, G, q, G.size(), G.at(0).size())),
         R_bar(scalar_mat_mult(s, R, q, R.size(), R.at(0).size())),
