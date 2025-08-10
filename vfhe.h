@@ -13,7 +13,8 @@ vector_i128 sample_discrete_gaussian(size_t N, double mu = 3.2, double sigma = 1
     std::mt19937 gen(rd());
     std::normal_distribution<double> dist(mu, sigma);
     for (size_t i = 0; i < N; ++i) {
-        result[i] = static_cast<i128>(std::round(dist(gen)));
+        i128 res = static_cast<i128>(std::round(dist(gen)));
+        result[i] = mod_(res, FIELD_MODULUS);
     }
     return result;
 }
@@ -390,42 +391,48 @@ public:
         }
         return hash;
     }
-    auto convolve(poly& other) const {
+    poly convolve(const poly& other) const {
         assert(n_coeffs() == other.n_coeffs());
         poly convolved(2 * n_coeffs() - 1);
         for (size_t i = 0; i < n_coeffs(); i++) {
             for (size_t j = 0; j < n_coeffs(); j++) {
-                convolved.set(i + j, mod_(convolved.get(i + j) + get_coeff(i) * other.get_coeff(j), FIELD_MODULUS));
+                i128 val = mod_(get_coeff(i) * other.get_coeff(j), FIELD_MODULUS);
+                val = mod_(convolved.get(i + j) + val, FIELD_MODULUS);
+                convolved.set(i + j, val);
             }
         }
         return convolved;
     }
     using array1d<i128, poly>::operator*;
-    auto operator*(poly& other) const {
-        i128 N = n_coeffs();
+    poly operator*(const poly& other) const {
+        size_t N = n_coeffs();
         assert(N == other.n_coeffs());
         poly neg_conv(N);
         for (size_t i = 0; i < N; i++) {
             for (size_t j = 0; j < i + 1; j++) {
-                neg_conv.set(i, mod_(neg_conv.get(i) + get_coeff(j) * other.get_coeff(i - j), FIELD_MODULUS));
+                i128 val = mod_(get_coeff(j) * other.get_coeff(i - j), FIELD_MODULUS);
+                val = mod_(neg_conv.get(i) + val, FIELD_MODULUS);
+                neg_conv.set(i, val);
             }
             for (size_t j = i + 1; j < N; j++) {
-                neg_conv.set(i, mod_(neg_conv.get(i) - get_coeff(j) * other.get_coeff(N + i - j), FIELD_MODULUS));
+                i128 val = mod_(get_coeff(j) * other.get_coeff(N + i - j), FIELD_MODULUS);
+                val = mod_(neg_conv.get(i) - val, FIELD_MODULUS);
+                neg_conv.set(i, val);
             }
         }
         return neg_conv;
     }
     auto conv_to_nega(size_t N) const {
-        assert(n_coeffs() == 2 * N + 1);
+        assert(n_coeffs() == 2 * N - 1);
         i128 conv_degree = n_coeffs() - 1;
         if (conv_degree < N)
-        return *this;
+            return *this;
         poly negacyclic(N);
         for (size_t i = 0; i < N; i++)
             negacyclic.set(i, get_coeff(i));
         for (size_t i = N; i < conv_degree + 1; i++) {
             i128 coeff = negacyclic.get_coeff(i - N) - get_coeff(i);
-            negacyclic.set(i - N, coeff);
+            negacyclic.set(i - N, mod_(coeff, FIELD_MODULUS));
         }
         return negacyclic;
     }
@@ -750,13 +757,18 @@ public:
     using array1d<hashed_rlwe, hashed_rgsw>::pow;
     hashed_rlwe pow(const hashed_rlwe_decomp& other) const {
         size_t n_polys_ = n_hashed_polys();
+        assert(n_polys_ == N_POLYS_IN_RLWE);
         size_t N = size();
         assert(N == other.size());
         hashed_rlwe_vec res_vec(N, n_polys_);
-        #pragma omp parallel for num_threads(2)
+        // #pragma omp parallel for num_threads(2)
         for (size_t i = 0; i < N; i++) {
-            auto val0 = get(i).pow(other.get(i));
-            res_vec.set(i, val0);
+            // FIXME a bit hacky - obj.pow(scalar) is scalar^obj, do we need obj^scalar???
+            auto val0 = pow_(get(i).get(0), (other.get(i)));
+            auto val1 = pow_(get(i).get(1), (other.get(i)));
+            hashed_rlwe& res = res_vec.get(i);
+            res.set(0, val0);
+            res.set(1, val1);
         }
 
         hashed_rlwe res(n_polys_);
@@ -813,7 +825,7 @@ public:
     rlwe convolve(const rlwe_decomp& other) const {
         size_t N = size();
         assert(N == other.size());
-        rlwe res(n_polys(), n_coeffs());
+        rlwe res(n_polys(), 2 * n_coeffs() - 1);
         poly& p0 = res.get(0);
         poly& p1 = res.get(1);
         for (size_t i = 0; i < N; i++) {
@@ -902,7 +914,7 @@ public:
         hashed_rlwe_vec res_vec(n, n_hashed_polys_);
         hashed_rlwe res(n_hashed_polys_);
         res.set_coeffs_to_one();
-        #pragma omp parallel for num_threads(12)
+        // #pragma omp parallel for num_threads(12)
         for (size_t i = 0; i < n; i++) {
             auto val = get(i).pow(other.get(i));
             res_vec.set(i, val);
@@ -1144,39 +1156,6 @@ i128 random_i128(i128 from, i128 to_inclusive) {
     return random_number;
 }
 
-void init(rgsw_mat& F, rlwe_decomp_vec& x, veri_vec_scalar& r) {
-    std::random_device rd;  // Non-deterministic seed
-    std::mt19937 gen(rd()); // Mersenne Twister engine
-    std::uniform_int_distribution<i128> distrib(0, FIELD_MODULUS - 1); // Range: 0 to 100
-    i128 random_number = distrib(gen);
-    i128 counter = random_number;
-    for (size_t i = 0; i < F.n_rows(); ++i) {
-        for (size_t j = 0; j < F.n_cols(); ++j) {
-            rgsw& rg = F.get_rgsw(i, j);
-            for (rlwe& rl : rg) {
-                for (poly& p : rl) {
-                    for (size_t m = 0; m < p.size(); ++m) {
-                        p.set(m, counter++ % FIELD_MODULUS); // just an example initialization
-                    }
-                }
-            }
-        }
-    }
-    counter = distrib(gen);
-    for (size_t i = 0; i < x.size(); ++i) {
-        rlwe_decomp& rd = x.get(i);
-        for (size_t j = 0; j < rd.size(); ++j) {
-            poly& p = rd.get(j);
-            for (size_t m = 0; m < p.size(); ++m) {
-                p.set(m, counter++ % FIELD_MODULUS);
-            }
-        }
-    }
-    counter = distrib(gen);
-    for (size_t i = 0; i < r.size(); ++i) {
-        r.set(i, counter++ % FIELD_MODULUS);
-    }
-}
 
 struct Params {
 private:

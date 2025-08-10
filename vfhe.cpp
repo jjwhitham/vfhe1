@@ -27,6 +27,7 @@ su = sHu
 #include "enc.h"
 #include "vfhe.h"
 #include <ranges>
+#include <chrono>
 
 vector_i128 eval_poly_pows(size_t n, i128 base, i128 q) {
     vector_i128 res(n);
@@ -89,105 +90,55 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key> compute_eval_and_veri_keys(
         return res;
     };
 
-    // Hashes a poly using eval_pows and q
-    auto hash_poly = [](const poly& p, const vector_i128& eval_pows, i128 q) -> i128 {
-        i128 sum = 0;
-        for (size_t i = 0; i < p.size() && i < eval_pows.size(); ++i) {
-            sum = mod_(sum + mod_(p.get(i) * eval_pows[i], q), q);
-        }
-        return sum;
-    };
-
-    // Hashes an rgsw_vec using eval_pows and q
-    auto hash_rgsw_vector = [&](const rgsw_vec& rgsw_v, const vector_i128& eval_pows, i128 q) -> rgsw_vec {
-        rgsw_vec hashed(rgsw_v.size(), rgsw_v.n_rlwes(), rgsw_v.n_polys(), rgsw_v.n_coeffs());
-        for (size_t i = 0; i < rgsw_v.size(); ++i) {
-            const rgsw& rgsw_elem = rgsw_v.get(i);
-            rgsw hashed_rgsw(rgsw_elem.size(), rgsw_elem.n_polys(), rgsw_elem.n_coeffs());
-            for (size_t j = 0; j < rgsw_elem.size(); ++j) {
-                const rlwe& rlwe_elem = rgsw_elem.get(j);
-                rlwe hashed_rlwe(rlwe_elem.size(), rlwe_elem.get(0).size());
-                for (size_t k = 0; k < rlwe_elem.size(); ++k) {
-                    const poly& poly_elem = rlwe_elem.get(k);
-                    i128 hash_val = hash_poly(poly_elem, eval_pows, q);
-                    poly hashed_poly(poly_elem.size());
-                    for (size_t l = 0; l < poly_elem.size(); ++l) {
-                        hashed_poly.set(l, hash_val);
-                    }
-                    hashed_rlwe.set(k, hashed_poly);
-                }
-                hashed_rgsw.set(j, hashed_rlwe);
-            }
-            hashed.set(i, hashed_rgsw);
-        }
-        return hashed;
-    };
-
-    rgsw_vec rF_0 = vec_mat_mult(r_0, F_ctx);
-    rgsw_vec rF_1 = vec_mat_mult(r_1, F_ctx);
-    // rF_0 = hash_rgsw_vector(rF_0, eval_pows, q);
-    rF_0 = hash_rgsw_vector(rF_0, eval_pows, q);
-    rF_1 = hash_rgsw_vector(rF_1, eval_pows, q);
+    hashed_rgsw_vec rF_0 = vec_mat_mult(r_0, F_ctx).get_hash(eval_pows);
+    hashed_rgsw_vec rF_1 = vec_mat_mult(r_1, F_ctx).get_hash(eval_pows);
 
     // Make rgsw_vec for r_0 and r_1
-    rgsw_vec r_0_rgsw(r_0.size(), 2 * d, 2, N);
-    rgsw_vec r_1_rgsw(r_1.size(), 2 * d, 2, N);
+    hashed_rgsw_vec r_0_rgsw(r_0.size(), N_POLYS_IN_RLWE * d, N_POLYS_IN_RLWE);
+    hashed_rgsw_vec r_1_rgsw(r_1.size(), N_POLYS_IN_RLWE * d, N_POLYS_IN_RLWE);
     for (size_t i = 0; i < r_0.size(); ++i) {
         poly p(N);
         p.set(0, r_0[i]);
-        r_0_rgsw.set(i, enc.encode_rgsw(p));
+        r_0_rgsw.set(i, enc.encode_rgsw(p).get_hash(eval_pows));
     }
     for (size_t i = 0; i < r_1.size(); ++i) {
         poly p(N);
         p.set(0, r_1[i]);
-        r_1_rgsw.set(i, enc.encode_rgsw(p));
+        r_1_rgsw.set(i, enc.encode_rgsw(p).get_hash(eval_pows));
     }
     assert(r_0_rgsw.size() == rF_0.size());
     // assert(r_0_rgsw[0].rows() == rF_0[0].rows()); // FIXME
 
-    rgsw_vec rF_0_r_1(rF_0.size());
-    rgsw_vec rF_1_r_0(rF_1.size());
+    hashed_rgsw_vec rF_0_r_1(rF_0.size());
+    hashed_rgsw_vec rF_1_r_0(rF_1.size());
     for (size_t i = 0; i < rF_0.size(); ++i)
         rF_0_r_1.set(i, rF_0.get(i) - r_1_rgsw.get(i));
     for (size_t i = 0; i < rF_1.size(); ++i)
         rF_1_r_0.set(i, rF_1.get(i) - r_0_rgsw.get(i));
 
-    // = convert_vec_to_cyclic_enc(g, rF_0_r_1, d, q, p);
-    hashed_rgsw_vec grFr_0 = rF_0_r_1.get_hash(eval_pows).pow();
-    // convert_vec_to_cyclic_enc(g, rF_1_r_0, d, q, p);
-    hashed_rgsw_vec grFr_1 = rF_1_r_0.get_hash(eval_pows).pow();
-
-    // convert_vec_to_cyclic_enc(g, rF_0_r_1 * alpha_1, d, q, p);
-    hashed_rgsw_vec grFr_alpha_0 = (rF_0_r_1.get_hash(eval_pows) * alpha_1).pow();
-    // convert_vec_to_cyclic_enc(g, rF_1_r_0 * alpha_0, d, q, p);
-    hashed_rgsw_vec grFr_alpha_1 = (rF_1_r_0.get_hash(eval_pows) * alpha_0).pow();
+    hashed_rgsw_vec grFr_0 = rF_0_r_1.pow();
+    hashed_rgsw_vec grFr_1 = rF_1_r_0.pow();
+    hashed_rgsw_vec grFr_alpha_0 = (rF_0_r_1 * alpha_1).pow();
+    hashed_rgsw_vec grFr_alpha_1 = (rF_1_r_0 * alpha_0).pow();
 
     hashed_rgsw_vec rG_0 = vec_mat_mult(r_0, G_bar_ctx).get_hash(eval_pows);
     hashed_rgsw_vec rG_1 = vec_mat_mult(r_1, G_bar_ctx).get_hash(eval_pows);
     hashed_rgsw_vec rR_0 = vec_mat_mult(r_0, R_bar_ctx).get_hash(eval_pows);
     hashed_rgsw_vec rR_1 = vec_mat_mult(r_1, R_bar_ctx).get_hash(eval_pows);
 
-    // hashed_rgsw_vec sH = vec_mat_mult(s, H_bar_ctx).get_hash(eval_pows);
-    rgsw_vec sH = vec_mat_mult(s, H_bar_ctx);
+    hashed_rgsw_vec sH = vec_mat_mult(s, H_bar_ctx).get_hash(eval_pows);
 
-    rgsw_vec sH_r_1(sH.size());
-    rgsw_vec sH_r_0(sH.size());
+    hashed_rgsw_vec sH_r_1(sH.size());
+    hashed_rgsw_vec sH_r_0(sH.size());
     for (size_t i = 0; i < sH.size(); ++i)
         sH_r_1.set(i, sH.get(i) - r_1_rgsw.get(i));
     for (size_t i = 0; i < sH.size(); ++i)
         sH_r_0.set(i, sH.get(i) - r_0_rgsw.get(i));
 
-    // rgsw_vec gsHr_0 = convert_vec_to_cyclic_enc(g, mod_rgsw_vec(sH_r_1, q), d, q, p);
-    hashed_rgsw_vec gsHr_0 = sH_r_1.get_hash(eval_pows).pow();
-    // rgsw_vec gsHr_1 = convert_vec_to_cyclic_enc(g, mod_rgsw_vec(sH_r_0, q), d, q, p);
-    hashed_rgsw_vec gsHr_1 = sH_r_0.get_hash(eval_pows).pow();
-
-    // rgsw_vec gsHr_gamma_0 = convert_vec_to_cyclic_enc(g, mod_rgsw_vec(sH_r_1 * gamma_1, q), d, q, p);
-    hashed_rgsw_vec gsHr_gamma_0 = (sH_r_1.get_hash(eval_pows) * gamma_1).pow();
-    // rgsw_vec gsHr_gamma_1 = convert_vec_to_cyclic_enc(g, mod_rgsw_vec(sH_r_0 * gamma_0, q), d, q, p);
-    hashed_rgsw_vec gsHr_gamma_1 = (sH_r_0.get_hash(eval_pows) * gamma_0).pow();
-
-
+    hashed_rgsw_vec gsHr_0 = sH_r_1.pow();
+    hashed_rgsw_vec gsHr_1 = sH_r_0.pow();
+    hashed_rgsw_vec gsHr_gamma_0 = (sH_r_1 * gamma_1).pow();
+    hashed_rgsw_vec gsHr_gamma_1 = (sH_r_0 * gamma_0).pow();
 
     eval_key ek0 {
         gr_0,
@@ -288,7 +239,7 @@ Proof compute_proof(
 void verify_with_lin_and_dyn_checks(
     const veri_key& vk, const Proof& proof, const Proof& old_proof, i128 k,
     const rlwe_vec& y, const hashed_rlwe_vec& u, const rlwe_vec& u_reenc,
-    i128 q, i128 p, const vector_i128& eval_pows
+    i128 v, i128 d, const vector_i128& eval_pows
 ) {
     // Unpack veri_key
     const vector_i128& s = vk.s;
@@ -329,68 +280,49 @@ void verify_with_lin_and_dyn_checks(
         rR = &rR_1;
     }
 
-    // Helper lambdas
-    auto cyclic_exp_enc = [](const hashed_rlwe& hrlwe, i128 exp, i128 q, i128 p) -> hashed_rlwe {
-        hashed_rlwe res(hrlwe.size());
-        for (size_t i = 0; i < hrlwe.size(); ++i) {
-            res.set(i, cyclic_exp(hrlwe.get(i), exp, q, p));
-        }
-        return res;
-    };
-    auto cyclic_mult_enc = [](const hashed_rlwe& a, const hashed_rlwe& b, i128 p) -> hashed_rlwe {
-        assert(a.size() == b.size());
-        hashed_rlwe res(a.size());
-        for (size_t i = 0; i < a.size(); ++i) {
-            res.set(i, mod_(a.get(i) * b.get(i), p));
-        }
-        return res;
-    };
-    auto vec_dot_prod = [](const vector_i128& vec, const hashed_rlwe_vec& hvec, i128 q) -> i128 {
+    auto vec_dot_prod = [](const vector_i128& vec, const hashed_rlwe_vec& hvec) -> hashed_rlwe {
         assert(vec.size() == hvec.size());
-        i128 sum = 0;
+        hashed_rlwe sum(N_POLYS_IN_RLWE);
         for (size_t i = 0; i < vec.size(); ++i) {
-            for (size_t j = 0; j < hvec.get(i).size(); ++j) {
-                sum = mod_(sum + mod_(vec[i] * hvec.get(i).get(j), q), q);
-            }
+            sum = sum + hvec.get(i) * vec[i];
         }
         return sum;
     };
-    auto vec_dot_prod_enc = [](const hashed_rgsw_vec& rgsw_v, const rlwe_vec& rlwe_v, const vector_i128& eval_pows) -> hashed_rlwe {
+    auto vec_dot_prod_enc = [](const hashed_rgsw_vec& rgsw_v, const rlwe_vec& rlwe_v, const vector_i128& eval_pows, i128 v, i128 d) -> hashed_rlwe {
         assert(rgsw_v.size() == rlwe_v.size());
         hashed_rlwe sum(N_POLYS_IN_RLWE);
         for (size_t i = 0; i < rgsw_v.size(); ++i) {
             // For each element, hash rlwe_v[i] and multiply by rgsw_v[i]
-            auto hashed = rlwe_v.get(i).get_hash(eval_pows);
+            auto hashed = rlwe_v.get(i).decompose(v, d).get_hash(eval_pows);
             for (size_t j = 0; j < hashed.size(); ++j) {
-                sum = rgsw_v.get(i).get(j) * hashed.get(j);
+                sum = sum + rgsw_v.get(i).get(j) * hashed.get(j);
             }
         }
         return sum;
     };
 
     // Linearity checks
-    hashed_rlwe G_1_rho = cyclic_exp_enc(G_1, rho, q, p);
-    hashed_rlwe G_2_alpha = cyclic_exp_enc(G_2, alpha, q, p);
-    hashed_rlwe G_3_gamma = cyclic_exp_enc(G_3, gamma, q, p);
+    // hashed_rlwe G_1_rho = cyclic_exp_enc(G_1, rho, q, p);
+    // TODO better interface self^other, with other as i128,
+    // or better interface for i128^i128 (static member func?)
     for (size_t i = 0; i < 2; i++) {
-        assert(G_1_rho.get(i) == G_1_.get(i));
-        assert(G_2_alpha.get(i) == G_2_.get(i));
-        assert(G_3_gamma.get(i) == G_3_.get(i));
+        assert(G_1.pow_(G_1.get(i), rho) == G_1_.get(i));
+        assert(G_2.pow_(G_2.get(i), alpha) == G_2_.get(i));
+        assert(G_3.pow_(G_3.get(i), gamma) == G_3_.get(i));
     }
 
     // Dynamics check
-    hashed_rlwe su = vec_dot_prod(s, u, q);
+    hashed_rlwe su = vec_dot_prod(s, u);
     hashed_rlwe gsu = su.pow();
     hashed_rlwe rhs_u = G_3.group_mult(g_1);
     for (size_t i = 0; i < 2; i++)
         assert(gsu.get(i) == rhs_u.get(i));
 
     hashed_rlwe rhs = G_2.group_mult(g_1);
-    hashed_rlwe rGy = vec_dot_prod_enc(*rG, y, eval_pows);
-    // hashed_rlwe grGy = cyclic_exp_enc(rhs, rGy, q, p);
-    hashed_rlwe grGy = rhs.group_mult(rGy);
-    rhs = cyclic_mult_enc(rhs, grGy, p);
-    hashed_rlwe rRu = vec_dot_prod_enc(*rR, u_reenc, eval_pows);
+    hashed_rlwe rGy = vec_dot_prod_enc(*rG, y, eval_pows, v, d);
+    hashed_rlwe grGy = rGy.pow();
+    rhs = rhs.group_mult(grGy);
+    hashed_rlwe rRu = vec_dot_prod_enc(*rR, u_reenc, eval_pows, v, d);
     hashed_rlwe grRu = rRu.pow();
     rhs = rhs.group_mult(grRu);
     for (size_t i = 0; i < 2; i++)
@@ -420,7 +352,7 @@ void run_control_loop() {
     i128 iter_ = pms.iter_;
 
     i128 from = 1;
-    i128 to_inclusive = 100;
+    i128 to_inclusive = q - 1;
     auto knowledge_exps = pms.sample_knowledge_exponents(from, to_inclusive);
     i128 alpha_0 = knowledge_exps.at(0);
     i128 alpha_1 = knowledge_exps.at(1);
@@ -460,17 +392,15 @@ void run_control_loop() {
     auto ek = std::get<0>(keys);
     veri_key vk = std::get<1>(keys);
 
-    auto x_cont_ctx_hashed = x_cont_ctx_convolved.get_hash(eval_pows);
+    auto x_cont_ctx_hashed = x_cont_ctx.get_hash(eval_pows);
 
-    auto vec_dot_prod = [](const vector_i128& scalar_vec, const hashed_rlwe_vec& rv) -> hashed_rlwe {
-        assert(scalar_vec.size() == rv.size());
-        hashed_rlwe dot_prod(rv.n_hashed_polys());
-        for (size_t i = 0; i < scalar_vec.size(); ++i) {
-            for (size_t j = 0; j < rv.get(i).size(); ++j) {
-                dot_prod.set(j, mod_(dot_prod.get(j) + rv.get(i).get(j) * scalar_vec[i], FIELD_MODULUS));
-            }
+    auto vec_dot_prod = [](const vector_i128& vec, const hashed_rlwe_vec& hvec) -> hashed_rlwe {
+        assert(vec.size() == hvec.size());
+        hashed_rlwe sum(N_POLYS_IN_RLWE);
+        for (size_t i = 0; i < vec.size(); ++i) {
+            sum = sum + hvec.get(i) * vec[i];
         }
-        return dot_prod;
+        return sum;
     };
     auto rx_0 = vec_dot_prod(r_1, x_cont_ctx_hashed);
     auto g1 = rx_0.pow();
@@ -507,11 +437,11 @@ void run_control_loop() {
         rlwe_vec y_out_ctx = enc.encrypt_rlwe_vec(y_out_rounded_modded); // P -> C
 
         // Controller: Compute output
-        rlwe_vec u_out_ctx_convolved = H_bar_ctx.convolve(x_cont_ctx.decompose(v, d));
-        hashed_rlwe_vec u_out_ctx_hashed = u_out_ctx_convolved.get_hash(eval_pows);
-        rlwe_vec u_out_ctx = u_out_ctx_convolved.conv_to_nega(N); // C -> P
+        rlwe_vec u_out_ctx_convolved = H_bar_ctx.convolve(x_cont_ctx.decompose(v, d)); // C -> P
 
         // Plant: Update state (and re-encrypt u)
+        hashed_rlwe_vec u_out_ctx_hashed = u_out_ctx_convolved.get_hash(eval_pows);
+        rlwe_vec u_out_ctx = u_out_ctx_convolved.conv_to_nega(N);
         vector_i128 u_out_ptx = enc.decrypt_rlwe_vec(u_out_ctx);
         vector_double u_in = scalar_vec_mult(1.0 / (rr * ss * ss * L), u_out_ptx);
         vector_i128 u_in_rounded_modded = round_and_mod_vec(scalar_vec_mult(rr * L, u_in));
@@ -530,10 +460,10 @@ void run_control_loop() {
         eval_key& ek_i = std::get<0>(ek); // TODO check allowable &const variations
         if (k % 2 == 1)
             ek_i = std::get<1>(ek);
-        Proof proof = compute_proof(ek_i, x_cont_ctx, x_cont_ctx_convolved, x_cont_old_ctx, v, d, eval_pows);
+        Proof proof = compute_proof(ek_i, x_cont_ctx, x_cont_ctx_convolved, x_cont_old_ctx, v, d, eval_pows); // C -> P
 
         // Plant: Verify
-        verify_with_lin_and_dyn_checks(vk, proof, old_proof, k, y_out_ctx, u_out_ctx_hashed, u_reenc_ctx, q, p, eval_pows);
+        verify_with_lin_and_dyn_checks(vk, proof, old_proof, k, y_out_ctx, u_out_ctx_hashed, u_reenc_ctx, v, d, eval_pows);
         old_proof = proof;
     }
 }
@@ -545,8 +475,11 @@ int main() {
     // std::cout << "omp num threads: " << omp_get_max_threads() << std::endl;
     // std::cout << " omp num threads: " << omp_get_num_threads() << std::endl;
     // test_full();
+    auto start = std::chrono::high_resolution_clock::now();
     run_control_loop();
-
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> elapsed = end - start;
+    std::cout << "Elapsed time: " << elapsed.count() << " ms\n";
     return 0;
 }
 

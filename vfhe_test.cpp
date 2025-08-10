@@ -1,6 +1,40 @@
 #include "vfhe.h"
 #include <chrono>
 
+void init(rgsw_mat& F, rlwe_decomp_vec& x, veri_vec_scalar& r) {
+    std::random_device rd;  // Non-deterministic seed
+    std::mt19937 gen(rd()); // Mersenne Twister engine
+    std::uniform_int_distribution<i128> distrib(0, FIELD_MODULUS - 1); // Range: 0 to 100
+    i128 random_number = distrib(gen);
+    i128 counter = random_number;
+    for (size_t i = 0; i < F.n_rows(); ++i) {
+        for (size_t j = 0; j < F.n_cols(); ++j) {
+            rgsw& rg = F.get_rgsw(i, j);
+            for (rlwe& rl : rg) {
+                for (poly& p : rl) {
+                    for (size_t m = 0; m < p.size(); ++m) {
+                        p.set(m, counter++ % FIELD_MODULUS); // just an example initialization
+                    }
+                }
+            }
+        }
+    }
+    counter = distrib(gen);
+    for (size_t i = 0; i < x.size(); ++i) {
+        rlwe_decomp& rd = x.get(i);
+        for (size_t j = 0; j < rd.size(); ++j) {
+            poly& p = rd.get(j);
+            for (size_t m = 0; m < p.size(); ++m) {
+                p.set(m, counter++ % FIELD_MODULUS);
+            }
+        }
+    }
+    counter = distrib(gen);
+    for (size_t i = 0; i < r.size(); ++i) {
+        r.set(i, counter++ % FIELD_MODULUS);
+    }
+}
+
 void test() {
     rlwe_vec u(2, 2, 2);
     for (size_t i = 0; i < u.size(); i++) {
