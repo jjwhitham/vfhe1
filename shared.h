@@ -7,16 +7,20 @@
 // FIXME check if this is being used correctly, i.e. are some negs required?
 // typedef __uint128_t i128;
 typedef __int128_t i128;
+constexpr i128 GROUP_MODULUS = 17180000273;
+constexpr i128 FIELD_MODULUS = 1073750017;
+constexpr i128 GENERATOR = 65536;
+
 // constexpr i128 GROUP_MODULUS = 23;
 // constexpr i128 FIELD_MODULUS = 11;
 // constexpr i128 GENERATOR = 4;
 // constexpr i128 GROUP_MODULUS = 103;
 // constexpr i128 FIELD_MODULUS = 17;
 // constexpr i128 GENERATOR = 64;
-constexpr i128 GROUP_MODULUS = 540431955285196831;
+// constexpr i128 GROUP_MODULUS = 540431955285196831;
+// constexpr unsigned int FIELD_MODULUS = 18014398509506561;
 // constexpr i128 FIELD_MODULUS = 18014398509506561;
-constexpr unsigned int FIELD_MODULUS = 18014398509506561;
-constexpr i128 GENERATOR = 1073741824;
+// constexpr i128 GENERATOR = 1073741824;
 constexpr i128 N_POLYS_IN_RLWE = 2;
 using matrix_double = std::vector<std::vector<double>>;
 using vector_double = std::vector<double>;

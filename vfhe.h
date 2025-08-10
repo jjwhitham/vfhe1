@@ -397,8 +397,6 @@ public:
     std::vector<i128> convolution_(const std::vector<i128>& a, const std::vector<i128>& b) const {
         i128 n = a.size();
         std::vector<i128> a_pad = a, b_pad = b;
-        // a_pad.resize(2 * n);
-        // b_pad.resize(2 * n);
         std::vector<i128> conv = convolution<FIELD_MODULUS>(a_pad, b_pad);
         assert(conv.size() == 2 * n - 1);
         return conv;
@@ -908,6 +906,7 @@ public:
         rlwe res(n_polys(), 2 * n_coeffs() - 1);
         poly& p0 = res.get(0);
         poly& p1 = res.get(1);
+        #pragma omp parallel for num_threads(8)
         for (size_t i = 0; i < N; i++) {
             auto val0 = get(i).get(0).convolve(other.get(i));
             auto val1 = get(i).get(1).convolve(other.get(i));

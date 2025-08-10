@@ -29,6 +29,13 @@ su = sHu
 #include <ranges>
 #include <chrono>
 
+#ifdef TIMING_ON
+#  define TIMING(x) x
+#else
+#  define TIMING(x)
+#endif
+
+
 vector_i128 eval_poly_pows(size_t n, i128 base, i128 q) {
     vector_i128 res(n);
     res.at(0) = 1; // base^0 = 1
@@ -432,14 +439,18 @@ void run_control_loop() {
 
     for (size_t k = 0; k < iter_; k++) {
         // Plant: Compute output
+        auto start_plant = std::chrono::high_resolution_clock::now();
         vector_double y_out = mat_vec_mult(C, x_plant);
         vector_i128 y_out_rounded_modded = round_and_mod_vec(scalar_vec_mult(L * rr, y_out));
         rlwe_vec y_out_ctx = enc.encrypt_rlwe_vec(y_out_rounded_modded); // P -> C
+        auto end_plant = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed_plant = end_plant - start_plant;
 
         // Controller: Compute output
         rlwe_vec u_out_ctx_convolved = H_bar_ctx.convolve(x_cont_ctx.decompose(v, d)); // C -> P
 
         // Plant: Update state (and re-encrypt u)
+        start_plant = std::chrono::high_resolution_clock::now();
         hashed_rlwe_vec u_out_ctx_hashed = u_out_ctx_convolved.get_hash(eval_pows);
         rlwe_vec u_out_ctx = u_out_ctx_convolved.conv_to_nega(N);
         vector_i128 u_out_ptx = enc.decrypt_rlwe_vec(u_out_ctx);
@@ -447,24 +458,49 @@ void run_control_loop() {
         vector_i128 u_in_rounded_modded = round_and_mod_vec(scalar_vec_mult(rr * L, u_in));
         rlwe_vec u_reenc_ctx = enc.encrypt_rlwe_vec(u_in_rounded_modded); // XXX P->C: Plant re-encrypts u
         x_plant = mat_vec_mult(A, x_plant);
+        end_plant = std::chrono::high_resolution_clock::now();
+        elapsed_plant += end_plant - start_plant;
 
         // Controller: Update state
+        auto start_controller = std::chrono::high_resolution_clock::now();
         rlwe_vec x_cont_old_ctx = x_cont_ctx;
         rlwe_vec x_cont_ctx_convolved =
             F_ctx.convolve(x_cont_ctx.decompose(v, d))
             + G_bar_ctx.convolve(y_out_ctx.decompose(v, d))
             + R_bar_ctx.convolve(u_reenc_ctx.decompose(v, d));
         x_cont_ctx = x_cont_ctx_convolved.conv_to_nega(N);
+        auto end_controller = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed_controller = end_controller - start_controller;
 
         // Controller: Prove
+        start_controller = std::chrono::high_resolution_clock::now();
         eval_key& ek_i = std::get<0>(ek); // TODO check allowable &const variations
         if (k % 2 == 1)
             ek_i = std::get<1>(ek);
+        auto start_proof = std::chrono::high_resolution_clock::now();
         Proof proof = compute_proof(ek_i, x_cont_ctx, x_cont_ctx_convolved, x_cont_old_ctx, v, d, eval_pows); // C -> P
+        auto end_proof = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed_proof = end_proof - start_proof;
+        std::cout << "Proof time: " << elapsed_proof.count() << " ms\n";
+        end_controller = std::chrono::high_resolution_clock::now();
+        elapsed_controller += end_controller - start_controller;
+        std::cout << "Controller time: " << elapsed_controller.count() << " ms\n";
 
         // Plant: Verify
+        start_plant = std::chrono::high_resolution_clock::now();
+        #ifdef TIMING
+            auto start_verify = std::chrono::high_resolution_clock::now();
+        #endif
         verify_with_lin_and_dyn_checks(vk, proof, old_proof, k, y_out_ctx, u_out_ctx_hashed, u_reenc_ctx, v, d, eval_pows);
+        #ifdef TIMING
+            auto end_verify = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double, std::milli> elapsed_verify = end_verify - start_verify;
+            std::cout << "Verify time: " << elapsed_verify.count() << " ms\n";
+        #endif
         old_proof = proof;
+        end_plant = std::chrono::high_resolution_clock::now();
+        elapsed_plant += end_plant - start_plant;
+        std::cout << "Plant time: " << elapsed_plant.count() << " ms\n";
     }
 }
 
@@ -479,9 +515,11 @@ int main() {
     run_control_loop();
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed = end - start;
-    std::cout << "Elapsed time: " << elapsed.count() << " ms\n";
+    std::cout << "Total Elapsed time: " << elapsed.count() << " ms\n";
     return 0;
 }
 
 // DONE update either i128 to u128, or replace % with mod()
 // TODO test encryptor funcs (perhaps set moduli small and compare with Python)
+
+// TODO timings
