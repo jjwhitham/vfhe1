@@ -7,8 +7,8 @@
 #include <type_traits>
 #include <vector>
 
-#include "atcoder/internal_bit"
-#include "atcoder/modint"
+#include "atcoder/internal_bit.hpp"
+#include "atcoder/modint.hpp"
 
 namespace atcoder {
 

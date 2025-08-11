@@ -33,15 +33,18 @@ std::string print_to_string_i128(i128 n) {
 vector<i128> negacyclic_convolution(const vector<i128>& a, const vector<i128>& b) {
     i128 n = a.size();
     vector<i128> a_pad = a, b_pad = b;
-    a_pad.resize(2 * n);
-    b_pad.resize(2 * n);
+    a_pad.resize(2 * n - 1);
+    b_pad.resize(2 * n - 1);
     vector<i128> conv = convolution<MOD>(a_pad, b_pad);
     for (i128 c : conv) std::cout << print_to_string_i128(c) << " ";
     std::cout << "\n";
     vector<i128> res(n);
     for (i128 i = 0; i < n; ++i) {
         // (conv[i] - conv[i + n]) mod MOD
-        res[i] = (conv[i] - conv[i + n] + MOD) % MOD;
+        i128 val = (conv[i] - conv[i + n]) % MOD;
+        if (val < 0)
+            val += MOD;
+        res[i] = val;
     }
     return res;
 }

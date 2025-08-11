@@ -6,7 +6,7 @@
 #include <chrono>
 #include "omp.h"
 #include "shared.h"
-#include "atcoder/convolution.hpp" // Download from AtCoder ACL
+#include <atcoder/convolution.hpp> // Download from AtCoder ACL
 
 using namespace atcoder;
 
@@ -455,6 +455,9 @@ public:
         return convolved;
     }
     poly convolve_ntt(const poly& other) const {
+        TIMING(auto start = std::chrono::high_resolution_clock::now();)
+        TIMING(int thread_num = omp_get_thread_num();)
+
         // turn *this and other into vector_i128's
         size_t n = n_coeffs();
         vector_i128 a(n);
@@ -471,21 +474,18 @@ public:
         poly res(n_conv);
         for (size_t i = 0; i < n_conv; i++)
             res.set(i, conv.at(i));
+
+        TIMING(auto end = std::chrono::high_resolution_clock::now();)
+        TIMING(times_counts.convolve[thread_num] += end - start;)
         return res;
     }
     poly convolve(const poly& other) const {
-        TIMING(auto start = std::chrono::high_resolution_clock::now();)
-        TIMING(int thread_num = omp_get_thread_num();)
-
         assert(n_coeffs() == other.n_coeffs());
         bool using_ntt = true;
         if (using_ntt)
             return convolve_ntt(other);
         else
             return convolve_naive(other);
-
-        TIMING(auto end = std::chrono::high_resolution_clock::now();)
-        TIMING(times_counts.convolve[thread_num] += end - start;)
     }
     poly nega_ntt(const poly& other) const {
         // turn *this and other into vector_i128's
@@ -938,7 +938,7 @@ public:
         rlwe res(n_polys(), 2 * n_coeffs() - 1);
         poly& p0 = res.get(0);
         poly& p1 = res.get(1);
-        #pragma omp parallel for num_threads(1)
+        #pragma omp parallel for num_threads(N_THREADS)
         for (size_t i = 0; i < N; i++) {
             auto val0 = get(i).get(0).convolve(other.get(i));
             auto val1 = get(i).get(1).convolve(other.get(i));

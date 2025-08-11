@@ -518,19 +518,23 @@ void run_control_loop() {
 
 void print_times_and_counts() {
     i128 iter_ = times_counts.iter_;
+    int n_decimals = 0;
+    std::cout << std::fixed << std::setprecision(n_decimals);
     std::cout << "Times:\n";
-    std::cout << "Proof (per loop): " << times_counts.elapsed_proof.count() / iter_ << " ms\n";
-    std::cout << "Controller (per loop): " << times_counts.elapsed_controller.count() / iter_ << " ms\n";
-    std::cout << "Verify (per loop): " << times_counts.elapsed_verify.count() / iter_ << " ms\n";
-    std::cout << "Plant (per loop): " << times_counts.elapsed_plant.count() / iter_ << " ms\n";
-    std::cout << "Total Elapsed time: " << times_counts.elapsed_total.count() << " ms\n";
-    std::cout << "Total Elapsed time (per loop): " << times_counts.elapsed_total.count() / iter_ << " ms\n";
+    std::cout << "Proof (per loop): " << times_counts.elapsed_proof.count() / iter_ << "ms\n";
+    std::cout << "Controller (per loop): " << times_counts.elapsed_controller.count() / iter_ << "ms\n";
+    std::cout << "Verify (per loop): " << times_counts.elapsed_verify.count() / iter_ << "ms\n";
+    std::cout << "Plant (per loop): " << times_counts.elapsed_plant.count() / iter_ << "ms\n";
+    std::cout << "Total Elapsed time: " << times_counts.elapsed_total.count() << "ms\n";
+    std::cout << "Total Elapsed time (per loop): " << times_counts.elapsed_total.count() / iter_ << "ms\n";
 
     std::cout << "\n";
     double convolve = 0.0;
     for (size_t i = 0; i < N_THREADS; i++)
         convolve += times_counts.convolve[i].count();
-    std::cout << "Convolve: " << convolve << " ms\n";
+    std::cout << "Convolve (per loop): " << convolve / iter_ << "ms\n";
+    std::cout << "Convolve (per loop, per thread): ";
+    std::cout << convolve / N_THREADS / iter_ << "ms\n";
 }
 
 int main() {
