@@ -3,11 +3,37 @@
 #include <iostream>
 #include <cassert>
 #include <random>
+#include <chrono>
 #include "omp.h"
 #include "shared.h"
 #include "atcoder/convolution.hpp" // Download from AtCoder ACL
 
 using namespace atcoder;
+
+// #ifdef TIMING_ON
+#  define TIMING(x) x
+// #else
+// #  define TIMING(x)
+// #endif
+
+#ifndef N_THREADS
+#  define N_THREADS 8
+#endif
+
+typedef struct {
+    i128 calls_ext_prod = 0;
+    i128 iter_ = 0;
+    std::chrono::duration<double, std::milli> elapsed_verify{};
+    std::chrono::duration<double, std::milli> elapsed_proof{};
+    std::chrono::duration<double, std::milli> elapsed_controller{};
+    std::chrono::duration<double, std::milli> elapsed_plant{};
+    std::chrono::duration<double, std::milli> elapsed_total{};
+    std::chrono::duration<double, std::milli> convolve[N_THREADS]{};
+} times_and_counts;
+
+// NOTE inline keyword for structs allows the struct to be used in multiple
+// translation uunits without causing linker errors
+inline times_and_counts times_counts = { 0 };
 
 vector_i128 sample_discrete_gaussian(size_t N, double mu = 3.2, double sigma = 19.2) {
     vector_i128 result(N);
@@ -417,7 +443,7 @@ public:
         std::vector<i128> res1 = conv_to_nega_(res);
         return res1;
     }
-    poly convolve_schoolbook(const poly& other) const {
+    poly convolve_naive(const poly& other) const {
         poly convolved(2 * n_coeffs() - 1);
         for (size_t i = 0; i < n_coeffs(); i++) {
             for (size_t j = 0; j < n_coeffs(); j++) {
@@ -448,12 +474,18 @@ public:
         return res;
     }
     poly convolve(const poly& other) const {
+        TIMING(auto start = std::chrono::high_resolution_clock::now();)
+        TIMING(int thread_num = omp_get_thread_num();)
+
         assert(n_coeffs() == other.n_coeffs());
         bool using_ntt = true;
         if (using_ntt)
             return convolve_ntt(other);
         else
-            return convolve_schoolbook(other);
+            return convolve_naive(other);
+
+        TIMING(auto end = std::chrono::high_resolution_clock::now();)
+        TIMING(times_counts.convolve[thread_num] += end - start;)
     }
     poly nega_ntt(const poly& other) const {
         // turn *this and other into vector_i128's
@@ -906,7 +938,7 @@ public:
         rlwe res(n_polys(), 2 * n_coeffs() - 1);
         poly& p0 = res.get(0);
         poly& p1 = res.get(1);
-        #pragma omp parallel for num_threads(8)
+        #pragma omp parallel for num_threads(1)
         for (size_t i = 0; i < N; i++) {
             auto val0 = get(i).get(0).convolve(other.get(i));
             auto val1 = get(i).get(1).convolve(other.get(i));
