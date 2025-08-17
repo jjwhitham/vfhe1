@@ -408,8 +408,8 @@ void run_control_loop() {
     // DEBUG(std::cout << "sk: ";)
     // DEBUG(print_vector_i128(sk);)
     // TODO move to Params
-    // const i128 d = 4;
-    const i128 d = 2;
+    const i128 d = 4;
+    // const i128 d = 2;
     // DEBUG(std::cout << "d: ";)
     // DEBUG(std::cout << print_to_string_i128(d) << "\n" ;)
     // TODO move to Params
@@ -597,10 +597,7 @@ void run_control_loop() {
             auto start_proof = std::chrono::high_resolution_clock::now();
         #endif
 
-        // BUG
-        eval_key& ek_i = std::get<0>(ek); // TODO check allowable &const variations
-        if (k % 2 == 1)
-            ek_i = std::get<1>(ek);
+        const eval_key& ek_i = (k % 2 == 0) ? std::get<0>(ek) : std::get<1>(ek);
         Proof proof = compute_proof(ek_i, x_cont_ctx, x_cont_ctx_convolved, x_cont_old_ctx, v, d, eval_pows); // C -> P
 
 #ifdef TIMING_ON

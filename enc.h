@@ -203,9 +203,8 @@ public:
         for (size_t i = 0; i < rows; ++i) {
             for (size_t j = 0; j < cols; ++j) {
                 poly p(N);
-                for (size_t k = 0; k < N; ++k) {
-                    p.set(k, mat.get(i, j)); // fill all coeffs with mat(i, j)
-                }
+                // Set only the poly's constant coeff
+                p.set(0, mod_(mat.get(i, j), FIELD_MODULUS));
                 rgsw enc_rgsw = encrypt_rgsw(p);
                 res.set(i, j, enc_rgsw);
             }

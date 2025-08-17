@@ -226,8 +226,7 @@ public:
                 val = mod_(val, FIELD_MODULUS);
             neg_other.set(i, val);
         }
-        // BUG
-        return *this + neg_other;
+        return neg_other;
     }
     // raise self to other
     Derived pow(const Derived& other) const {
@@ -755,8 +754,7 @@ public:
                 for (size_t j = 0; j < d; j++) {
                     i128 decomped_coeff = (v - 1) & (pol.get_coeff(i) / pow_(v, j));
                     assert(decomped_coeff < v);
-                    // BUG
-                    polys.get_poly(k + j).set(i, decomped_coeff);
+                    polys.get_poly(d * k + j).set(i, decomped_coeff);
                 }
             }
         }
