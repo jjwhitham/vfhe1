@@ -122,15 +122,14 @@ public:
             );
         }
     }
-    // TODO wrap in DEBUG
     // T& get(size_t n, bool disable_value_check = true) const {
     T& get(size_t n) const {
-        check_index_bounds(n);
+        DEBUG(check_index_bounds(n);)
         // if (!disable_value_check)
-            check_value_bounds(arr[n]);
+        DEBUG(check_value_bounds(arr[n]);)
         return arr[n];
     }
-    void check_value_bounds(T& val) const {
+    void check_value_bounds(const T& val) const {
         if constexpr (std::is_same_v<T, i128>) {
             i128 min_val = 0;
             i128 max_val = GROUP_MODULUS - 1;
@@ -142,12 +141,11 @@ public:
             }
         }
     }
-    // TODO wrap in DEBUG
     // void set(int n, T val, bool disable_value_check = false) { // FIXME should be T& ?
-    void set(int n, T val) {
-        check_index_bounds(n);
+    void set(int n, const T& val) {
+        DEBUG(check_index_bounds(n);)
         // if (!disable_value_check)
-            check_value_bounds(val);
+        DEBUG(check_value_bounds(val);)
         arr[n] = val;
     }
     size_t size() const {
@@ -350,14 +348,13 @@ public:
             );
         }
     }
-    // TODO wrap in DEBUG
     T& get(size_t row, size_t col) const {
-        check_index_bounds(row, col);
-        // TODO check val bounds
+        DEBUG(check_index_bounds(row, col);)
+        DEBUG(check_value_bounds(arr[row][col]);)
         return arr[row][col];
     }
 
-    void check_value_bounds(T val) {
+    void check_value_bounds(const T& val) const {
         if constexpr (std::is_same_v<T, i128>) {
             i128 min_val = -1;
             min_val <<= 63;
@@ -369,10 +366,9 @@ public:
             }
         }
     }
-    // TODO wrap in DEBUG
-    void set(size_t row, size_t col, T val) {
-        check_index_bounds(row, col);
-        check_value_bounds(val);
+    void set(size_t row, size_t col, const T& val) {
+        DEBUG(check_index_bounds(row, col);)
+        DEBUG(check_value_bounds(val);)
         arr[row][col] = val;
     }
     size_t n_rows() const {
@@ -919,6 +915,7 @@ public:
         size_t N = size();
         assert(N == other.size());
         rlwe res(n_polys(), n_coeffs());
+        // TODO wrap in loop
         poly& p0 = res.get(0);
         poly& p1 = res.get(1);
         for (size_t i = 0; i < N; i++) {
@@ -936,6 +933,7 @@ public:
         size_t N = size();
         assert(N == other.size());
         rlwe res(n_polys(), 2 * n_coeffs() - 1);
+        // TODO wrap in loop
         poly& p0 = res.get(0);
         poly& p1 = res.get(1);
         // TODO wrap in outer loop
@@ -959,6 +957,7 @@ public:
         size_t N = size();
         assert(N == other.size());
         rlwe_vec res_vec(N, n_polys_, n_coeffs_);
+        // TODO wrap in loop
         // #pragma omp parallel for num_threads(N_THREADS)
         for (size_t i = 0; i < N; i++) {
             rlwe& res = res_vec.get(i);
@@ -1191,10 +1190,10 @@ public:
 };
 
 
+// TODO use this instead of vector_i128
 class veri_vec_scalar : public array1d<i128, veri_vec_scalar> {
 private:
 public:
-    using array1d<i128, veri_vec_scalar>::pow;
     veri_vec_scalar() : array1d<i128, veri_vec_scalar>() {}
     veri_vec_scalar(size_t N) : array1d<i128, veri_vec_scalar>(N) {}
     ~veri_vec_scalar() {}
@@ -1231,6 +1230,7 @@ public:
         }
         return sum;
     }
+    using array1d<i128, veri_vec_scalar>::pow;
     rlwe pow(const rlwe_vec& other) const {
         size_t n = other.size();
         assert(size() == n);
@@ -1328,7 +1328,6 @@ public:
         L(10001),
         r(10001),
         iter_(10),
-        // BUG ?
         F(F_.size(), F_.at(0).size()),
         G_bar(scalar_mat_mult(s, G, q, G.size(), G.at(0).size())),
         R_bar(scalar_mat_mult(s, R, q, R.size(), R.at(0).size())),
