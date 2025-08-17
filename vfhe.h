@@ -109,11 +109,22 @@ private:
     size_t size_;
     T* arr;
 public:
-    array1d() : size_(0) {}
-    array1d(size_t size) : size_(size) {
+    array1d() : size_(0), arr(nullptr) {}
+    array1d(size_t size) : size_(size), arr(new T[size]()) {
         arr = new T[size]();
     }
-    ~array1d() = default;
+    // Copy constructor
+    array1d(const array1d& other) : size_(other.size_), arr(new T[other.size_]) {
+        for (size_t i = 0; i < size_; ++i) arr[i] = other.arr[i];
+    }
+    // Move constructor
+    array1d(array1d&& other) noexcept : size_(other.size_), arr(other.arr) {
+        other.size_ = 0;
+        other.arr = nullptr;
+    }
+    ~array1d() {
+        delete[] arr;
+    }
     void check_index_bounds(size_t n) const {
         if (n >= size_) {
             throw std::out_of_range(
@@ -150,6 +161,27 @@ public:
     }
     size_t size() const {
         return size_;
+    }
+    // Copy assignment operator
+    array1d& operator=(const array1d& other) {
+        if (this != &other) {
+            delete[] arr;
+            size_ = other.size_;
+            arr = new T[size_];
+            for (size_t i = 0; i < size_; ++i) arr[i] = other.arr[i];
+        }
+        return *this;
+    }
+    // Move assignment operator
+    array1d& operator=(array1d&& other) noexcept {
+        if (this != &other) {
+            delete[] arr;
+            size_ = other.size_;
+            arr = other.arr;
+            other.size_ = 0;
+            other.arr = nullptr;
+        }
+        return *this;
     }
     Derived operator*(const Derived& other) const {
         size_t N = size();
@@ -542,6 +574,8 @@ public:
     auto conv_to_nega(size_t N) const {
         assert(n_coeffs() == 2 * N - 1);
         i128 conv_degree = n_coeffs() - 1;
+        // HACK can't return *this after defining array1d move semantics
+        // assert(conv_degree >= N);
         if (conv_degree < N)
             return *this;
         poly negacyclic(N);
