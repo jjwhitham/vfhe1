@@ -16,3 +16,4 @@
 !googletest
 build/
 .DS_Store
+gdb-entitlement.xml

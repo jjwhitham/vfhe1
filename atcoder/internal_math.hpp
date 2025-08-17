@@ -7,6 +7,8 @@
 #include <intrin.h>
 #endif
 
+typedef __uint128_t u128;
+
 namespace atcoder {
 
 namespace internal {
@@ -53,7 +55,7 @@ struct barrett {
         _umul128(z, im, &x);
 #else
         unsigned long long x =
-            (unsigned long long)(((unsigned __int128)(z)*im) >> 64);
+            (unsigned long long)(((u128)(z)*im) >> 64);
 #endif
         unsigned long long y = x * _m;
         return (unsigned int)(z - y + (z < y ? _m : 0));

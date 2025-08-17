@@ -8,7 +8,8 @@ typedef __int128_t i128;
 
 // const i128 MOD = 998244353;
 // NOTE Must be a suitable NTT modulus (m * 2^k + 1)
-const i128 MOD = 1 * (1 << 4) + 1; // 17
+// const i128 MOD = 1 * (1 << 4) + 1; // 17
+const i128 MOD = 257;
 
 std::string print_to_string_i128(i128 n) {
     if (n == 0) {
@@ -33,8 +34,8 @@ std::string print_to_string_i128(i128 n) {
 vector<i128> negacyclic_convolution(const vector<i128>& a, const vector<i128>& b) {
     i128 n = a.size();
     vector<i128> a_pad = a, b_pad = b;
-    a_pad.resize(2 * n - 1);
-    b_pad.resize(2 * n - 1);
+    // a_pad.resize(2 * n - 1);
+    // b_pad.resize(2 * n - 1);
     vector<i128> conv = convolution<MOD>(a_pad, b_pad);
     for (i128 c : conv) std::cout << print_to_string_i128(c) << " ";
     std::cout << "\n";
@@ -62,8 +63,13 @@ vector<i128> negacyclic_convolution(const vector<i128>& a, const vector<i128>& b
 // };
 
 int main() {
-    vector<i128> a = {1, 2};
-    vector<i128> b = {3, 4};
+    // vector<i128> a = {1, 2};
+    // vector<i128> b = {3, 4};
+    vector<i128> a(128), b(128);
+    for (size_t i = 0; i < a.size(); i++) {
+        a.at(i) = i + 1;
+        b.at(i) = i + 1;
+    }
     // vector<i128> b = {5, 6, 7, 8};
     vector<i128> c = convolution<MOD>(a, b);
     vector<i128> c1 = negacyclic_convolution(a, b);
