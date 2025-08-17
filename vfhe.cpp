@@ -79,9 +79,9 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key> compute_eval_and_veri_keys(
         size_t rows = mat.n_rows();
         size_t cols = mat.n_cols();
         assert(vec.size() == rows);
-        rgsw_vec res(cols, mat.get_n_rlwes(), mat.get_n_polys(), mat.get_n_coeffs());
+        rgsw_vec res(cols, mat.n_rlwes(), mat.n_polys(), mat.n_coeffs());
         for (size_t j = 0; j < cols; ++j) {
-            rgsw sum(mat.get_n_rlwes(), mat.get_n_polys(), mat.get_n_coeffs());
+            rgsw sum(mat.n_rlwes(), mat.n_polys(), mat.n_coeffs());
             for (size_t i = 0; i < rows; ++i) {
                 sum = sum + (mat.get(i, j) * vec[i]);
             }
@@ -216,7 +216,7 @@ Proof compute_proof(
             res = res.group_mult(rv.get(i).pow(vec[i]));
         return res;
     };
-    // cyclic_vec_dot_product returns a 2-tuple of i128
+
     auto grx_ = pow_(gr, x_.get_hash(eval_pows)); // G_1
     auto grFrx = grFr.pow(x.decompose(v, d).get_hash(eval_pows)); // G_2
     auto gsHrx = gsHr.pow(x.decompose(v, d).get_hash(eval_pows)); // G_3
@@ -305,18 +305,24 @@ void verify_with_lin_and_dyn_checks(
     // hashed_rlwe G_1_rho = cyclic_exp_enc(G_1, rho, q, p);
     // TODO better interface self^other, with other as i128,
     // or better interface for i128^i128 (static member func?)
-    // for (size_t i = 0; i < 2; i++) {
-    //     assert(G_1.pow_(G_1.get(i), rho) == G_1_.get(i));
-    //     assert(G_2.pow_(G_2.get(i), alpha) == G_2_.get(i));
-    //     assert(G_3.pow_(G_3.get(i), gamma) == G_3_.get(i));
-    // }
+    DEBUG(std::cout << "G_1: ";)
+    DEBUG(G_1.print();)
+    DEBUG(std::cout << "\n";)
+    DEBUG(std::cout << "G_1_: ";)
+    DEBUG(G_1_.print();)
+    DEBUG(std::cout << "\n";)
+    for (size_t i = 0; i < 2; i++) {
+        assert(G_1.pow_(G_1.get(i), rho) == G_1_.get(i));
+        assert(G_2.pow_(G_2.get(i), alpha) == G_2_.get(i));
+        assert(G_3.pow_(G_3.get(i), gamma) == G_3_.get(i));
+    }
 
     // Dynamics check
     hashed_rlwe su = vec_dot_prod(s, u);
     hashed_rlwe gsu = su.pow();
     hashed_rlwe rhs_u = G_3.group_mult(g_1);
-    // for (size_t i = 0; i < 2; i++)
-    //     assert(gsu.get(i) == rhs_u.get(i));
+    for (size_t i = 0; i < 2; i++)
+        assert(gsu.get(i) == rhs_u.get(i));
 
     hashed_rlwe rhs = G_2.group_mult(g_1);
     hashed_rlwe rGy = vec_dot_prod_enc(*rG, y, eval_pows, v, d);
@@ -325,12 +331,14 @@ void verify_with_lin_and_dyn_checks(
     hashed_rlwe rRu = vec_dot_prod_enc(*rR, u_reenc, eval_pows, v, d);
     hashed_rlwe grRu = rRu.pow();
     rhs = rhs.group_mult(grRu);
-    // for (size_t i = 0; i < 2; i++)
-    //     assert(G_1.get(i) == rhs.get(i));
+    for (size_t i = 0; i < 2; i++)
+        assert(G_1.get(i) == rhs.get(i));
 }
 
 void run_control_loop() {
     Params pms;
+    DEBUG(pms.print();)
+    DEBUG(std::cout << "*** START run_control_loop ***\n";)
     using matrix_i128 = array2d<i128>;
 
     i128 q = pms.q;
@@ -345,15 +353,23 @@ void run_control_loop() {
     matrix_i128 R_bar = pms.R_bar;
     vector_double x_plant = pms.x_plant_init;
     vector_i128 x_cont = pms.x_cont_init_scaled;
-
+    DEBUG(std::cout << "C:\n";)
+    DEBUG(for (auto& x : C) print_vector_double(x);)
+    DEBUG(std::cout << "x_plant:\n";)
+    DEBUG(print_vector_double(x_plant);)
     i128 rr = pms.r;
     i128 ss = pms.s;
     i128 L = pms.L;
     i128 iter_ = pms.iter_;
+    DEBUG(iter_ = 1000;)
 
     i128 from = 1;
     i128 to_inclusive = q - 1;
+    // TODO Params should sample
     auto knowledge_exps = pms.sample_knowledge_exponents(from, to_inclusive);
+    knowledge_exps = vector_i128({1, 1, 3, 3, 2, 3});
+    // DEBUG(std::cout << "knowledge_exps: ";)
+    // DEBUG(print_vector_i128(knowledge_exps);)
     i128 alpha_0 = knowledge_exps.at(0);
     i128 alpha_1 = knowledge_exps.at(1);
     i128 gamma_0 = knowledge_exps.at(2);
@@ -362,25 +378,68 @@ void run_control_loop() {
     i128 rho_1 = knowledge_exps.at(5);
     i128 m = H_bar.n_rows();
     i128 n = F.n_rows();
+    // TODO Params should sample
+    // r_0: 1, 2, 4, 3, 11
+    // r_1: 2, 4, 1, 4, 2,
+    // s: 1, 3,
     auto verification_vectors = pms.sample_verification_vectors(m, n, from, to_inclusive);
     vector_i128 r_0 = verification_vectors.at(0);
+    r_0 = vector_i128({1, 2, 4, 3, 1});
+    // DEBUG(std::cout << "r_0: ";)
+    // DEBUG(print_vector_i128(r_0);)
     vector_i128 r_1 = verification_vectors.at(1);
+    r_1 = vector_i128({2, 4, 1, 4, 2});
+    // DEBUG(std::cout << "r_1: ";)
+    // DEBUG(print_vector_i128(r_1);)
     vector_i128 s = verification_vectors.at(2);
+    s = vector_i128({1, 3});
+    // DEBUG(std::cout << "s: ";)
+    // DEBUG(print_vector_i128(s);)
 
-    const i128 N = 1 << 12;
+    const i128 N = N_;
+    DEBUG1(const i128 N = 1 << 2;)
+    // DEBUG(std::cout << "N_THREADS: ";)
+    // DEBUG(std::cout << N_THREADS << "\n" ;)
+    // DEBUG(std::cout << "N: ";)
+    // DEBUG(std::cout << print_to_string_i128(N) << "\n" ;)
+    // TODO move to Encryptor
     vector_i128 sk = sample_secret_key(N);
-    const i128 d = 4;
+    DEBUG1(sk = vector_i128({0, 0});)
+    // DEBUG(std::cout << "sk: ";)
+    // DEBUG(print_vector_i128(sk);)
+    // TODO move to Params
+    // const i128 d = 4;
+    const i128 d = 2;
+    // DEBUG(std::cout << "d: ";)
+    // DEBUG(std::cout << print_to_string_i128(d) << "\n" ;)
+    // TODO move to Params
     double log2q = std::log2(static_cast<double>(FIELD_MODULUS));
+    // DEBUG(std::cout << "log2q: ";)
+    // DEBUG(std::cout << log2q << "\n" ;)
+    // TODO move to Params
     int power = static_cast<int>(std::ceil(log2q / static_cast<double>(d)));
     i128 v = static_cast<i128>(1) << power;
+    // DEBUG(std::cout << "v: ";)
+    // DEBUG(std::cout << print_to_string_i128(v) << "\n" ;)
 
     Encryptor enc(v, d, N, q, sk);
     rgsw_mat F_ctx = enc.encrypt_rgsw_mat(F);
+    // DEBUG(std::cout << "F_ctx.get(0, 0):\n";)
+    // DEBUG(F_ctx.get(0, 0).print();)
     rgsw_mat G_bar_ctx = enc.encrypt_rgsw_mat(G_bar);
+    // DEBUG(std::cout << "G_bar_ctx[0][0]:\n";)
+    // DEBUG(G_bar_ctx.get(0, 0).print();)
     rgsw_mat R_bar_ctx = enc.encrypt_rgsw_mat(R_bar);
     rgsw_mat H_bar_ctx = enc.encrypt_rgsw_mat(H_bar);
+    // DEBUG(std::cout << "H_bar_ctx.get(0, 0):\n";)
+    // DEBUG(H_bar_ctx.get(0, 0).print();)
     rlwe_vec x_cont_ctx = enc.encrypt_rlwe_vec(x_cont);
+    DEBUG(std::cout << "x_cont_ctx:\n";)
+    DEBUG(x_cont_ctx.print();)
     rlwe_vec x_cont_ctx_convolved(x_cont_ctx);
+    DEBUG(std::cout << "x_cont_ctx_convolved:\n";)
+    DEBUG(x_cont_ctx_convolved.print();)
+
 
     i128 eval_point = 42;
     vector_i128 eval_pows = eval_poly_pows(2 * N, eval_point, q);
@@ -432,33 +491,66 @@ void run_control_loop() {
 
     TIMING(times_counts.iter_ = iter_;)
     for (size_t k = 0; k < iter_; k++) {
+        DEBUG(std::cout << "\n*** START k: " << k << ", run_control_loop ***\n";)
         // Plant: Compute output
         TIMING(auto start_plant = std::chrono::high_resolution_clock::now();)
 
         vector_double y_out = mat_vec_mult(C, x_plant);
-        vector_i128 y_out_rounded_modded = round_and_mod_vec(scalar_vec_mult(L * rr, y_out));
+        DEBUG(std::cout << "y_out:\n";)
+        DEBUG(print_vector_double(y_out);)
+        vector_double y_out_scaled = scalar_vec_mult(rr, y_out);
+        DEBUG(std::cout << "y_out_scaled:\n";)
+        DEBUG(print_vector_double(y_out_scaled);)
+        vector_i128 y_out_rounded_modded = round_and_mod_vec(y_out_scaled);
+        DEBUG(std::cout << "y_out_scaled_modded:\n";)
+        DEBUG(print_vector_i128(y_out_rounded_modded);)
+        y_out_scaled = scalar_vec_mult(L, y_out_rounded_modded);
+        DEBUG(std::cout << "y_out_scaled:\n";)
+        DEBUG(print_vector_double(y_out_scaled);)
+        y_out_rounded_modded = round_and_mod_vec(y_out_scaled);
+        DEBUG(std::cout << "y_out_scaled_modded:\n";)
+        DEBUG(print_vector_i128(y_out_rounded_modded);)
         rlwe_vec y_out_ctx = enc.encrypt_rlwe_vec(y_out_rounded_modded); // P -> C
 
-        #ifdef TIMING
+        #ifdef TIMING_ON
             auto end_plant = std::chrono::high_resolution_clock::now();
             times_counts.elapsed_plant += end_plant - start_plant;
         #endif
 
         // Controller: Compute output
-        rlwe_vec u_out_ctx_convolved = H_bar_ctx.convolve(x_cont_ctx.decompose(v, d)); // C -> P
+        rlwe_decomp_vec x_cont_ctx_decomp = x_cont_ctx.decompose(v, d);
+        // DEBUG(std::cout << "x_cont_ctx_decomp:\n";)
+        // DEBUG(x_cont_ctx_decomp.print();)
+        rlwe_vec u_out_ctx_convolved = H_bar_ctx.convolve(x_cont_ctx_decomp); // C -> P
+        // DEBUG(std::cout << "u_out_ctx_convolved:\n";)
+        // DEBUG(u_out_ctx_convolved.print();)
 
         // Plant: Update state (and re-encrypt u)
         TIMING(start_plant = std::chrono::high_resolution_clock::now();)
 
         hashed_rlwe_vec u_out_ctx_hashed = u_out_ctx_convolved.get_hash(eval_pows);
+        // DEBUG(std::cout << "u_out_ctx_hashed:\n";)
+        // DEBUG(u_out_ctx_hashed.print();)
         rlwe_vec u_out_ctx = u_out_ctx_convolved.conv_to_nega(N);
+        // DEBUG(std::cout << "u_out_ctx:\n";)
+        // DEBUG(u_out_ctx.print();)
         vector_i128 u_out_ptx = enc.decrypt_rlwe_vec(u_out_ctx);
+        // DEBUG(std::cout << "u_out_ptx:\n";)
+        // DEBUG(print_vector_i128(u_out_ptx);)
         vector_double u_in = scalar_vec_mult(1.0 / (rr * ss * ss * L), u_out_ptx);
-        vector_i128 u_in_rounded_modded = round_and_mod_vec(scalar_vec_mult(rr * L, u_in));
+        DEBUG(std::cout << "u_in:\n";)
+        DEBUG(print_vector_double(u_in);)
+        vector_i128 u_in_rounded_modded = round_and_mod_vec(scalar_vec_mult(rr, u_in));
+        u_in_rounded_modded = round_and_mod_vec(scalar_vec_mult(L, u_in));
         rlwe_vec u_reenc_ctx = enc.encrypt_rlwe_vec(u_in_rounded_modded); // XXX P->C: Plant re-encrypts u
         x_plant = mat_vec_mult(A, x_plant);
+        vector_double B_u = mat_vec_mult(B, u_in);
+        for (size_t i = 0; i < B_u.size(); i++)
+            x_plant.at(i) += B_u.at(i);
+        DEBUG(std::cout << "x_plant:\n";)
+        DEBUG(print_vector_double(x_plant);)
 
-        #ifdef TIMING
+        #ifdef TIMING_ON
             end_plant = std::chrono::high_resolution_clock::now();
             times_counts.elapsed_plant += end_plant - start_plant;
         #endif
@@ -467,45 +559,67 @@ void run_control_loop() {
         TIMING(auto start_controller = std::chrono::high_resolution_clock::now();)
 
         rlwe_vec x_cont_old_ctx = x_cont_ctx;
-        rlwe_vec x_cont_ctx_convolved =
-            F_ctx.convolve(x_cont_ctx.decompose(v, d))
-            + G_bar_ctx.convolve(y_out_ctx.decompose(v, d))
-            + R_bar_ctx.convolve(u_reenc_ctx.decompose(v, d));
+        DEBUG(std::cout << "x_cont_old_ctx:\n";)
+        DEBUG(x_cont_old_ctx.print();)
+        rlwe_vec F_x = F_ctx.convolve(x_cont_ctx.decompose(v, d));
+        // DEBUG(std::cout << "F_x:\n";)
+        // DEBUG(F_x.print();)
+        rlwe_decomp_vec y_out_ctx_decomped = y_out_ctx.decompose(v, d);
+        rlwe_vec G_y = G_bar_ctx.convolve(y_out_ctx_decomped);
+        // DEBUG(std::cout << "y_out_ctx_decomped:\n";)
+        // DEBUG(y_out_ctx_decomped.print();)
+        // DEBUG(std::cout << "G_bar_ctx:";)
+        // DEBUG(G_bar_ctx.print();)
+        // DEBUG(std::cout << "y_out_ctx:\n";)
+        // DEBUG(y_out_ctx.print();)
+        // DEBUG(std::cout << "G_y:\n";)
+        // DEBUG(G_y.print();)
+        rlwe_vec R_u = R_bar_ctx.convolve(u_reenc_ctx.decompose(v, d));
+        // DEBUG(std::cout << "u_reenc_ctx:\n";)
+        // DEBUG(u_reenc_ctx.print();)
+        // DEBUG(std::cout << "R_u:\n";)
+        // DEBUG(R_u.print();)
+        rlwe_vec x_cont_ctx_convolved = F_x + G_y + R_u;
         x_cont_ctx = x_cont_ctx_convolved.conv_to_nega(N);
+        DEBUG(std::cout << "x_cont_ctx_convolved:\n";)
+        DEBUG(x_cont_ctx_convolved.print();)
+        DEBUG(std::cout << "x_cont_ctx:\n";)
+        DEBUG(x_cont_ctx.print();)
 
-        #ifdef TIMING
+        #ifdef TIMING_ON
             auto end_controller = std::chrono::high_resolution_clock::now();
             times_counts.elapsed_controller += end_controller - start_controller;
         #endif
 
         // Controller: Prove
-        #ifdef TIMING
+        #ifdef TIMING_ON
             start_controller = std::chrono::high_resolution_clock::now();
             auto start_proof = std::chrono::high_resolution_clock::now();
         #endif
 
+        // BUG
         eval_key& ek_i = std::get<0>(ek); // TODO check allowable &const variations
         if (k % 2 == 1)
             ek_i = std::get<1>(ek);
         Proof proof = compute_proof(ek_i, x_cont_ctx, x_cont_ctx_convolved, x_cont_old_ctx, v, d, eval_pows); // C -> P
 
-        #ifdef TIMING
+#ifdef TIMING_ON
             auto end_proof = std::chrono::high_resolution_clock::now();
             times_counts.elapsed_proof += end_proof - start_proof;
             end_controller = std::chrono::high_resolution_clock::now();
             times_counts.elapsed_controller += end_controller - start_controller;
         #endif
 
-        // Plant: Verify
-        start_plant = std::chrono::high_resolution_clock::now();
 
-        #ifdef TIMING
+        // Plant: Verify
+        #ifdef TIMING_ON
+            start_plant = std::chrono::high_resolution_clock::now();
             auto start_verify = std::chrono::high_resolution_clock::now();
         #endif
 
         verify_with_lin_and_dyn_checks(vk, proof, old_proof, k, y_out_ctx, u_out_ctx_hashed, u_reenc_ctx, v, d, eval_pows);
 
-        #ifdef TIMING
+        #ifdef TIMING_ON
             auto end_verify = std::chrono::high_resolution_clock::now();
             times_counts.elapsed_verify += end_verify - start_verify;
             end_plant = std::chrono::high_resolution_clock::now();
@@ -513,28 +627,42 @@ void run_control_loop() {
         #endif
 
         old_proof = proof;
+        DEBUG(std::cout << "\n\n*** END k: " << k << ", run_control_loop ***\n\n";)
     }
 }
 
 void print_times_and_counts() {
-    i128 iter_ = times_counts.iter_;
+    int iter_ = times_counts.iter_;
     int n_decimals = 0;
     std::cout << std::fixed << std::setprecision(n_decimals);
     std::cout << "Times:\n";
-    std::cout << "Proof (per loop): " << times_counts.elapsed_proof.count() / iter_ << "ms\n";
-    std::cout << "Controller (per loop): " << times_counts.elapsed_controller.count() / iter_ << "ms\n";
-    std::cout << "Verify (per loop): " << times_counts.elapsed_verify.count() / iter_ << "ms\n";
-    std::cout << "Plant (per loop): " << times_counts.elapsed_plant.count() / iter_ << "ms\n";
-    std::cout << "Total Elapsed time: " << times_counts.elapsed_total.count() << "ms\n";
-    std::cout << "Total Elapsed time (per loop): " << times_counts.elapsed_total.count() / iter_ << "ms\n";
+    std::cout << "Proof (per loop): ";
+    std::cout << times_counts.elapsed_proof.count() / iter_ << "\n";
+    std::cout << "Controller (per loop): ";
+    std::cout << times_counts.elapsed_controller.count() / iter_ << "\n";
+    std::cout << "Verify (per loop): ";
+    std::cout << times_counts.elapsed_verify.count() / iter_ << "\n";
+    std::cout << "Plant (per loop): ";
+    std::cout << times_counts.elapsed_plant.count() / iter_ << "\n";
+    std::cout << "Total Elapsed time: ";
+    std::cout << times_counts.elapsed_total.count() << "\n";
+    std::cout << "Total Elapsed time (per loop): ";
+    std::cout << times_counts.elapsed_total.count() / iter_ << "\n";
 
     std::cout << "\n";
     double convolve = 0.0;
     for (size_t i = 0; i < N_THREADS; i++)
         convolve += times_counts.convolve[i].count();
-    std::cout << "Convolve (per loop): " << convolve / iter_ << "ms\n";
+    std::cout << "Convolve (per loop): ";
+    std::cout  << convolve / iter_ << "\n";
     std::cout << "Convolve (per loop, per thread): ";
-    std::cout << convolve / N_THREADS / iter_ << "ms\n";
+    std::cout << convolve / N_THREADS / iter_ << "\n";
+    std::cout << "Number of calls:\n";
+    int convolve_calls = 0;
+    for (size_t i = 0; i < N_THREADS; i++)
+        convolve_calls += times_counts.calls_convolve[i];
+    std::cout << "  Convolve (per loop): ";
+    std::cout << convolve_calls / iter_ << "\n";
 }
 
 int main() {
@@ -543,7 +671,7 @@ int main() {
 
     run_control_loop();
 
-    #ifdef TIMING
+    #ifdef TIMING_ON
         auto end = std::chrono::high_resolution_clock::now();
         times_counts.elapsed_total = end - start;
         print_times_and_counts();
@@ -552,3 +680,14 @@ int main() {
 }
 
 // DONE timings
+//  TODO csv output for timings
+// TODO 128bit atcoder
+// TODO fix verify bug
+// TODO multiprecision library
+// TODO add secure hash
+// TODO increase group size
+// TODO implement packing?
+// TODO keep polys in NTT form?
+    // TODO at what points in the code?
+// TODO what happens when trying to use a cyclic group
+//      when Q=q1*...*qn? Refer to RSA which has composite modulus

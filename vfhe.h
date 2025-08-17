@@ -10,18 +10,30 @@
 
 using namespace atcoder;
 
-// #ifdef TIMING_ON
+#ifdef TIMING_ON
 #  define TIMING(x) x
-// #else
-// #  define TIMING(x)
-// #endif
+#else
+#  define TIMING(x)
+#endif
+
+#ifdef DEBUG_ON
+#  define DEBUG(x) x
+#else
+#  define DEBUG(x)
+#endif
+
+#ifdef DEBUG1_ON
+#  define DEBUG1(x) x
+#else
+#  define DEBUG1(x)
+#endif
 
 #ifndef N_THREADS
 #  define N_THREADS 8
 #endif
 
 typedef struct {
-    i128 calls_ext_prod = 0;
+    int calls_convolve[N_THREADS] = { 0 };
     i128 iter_ = 0;
     std::chrono::duration<double, std::milli> elapsed_verify{};
     std::chrono::duration<double, std::milli> elapsed_proof{};
@@ -32,7 +44,7 @@ typedef struct {
 } times_and_counts;
 
 // NOTE inline keyword for structs allows the struct to be used in multiple
-// translation uunits without causing linker errors
+// translation units without causing linker errors
 inline times_and_counts times_counts = { 0 };
 
 vector_i128 sample_discrete_gaussian(size_t N, double mu = 3.2, double sigma = 19.2) {
@@ -40,10 +52,14 @@ vector_i128 sample_discrete_gaussian(size_t N, double mu = 3.2, double sigma = 1
     std::random_device rd;
     std::mt19937 gen(rd());
     std::normal_distribution<double> dist(mu, sigma);
-    for (size_t i = 0; i < N; ++i) {
+    for (size_t i = 0; i < N; i++) {
         i128 res = static_cast<i128>(std::round(dist(gen)));
         result[i] = mod_(res, FIELD_MODULUS);
     }
+    #ifdef DEBUG1_ON
+        for (size_t i = 0; i < N; i++)
+            result.at(i) = 1;
+    #endif
     return result;
 }
 vector_i128 sample_secret_key(size_t N) {
@@ -55,11 +71,16 @@ vector_i128 sample_secret_key(size_t N) {
     std::discrete_distribution<int> dist({0.25, 0.5, 0.25});
     for (size_t i = 0; i < N; ++i) {
         int val = dist(gen);
+        // TODO uncomment and deal with potential check_val_bounds errors
         // if (val == 0) s[i] = -1;
         if (val == 0) s[i] = 1;
         else if (val == 1) s[i] = 0;
         else s[i] = 1;
     }
+    #ifdef DEBUG1_ON
+    for (size_t i = 0; i < N; i++)
+        s.at(i) = 1;
+    #endif
     return s;
 }
 // Sample a random polynomial of degree N-1 with coefficients in the range [0, q).
@@ -71,6 +92,10 @@ vector_i128 sample_random_polynomial(size_t N, i128 q) {
     for (size_t i = 0; i < N; ++i) {
         poly[i] = dist(gen);
     }
+    #ifdef DEBUG1_ON
+        for (size_t i = 0; i < N; i++)
+            poly.at(i) = 1;
+    #endif
     return poly;
 }
 
@@ -88,13 +113,6 @@ public:
     array1d(size_t size) : size_(size) {
         arr = new T[size]();
     }
-    // // copy constructor
-    // array1d(const array1d& other) : size_(other.size_) {
-    //     arr = new T[size_];
-    //     for (size_t i = 0; i < size_; ++i) {
-    //         arr[i] = other.arr[i];
-    //     }
-    // }
     ~array1d() = default;
     void check_index_bounds(size_t n) const {
         if (n >= size_) {
@@ -104,6 +122,7 @@ public:
             );
         }
     }
+    // TODO wrap in DEBUG
     // T& get(size_t n, bool disable_value_check = true) const {
     T& get(size_t n) const {
         check_index_bounds(n);
@@ -123,6 +142,7 @@ public:
             }
         }
     }
+    // TODO wrap in DEBUG
     // void set(int n, T val, bool disable_value_check = false) { // FIXME should be T& ?
     void set(int n, T val) {
         check_index_bounds(n);
@@ -133,17 +153,6 @@ public:
     size_t size() const {
         return size_;
     }
-    // Derived operator*(const Derived& other) const {
-    //     size_t N = size();
-    //     Derived res(N);
-    //     for (size_t i = 0; i < N; i++) {
-    //         auto val = (get(i) * other.get(i));
-    //         if constexpr (std::is_same_v<T, i128>)
-    //             val = mod_(val, FIELD_MODULUS);
-    //         res.set(i, val);
-    //     }
-    //     return res;
-    // }
     Derived operator*(const Derived& other) const {
         size_t N = size();
         Derived res(N);
@@ -217,6 +226,7 @@ public:
                 val = mod_(val, FIELD_MODULUS);
             neg_other.set(i, val);
         }
+        // BUG
         return *this + neg_other;
     }
     // raise self to other
@@ -293,7 +303,7 @@ public:
     const T* begin() const { return arr; }
     const T* end() const { return arr + size_; }
 
-    void print() {
+    void print() const {
         if constexpr (std::is_same_v<T, i128>) {
             std::cout << "{";
             for (size_t i = 0; i < size() - 1; i++) {
@@ -330,11 +340,7 @@ public:
             arr[i] = &data[i * cols];
         }
     }
-    ~array2d() {
-        // FIXME
-        // if (arr) delete[] *arr;
-        // if (arr) delete[] arr;
-    }
+    ~array2d() {}
     void check_index_bounds(size_t row, size_t col) const {
         if (row >= rows_ || col >= cols_) {
             throw std::out_of_range(
@@ -345,8 +351,10 @@ public:
             );
         }
     }
+    // TODO wrap in DEBUG
     T& get(size_t row, size_t col) const {
-        // check_index_bounds(row, col);
+        check_index_bounds(row, col);
+        // TODO check val bounds
         return arr[row][col];
     }
 
@@ -362,9 +370,10 @@ public:
             }
         }
     }
+    // TODO wrap in DEBUG
     void set(size_t row, size_t col, T val) {
-        // check_index_bounds(row, col);
-        // check_value_bounds(val);
+        check_index_bounds(row, col);
+        check_value_bounds(val);
         arr[row][col] = val;
     }
     size_t n_rows() const {
@@ -373,13 +382,28 @@ public:
     size_t n_cols() const {
         return cols_;
     }
-    void print() const {
+    void print_i128() const {
         for (size_t i = 0; i < rows_; i++) {
             std::cout << "{";
             for (size_t j = 0; j < cols_ - 1; j++) {
                 std::cout << print_to_string_i128(arr[i][j]) << ", ";
             }
             std::cout << print_to_string_i128(arr[i][cols_ - 1]) << "}\n";
+        }
+    }
+    void print_array1d() const {
+        for (size_t i = 0; i < rows_; i++) {
+            for (size_t j = 0; j < cols_ - 1; j++) {
+                std::cout << "[" << i << "]" << "[" << j << "]:\n";
+                arr[i][j].print();
+            }
+        }
+    }
+    void print() const {
+        if constexpr (std::is_same_v<T, i128>) {
+            print_i128();
+        } else {
+            print_array1d();
         }
     }
 };
@@ -394,19 +418,6 @@ public:
             set(i, 0);
         }
     }
-    // // deep copy constructor
-    // poly(const poly& other) : array1d<i128, poly>(other.size()) {
-    //     for (size_t i = 0; i < other.size(); ++i) {
-    //         set(i, other.get(i));
-    //     }
-    // }
-    // poly& operator=(const poly& other) {
-    //     if (this != &other) {
-    //         array1d<i128, poly>::operator=(other);
-    //         // Copy any poly-specific members here if needed
-    //     }
-    //     return *this;
-    // }
     auto& get_coeff(size_t n) const {
         return get(n);
     }
@@ -457,6 +468,7 @@ public:
     poly convolve_ntt(const poly& other) const {
         TIMING(auto start = std::chrono::high_resolution_clock::now();)
         TIMING(int thread_num = omp_get_thread_num();)
+        TIMING(times_counts.calls_convolve[thread_num] += 1;)
 
         // turn *this and other into vector_i128's
         size_t n = n_coeffs();
@@ -688,12 +700,6 @@ public:
             set(i, poly(n_coeffs));
         }
     }
-    // deep copy constructor
-    // rlwe(const rlwe& other) : array1d<poly, rlwe>(other.size()) {
-    //     for (size_t i = 0; i < other.size(); ++i) {
-    //         set(i, poly(other.get(i)));
-    //     }
-    // }
     auto& get_poly(size_t n) const {
         return get(n);
     }
@@ -725,6 +731,7 @@ public:
     rlwe_decomp decompose(const i128& v_, const i128& d) const {
         // v - power of 2, s.t. v^{d-1} < q < v^d
         i128 power = static_cast<i128>(std::ceil((std::log2(FIELD_MODULUS) / d)));
+        // TODO remove double up of computation of v in run_control_loop
         i128 v = 1 << power;
         assert(v == v_);
         assert(d >= 1);
@@ -748,6 +755,7 @@ public:
                 for (size_t j = 0; j < d; j++) {
                     i128 decomped_coeff = (v - 1) & (pol.get_coeff(i) / pow_(v, j));
                     assert(decomped_coeff < v);
+                    // BUG
                     polys.get_poly(k + j).set(i, decomped_coeff);
                 }
             }
@@ -799,12 +807,6 @@ public:
         for (size_t i = 0; i < n_rlwes; i++)
             set(i, rlwe(n_polys, n_coeffs));
     }
-    // // Deep copy constructor
-    // rlwe_vec(const rlwe_vec& other) : array1d<rlwe, rlwe_vec>(other.size()) {
-    //     for (size_t i = 0; i < other.size(); ++i) {
-    //         set(i, rlwe(other.get(i)));
-    //     }
-    // }
     auto& get_rlwe(size_t n) const {
         return get(n);
     }
@@ -938,7 +940,9 @@ public:
         rlwe res(n_polys(), 2 * n_coeffs() - 1);
         poly& p0 = res.get(0);
         poly& p1 = res.get(1);
-        #pragma omp parallel for num_threads(N_THREADS)
+        // TODO wrap in outer loop
+        // FIXME need thread array to accumulate sum
+        // #pragma omp parallel for num_threads(N_THREADS)
         for (size_t i = 0; i < N; i++) {
             auto val0 = get(i).get(0).convolve(other.get(i));
             auto val1 = get(i).get(1).convolve(other.get(i));
@@ -957,14 +961,8 @@ public:
         size_t N = size();
         assert(N == other.size());
         rlwe_vec res_vec(N, n_polys_, n_coeffs_);
-        #pragma omp parallel for num_threads(2)
+        // #pragma omp parallel for num_threads(N_THREADS)
         for (size_t i = 0; i < N; i++) {
-            // int thread_id = omp_get_thread_num();
-            // #pragma omp critical
-            // {
-            //     std::cout << "pow1: hi from thread #" << thread_id << std::endl;
-            // }
-
             rlwe& res = res_vec.get(i);
             auto val0 = get(i).get(0).pow(other.get(i));
             auto val1 = get(i).get(1).pow(other.get(i));
@@ -1084,15 +1082,8 @@ public:
         rlwe_vec res_vec(n, n_polys_, n_coeffs_);
         rlwe res(n_polys_, n_coeffs_);
         res.set_coeffs_to_one();
-        // size_t n_threads_max = omp_get_max_threads();
-        // std::cout << "Max threads: " << n_threads_max << std::endl;
-        #pragma omp parallel for num_threads(12)
+        // #pragma omp parallel for num_threads(N_THREADS)
         for (size_t i = 0; i < n; i++) {
-            // int thread_id = omp_get_thread_num();
-            // #pragma omp critical
-            // {
-            //     std::cout << "pow0: hi from thread #" << thread_id << std::endl;
-            // }
             auto val = get(i).pow(other.get(i));
             res_vec.set(i, val);
         }
@@ -1131,14 +1122,14 @@ public:
         size_t rows = n_rows();
         size_t cols = n_cols();
         assert(cols == other.size());
-        size_t n_polys = get_n_polys();
-        size_t n_coeffs = get_n_coeffs();
+        size_t n_polys_ = n_polys();
+        size_t n_coeffs_ = n_coeffs();
         size_t n_coeffs_other = other.n_coeffs();
-        assert(n_coeffs == n_coeffs_other);
+        assert(n_coeffs_ == n_coeffs_other);
 
-        rlwe_vec res(rows, n_polys, n_coeffs);
+        rlwe_vec res(rows, n_polys_, n_coeffs_);
         for (size_t i = 0; i < rows; i++) {
-            rlwe sum(n_polys, n_coeffs);
+            rlwe sum(n_polys_, n_coeffs_);
             for (size_t j = 0; j < cols; j++) {
                 auto val = get(i, j) * other.get(j);
                 sum = sum + val;
@@ -1151,14 +1142,14 @@ public:
         size_t rows = n_rows();
         size_t cols = n_cols();
         assert(cols == other.size());
-        size_t n_polys = get_n_polys();
-        size_t n_coeffs = get_n_coeffs();
+        size_t n_polys_ = n_polys();
+        size_t n_coeffs_ = n_coeffs();
         size_t n_coeffs_other = other.n_coeffs();
-        assert(n_coeffs == n_coeffs_other);
+        assert(n_coeffs_ == n_coeffs_other);
 
-        rlwe_vec res(rows, n_polys, 2 * n_coeffs - 1);
+        rlwe_vec res(rows, n_polys_, 2 * n_coeffs_ - 1);
         for (size_t i = 0; i < rows; i++) {
-            rlwe sum(n_polys, 2 * n_coeffs - 1);
+            rlwe sum(n_polys_, 2 * n_coeffs_ - 1);
             for (size_t j = 0; j < cols; j++) {
                 auto val = get(i, j).convolve(other.get(j));
                 sum = sum + val;
@@ -1189,13 +1180,13 @@ public:
     rgsw& get_rgsw(size_t row, size_t col) const {
         return get(row, col);
     }
-    size_t get_n_rlwes() const {
+    size_t n_rlwes() const {
         return get_rgsw(0, 0).size();
     }
-    size_t get_n_polys() const {
+    size_t n_polys() const {
         return get_rgsw(0, 0).n_polys();
     }
-    size_t get_n_coeffs() const {
+    size_t n_coeffs() const {
         return get_rgsw(0, 0).n_coeffs();
     }
 
@@ -1214,9 +1205,9 @@ public:
         size_t rows = other.n_rows();
         size_t cols = other.n_cols();
         assert(rows == size());
-        size_t n_rlwes = other.get_n_rlwes();
-        size_t n_polys = other.get_n_polys();
-        size_t n_coeffs = other.get_n_coeffs();
+        size_t n_rlwes = other.n_rlwes();
+        size_t n_polys = other.n_polys();
+        size_t n_coeffs = other.n_coeffs();
         rgsw_vec res(cols, n_rlwes, n_polys, n_coeffs);
         for (size_t j = 0; j < cols; j++) {
             rgsw sum(n_rlwes, n_polys, n_coeffs);
@@ -1305,7 +1296,7 @@ private:
         array2d<i128> result(rows, cols);
         for (size_t i = 0; i < rows; ++i) {
             for (size_t j = 0; j < cols; ++j) {
-                result.set(i, j, mod_(static_cast<__int128_t>(std::round(scalar * mat[i][j])), q));
+                result.set(i, j, mod_(static_cast<i128>(std::round(scalar * mat[i][j])), q));
             }
         }
         return result;
@@ -1333,25 +1324,28 @@ private:
 
 public:
     Params() :
+        N(N_),
         p(GROUP_MODULUS),
         q(FIELD_MODULUS),
         g(GENERATOR),
-        s(10000),
-        L(10000),
-        r(10000),
+        s(10001),
+        L(10001),
+        r(10001),
         iter_(10),
+        // BUG ?
         F(scalar_mat_mult(s, F_, q, F_.size(), F_.at(0).size())),
         G_bar(scalar_mat_mult(s, G, q, G.size(), G.at(0).size())),
         R_bar(scalar_mat_mult(s, R, q, R.size(), R.at(0).size())),
         H_bar(scalar_mat_mult(s, H, q, H.size(), H.at(0).size()))
     {
-        // generate_field_and_group_params();
-        x_cont_init_scaled = scalar_vec_mult(r * s * L, x_cont_init, q);
         // TODO update or remove
         assert(A.size() == B.size());
         assert(A.size() == F_.size());
+        // generate_field_and_group_params();
+        // TODO move into initialiser list
+        x_cont_init_scaled = scalar_vec_mult(r * s * L, x_cont_init, q);
     }
-    i128 p, q, g, s, L, r, iter_, x_dim, y_dim, u_dim;
+    i128 N, p, q, g, s, L, r, iter_, x_dim, y_dim, u_dim;
     array2d<i128> F, G_bar, R_bar, H_bar;
     // TODO update to array1d<i128> (add as another class?)
     vector_i128 x_cont_init_scaled;
@@ -1398,7 +1392,9 @@ public:
         0,
     };
     void print() {
+        std::cout << "*** START Params.print ***\n";
         // print these: p, q, g, s, L, r, iter_;
+        std::cout << "N: " << print_to_string_i128(N) << "\n";
         std::cout << "p: " << print_to_string_i128(p) << "\n";
         std::cout << "q: " << print_to_string_i128(q) << "\n";
         std::cout << "g: " << print_to_string_i128(g) << "\n";
@@ -1406,6 +1402,8 @@ public:
         std::cout << "L: " << print_to_string_i128(L) << "\n";
         std::cout << "r: " << print_to_string_i128(r) << "\n";
         std::cout << "iter: " << print_to_string_i128(iter_) << "\n";
+        std::cout << "F:\n";
+        F.print();
         std::cout << "G_bar:\n";
         G_bar.print();
         std::cout << "R_bar:\n";
@@ -1413,10 +1411,8 @@ public:
         std::cout << "H_bar:\n";
         H_bar.print();
         std::cout << "x_cont_init_scaled:\n";
-        // TODO print_vec()
-        // x_cont_init_scaled.print();
-        // print these: G_bar, R_bar, H_bar;
-        // print this: x_cont_init_scaled;
+        print_vector_i128(x_cont_init_scaled);
+        std::cout << "*** END Params.print ***\n\n\n";
     }
     // TODO pass in gen as a param
     vector_i128 sample_knowledge_exponents(i128 from, i128 to_inclusive) {
@@ -1425,6 +1421,7 @@ public:
         for (size_t i = 0; i < N; i++) {
             // TODO update range
             res.at(i) = random_i128(from, to_inclusive);
+            DEBUG1(res.at(i) = 1;)
         }
         // res <- {alpha_0, alpha_1, gamma_0, gamma_1, rho_0, rho_1}
         return res;
@@ -1442,6 +1439,7 @@ public:
         for (auto& x : res) {
             for (size_t i = 0; i < x.size(); i++) {
                 x.at(i) = random_i128(from, to_inclusive);
+                DEBUG1(x.at(i) = 1;)
             }
         }
         // res <- {r_0, r_1, s}
