@@ -213,7 +213,7 @@ public:
     }
 
     // Encodes an RGSW plaintext (not encryption, just encoding)
-    rgsw encode_rgsw(const poly& M) {
+    rgsw encode_rgsw(const poly& M) const {
         // Compute v powers: v^0, v^1, ..., v^{d-1}
         vector_i128 v_powers(d);
         for (i128 i = 0; i < d; ++i) {

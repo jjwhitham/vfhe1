@@ -54,11 +54,10 @@ i128 cyclic_exp(i128 base, i128 exp, i128 q, i128 p) {
 };
 
 std::tuple<std::tuple<eval_key, eval_key>, veri_key> compute_eval_and_veri_keys(
-    rgsw_mat F_ctx, rgsw_mat G_bar_ctx, rgsw_mat R_bar_ctx, rgsw_mat H_bar_ctx,
-    vector_i128 r_0, vector_i128 r_1, vector_i128 s,
+    const rgsw_mat& F_ctx, const rgsw_mat& G_bar_ctx, const rgsw_mat& R_bar_ctx, const rgsw_mat& H_bar_ctx,
+    const vector_i128& r_0, const vector_i128& r_1, const vector_i128& s,
     i128 rho_0, i128 rho_1, i128 alpha_0, i128 alpha_1, i128 gamma_0, i128 gamma_1,
-    i128 g, i128 d, i128 q, i128 p, i128 N, vector_i128 eval_pows, Encryptor enc
-    // i128 g, i128 d, i128 q, i128 p, i128 v, i128 N, vector_i128 eval_pows, Encryptor enc
+    i128 g, i128 d, i128 q, i128 p, i128 N, const vector_i128& eval_pows, const Encryptor& enc
 ) {
     // Converts a vector v to a vector where each element is g^v[i] mod p
     auto convert_vec_to_cyclic = [&](i128 g, const vector_i128& v, i128 q, i128 p) -> vector_i128 {
