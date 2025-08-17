@@ -1304,11 +1304,9 @@ private:
     vector_i128 scalar_vec_mult(i128 scalar, vector_double& vec, i128 q) {
         // TODO update to array1d<i128> (add as another class?)
         vector_i128 result(vec.size());
-        assert(result.size() == vec.size()); // FIXME remove after assert passes
         assert(result.capacity() == result.size());
         for (size_t i = 0; i < vec.size(); ++i) {
-            // FIXME usage of __int128_t, as per FIXME for i128 at top
-            result.at(i) = mod_(static_cast<__int128_t>(std::round(scalar * vec[i])), q);
+            result.at(i) = mod_(static_cast<i128>(std::round(scalar * vec[i])), q);
         }
         return result;
     }
@@ -1331,7 +1329,7 @@ public:
         r(10001),
         iter_(10),
         // BUG ?
-        F(scalar_mat_mult(s, F_, q, F_.size(), F_.at(0).size())),
+        F(F_.size(), F_.at(0).size()),
         G_bar(scalar_mat_mult(s, G, q, G.size(), G.at(0).size())),
         R_bar(scalar_mat_mult(s, R, q, R.size(), R.at(0).size())),
         H_bar(scalar_mat_mult(s, H, q, H.size(), H.at(0).size()))
@@ -1342,6 +1340,12 @@ public:
         // generate_field_and_group_params();
         // TODO move into initialiser list
         x_cont_init_scaled = scalar_vec_mult(r * s * L, x_cont_init, q);
+        // Construct F from F_
+        for (size_t i = 0; i < F_.size(); i++) {
+            for (size_t j = 0; j < F_.at(0).size(); j++) {
+                F.set(i, j, F_.at(i).at(j));
+            }
+        }
     }
     i128 N, p, q, g, s, L, r, iter_, x_dim, y_dim, u_dim;
     array2d<i128> F, G_bar, R_bar, H_bar;
