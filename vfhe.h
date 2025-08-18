@@ -435,6 +435,22 @@ public:
     }
 };
 
+class hashed_a_poly : public array1d<i128, hashed_a_poly> {
+private:
+public:
+    // NOTE hashed_rlwe always has two hashed_polys
+    hashed_a_poly() : array1d<i128, hashed_a_poly>() {}
+    hashed_a_poly(size_t n_hashed_a_coeffs) : array1d<i128, hashed_a_poly>(n_hashed_a_coeffs) {
+        assert(n_hashed_a_coeffs == 2);
+    }
+    auto& get_hashed_a_coeff(size_t n) const {
+        return get(n);
+    }
+    size_t n_hashed_a_coeffs() const {
+        return size();
+    }
+};
+
 class poly : public array1d<i128, poly> {
 private:
     bool isNTT = false;
@@ -457,6 +473,17 @@ public:
             hash = mod_(hash + get(i) * eval_pows.at(i), FIELD_MODULUS);
         }
         return hash;
+    }
+    auto get_a_hash(vector_i128 eval_pows) const {
+        auto hash = get_hash(eval_pows);
+        auto N = size();
+        hashed_a_poly ha_poly(N);
+        vector_i128 hashed_a_vec = scalar_vec_mult(hash, eval_pows, FIELD_MODULUS);
+        for (size_t i = 0; i < N; i++) {
+            auto val = hashed_a_vec.at(i);
+            ha_poly.set(i, val);
+        }
+        return ha_poly;
     }
     std::vector<i128> convolution_(const std::vector<i128>& a, const std::vector<i128>& b) const {
         i128 n = a.size();
@@ -495,7 +522,7 @@ public:
     poly convolve_ntt(const poly& other) const {
         TIMING(auto start = std::chrono::high_resolution_clock::now();)
         // TIMING(int thread_num = omp_get_thread_num();)
-        int thread_num = 0;
+        TIMING(int thread_num = 0;)
         TIMING(times_counts.calls_convolve[thread_num] += 1;)
 
         // turn *this and other into vector_i128's
@@ -736,7 +763,7 @@ public:
     // TODO move all get_hash() to array1d?
     // calls poly's get_hash and returns hashed_rlwe
     auto get_hash(vector_i128 eval_pows) const {
-        hashed_rlwe hash(2); // FIXME n_polys, do better (global?)
+        hashed_rlwe hash(N_POLYS_IN_RLWE); // FIXME n_polys, do better (global?)
         for (size_t i = 0; i < size(); i++) {
             hash.set(i, get(i).get_hash(eval_pows));
         }
