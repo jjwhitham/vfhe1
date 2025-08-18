@@ -1,3 +1,6 @@
+// TODO should default constructors init T arr to nullptrs? size=0...
+// TODO replace vectori128 by an array1d i128 subclass which:
+    // TODO implements scalar mult (should be covered by base class anyway...)
 #pragma once
 
 #include <iostream>
@@ -6,7 +9,7 @@
 #include <chrono>
 #include "omp.h"
 #include "shared.h"
-#include <atcoder/convolution.hpp> // Download from AtCoder ACL
+#include "atcoder/convolution.hpp" // Download from AtCoder ACL
 
 using namespace atcoder;
 
@@ -205,14 +208,18 @@ public:
         }
         return res;
     }
+    i128 group_mult_(i128 a, i128 b) const {
+        return mod_(a * b, GROUP_MODULUS);
+    }
     Derived group_mult(const Derived& other) const {
         size_t N = size();
         Derived res(N);
         for (size_t i = 0; i < N; i++) {
             T val;
             if constexpr (std::is_same_v<T, i128>) {
-                val = (get(i) * other.get(i));
-                val = mod_(val, GROUP_MODULUS);
+                // val = (get(i) * other.get(i));
+                // val = mod_(val, GROUP_MODULUS);
+                val = group_mult_(get(i), other.get(i));
             } else {
                 val = get(i).group_mult(other.get(i));
             }
@@ -226,8 +233,9 @@ public:
         for (size_t i = 0; i < N; i++) {
             T val;
             if constexpr (std::is_same_v<T, i128>) {
-                val = get(i) * scalar;
-                val = mod_(val, GROUP_MODULUS);
+                // val = get(i) * scalar;
+                // val = mod_(val, GROUP_MODULUS);
+                val = group_mult_(get(i) * scalar, GROUP_MODULUS);
             } else {
                 val = get(i).group_mult(scalar);
             }
@@ -435,31 +443,14 @@ public:
     }
 };
 
-class hashed_a_poly : public array1d<i128, hashed_a_poly> {
-private:
-public:
-    // NOTE hashed_rlwe always has two hashed_polys
-    hashed_a_poly() : array1d<i128, hashed_a_poly>() {}
-    hashed_a_poly(size_t n_hashed_a_coeffs) : array1d<i128, hashed_a_poly>(n_hashed_a_coeffs) {
-        assert(n_hashed_a_coeffs == 2);
-    }
-    auto& get_hashed_a_coeff(size_t n) const {
-        return get(n);
-    }
-    size_t n_hashed_a_coeffs() const {
-        return size();
-    }
-};
-
 class poly : public array1d<i128, poly> {
 private:
     bool isNTT = false;
 public:
     poly() : array1d<i128, poly>() {}
     poly(size_t N) : array1d<i128, poly>(N) {
-        for (size_t i = 0; i < N; i++) {
+        for (size_t i = 0; i < N; i++)
             set(i, 0);
-        }
     }
     auto& get_coeff(size_t n) const {
         return get(n);
@@ -474,17 +465,9 @@ public:
         }
         return hash;
     }
-    auto get_a_hash(vector_i128 eval_pows) const {
-        auto hash = get_hash(eval_pows);
-        auto N = size();
-        hashed_a_poly ha_poly(N);
-        vector_i128 hashed_a_vec = scalar_vec_mult(hash, eval_pows, FIELD_MODULUS);
-        for (size_t i = 0; i < N; i++) {
-            auto val = hashed_a_vec.at(i);
-            ha_poly.set(i, val);
-        }
-        return ha_poly;
-    }
+    // See inline definition below class hashed_a_poly (avoids circular definitions)
+    auto get_hash_a(vector_i128 eval_pows) const;
+
     std::vector<i128> convolution_(const std::vector<i128>& a, const std::vector<i128>& b) const {
         i128 n = a.size();
         std::vector<i128> a_pad = a, b_pad = b;
@@ -617,6 +600,48 @@ public:
     }
 };
 
+class hashed_a_poly : public array1d<i128, hashed_a_poly> {
+private:
+public:
+    hashed_a_poly() : array1d<i128, hashed_a_poly>() {}
+    hashed_a_poly(size_t n_hashed_a_coeffs) : array1d<i128, hashed_a_poly>(n_hashed_a_coeffs) {
+        for (size_t i = 0; i < n_hashed_a_coeffs; i++)
+            set(i, 0);
+    }
+    auto& get_hashed_a_coeff(size_t n) const {
+        return get(n);
+    }
+    size_t n_hashed_a_coeffs() const {
+        return size();
+    }
+    i128 get_hash_sec(const poly& other) const {
+        // HACK get around gr having hashed_a_polys of length 2n-1, but x_nega_ only length n
+        assert(size() == other.size() || size() == (2 * other.size() - 1));
+        i128 result = 1;
+        poly raised(other.size());
+        for (size_t i = 0; i < other.size(); i++) {
+            raised.set(i, pow_(get(i), other.get(i)));
+        }
+        for (size_t i = 0; i < other.size(); i++) {
+            result = group_mult_(result, raised.get(i));
+        }
+        return result;
+    }
+};
+
+inline auto poly::get_hash_a(vector_i128 eval_pows) const {
+    auto hash = get_hash(eval_pows);
+    auto N = size();
+    hashed_a_poly ha_poly(N);
+    // TODO optimise
+    vector_i128 hashed_a_vec = scalar_vec_mult(hash, eval_pows, FIELD_MODULUS);
+    for (size_t i = 0; i < N; i++) {
+        auto val = hashed_a_vec.at(i);
+        ha_poly.set(i, val);
+    }
+    return ha_poly;
+}
+
 class hashed_rlwe_decomp : public array1d<i128, hashed_rlwe_decomp> {
 private:
 public:
@@ -722,13 +747,38 @@ public:
     }
 };
 
+class hashed_a_rlwe : public array1d<hashed_a_poly, hashed_a_rlwe> {
+private:
+public:
+    // NOTE hashed_a_rlwe always has two hashed_a_polys
+    hashed_a_rlwe() : array1d<hashed_a_poly, hashed_a_rlwe>() {}
+    hashed_a_rlwe(size_t n_hashed_a_polys) : array1d<hashed_a_poly, hashed_a_rlwe>(n_hashed_a_polys) {}
+    hashed_a_rlwe(size_t n_hashed_a_polys, size_t n_coeffs) : array1d<hashed_a_poly, hashed_a_rlwe>(n_hashed_a_polys) {
+        assert(n_hashed_a_polys == N_POLYS_IN_RLWE);
+        for (size_t i = 0; i < n_hashed_a_polys; i++) {
+            set(i, hashed_a_poly(n_coeffs));
+        }
+    }
+    auto& get_hashed_a_poly(size_t n) const {
+        return get(n);
+    }
+    size_t n_hashed_a_polys() const {
+        return size();
+    }
+    // void set_coeffs_to_one() {
+    //     for (size_t i = 0; i < size(); i++) {
+    //         set(i, 1);
+    //     }
+    // }
+};
+
 class hashed_rlwe : public array1d<i128, hashed_rlwe> {
 private:
 public:
     // NOTE hashed_rlwe always has two hashed_polys
     hashed_rlwe() : array1d<i128, hashed_rlwe>() {}
     hashed_rlwe(size_t n_hashed_polys) : array1d<i128, hashed_rlwe>(n_hashed_polys) {
-        assert(n_hashed_polys == 2);
+        assert(n_hashed_polys == N_POLYS_IN_RLWE);
     }
     auto& get_hashed_poly(size_t n) const {
         return get(n);
@@ -768,6 +818,14 @@ public:
             hash.set(i, get(i).get_hash(eval_pows));
         }
         return hash;
+    }
+    // calls poly's get_hash and returns hashed_rlwe
+    auto get_hash_a(vector_i128 eval_pows) const {
+        hashed_a_rlwe hash_a(N_POLYS_IN_RLWE, eval_pows.size() / 2); // FIXME n_polys, do better (global?)
+        for (size_t i = 0; i < size(); i++) {
+            hash_a.set(i, get(i).get_hash_a(eval_pows));
+        }
+        return hash_a;
     }
     void set_coeffs_to_one() {
         for (auto& p : *this) {
@@ -898,6 +956,52 @@ public:
             conv.set(i, r);
         }
         return conv;
+    }
+};
+
+class hashed_a_rgsw : public array1d<hashed_a_rlwe, hashed_a_rgsw> {
+private:
+public:
+    hashed_a_rgsw() : array1d<hashed_a_rlwe, hashed_a_rgsw>() {}
+    hashed_a_rgsw(size_t n_hashed_a_rlwes) : array1d<hashed_a_rlwe, hashed_a_rgsw>(n_hashed_a_rlwes) {
+    }
+    hashed_a_rgsw(
+        size_t n_hashed_a_rlwes, size_t n_hashed_a_polys, size_t n_coeffs
+    ) : array1d<hashed_a_rlwe, hashed_a_rgsw>(n_hashed_a_rlwes) {
+        for (size_t i = 0; i < n_hashed_a_rlwes; i++)
+            set(i, hashed_a_rlwe(n_hashed_a_polys, n_coeffs));
+    }
+    auto& get_hashed_a_rlwe(size_t n) const {
+        return get(n);
+    }
+    size_t n_hashed_a_rlwes() const {
+        return size();
+    }
+    size_t n_hashed_a_polys() const {
+        return get_hashed_a_rlwe(0).n_hashed_a_polys();
+    }
+    // using array1d<hashed_a_rlwe, hashed_a_rgsw>::pow;
+    hashed_rlwe get_hash_sec(const rlwe_decomp& other) const {
+        size_t n_polys_ = n_hashed_a_polys();
+        assert(n_polys_ == N_POLYS_IN_RLWE);
+        size_t N = size();
+        assert(N == other.size());
+        hashed_rlwe_vec res_vec(N, n_polys_);
+        // #pragma omp parallel for num_threads(2)
+        for (size_t i = 0; i < N; i++) {
+            auto val0 = get(i).get(0).get_hash_sec(other.get(i));
+            auto val1 = get(i).get(1).get_hash_sec(other.get(i));
+            hashed_rlwe& res = res_vec.get(i);
+            res.set(0, val0);
+            res.set(1, val1);
+        }
+
+        hashed_rlwe res(n_polys_);
+        res.set_coeffs_to_one();
+        for (auto& hashed_a_rlwe_ : res_vec) {
+            res = res.group_mult(hashed_a_rlwe_);
+        }
+        return res;
     }
 };
 
@@ -1044,6 +1148,14 @@ public:
         }
         return hash;
     }
+    // calls rlwe's get_hash_a for all the rlwe's in (*this)
+    auto get_hash_a(vector_i128 eval_pows) const {
+        hashed_a_rgsw hash(size(), n_polys(), n_coeffs()); // FIXME n_polys, do better (global?)
+        for (size_t i = 0; i < size(); i++) {
+            hash.set(i, get(i).get_hash_a(eval_pows));
+        }
+        return hash;
+    }
 };
 
 class hashed_rgsw_vec : public array1d<hashed_rgsw, hashed_rgsw_vec> {
@@ -1093,6 +1205,55 @@ public:
         return res;
     }
 };
+
+class hashed_a_rgsw_vec : public array1d<hashed_a_rgsw, hashed_a_rgsw_vec> {
+private:
+public:
+    hashed_a_rgsw_vec() : array1d<hashed_a_rgsw, hashed_a_rgsw_vec>() {}
+    hashed_a_rgsw_vec(size_t n_hashed_a_rgsws) : array1d<hashed_a_rgsw, hashed_a_rgsw_vec>(n_hashed_a_rgsws) {}
+    hashed_a_rgsw_vec(
+        size_t n_hashed_a_rgsws, size_t n_hashed_a_rlwes, size_t n_hashed_a_polys, size_t n_coeffs
+    ) : array1d<hashed_a_rgsw, hashed_a_rgsw_vec>(n_hashed_a_rgsws) {
+        for (size_t i = 0; i < n_hashed_a_rgsws; i++)
+            set(i, hashed_a_rgsw(n_hashed_a_rlwes, n_hashed_a_polys, n_coeffs));
+    }
+    ~hashed_a_rgsw_vec() {}
+    hashed_a_rgsw& get_hashed_a_rgsw(size_t n) const {
+        return get(n);
+    }
+    size_t n_hashed_a_rgsws() const {
+        return size();
+    }
+    size_t n_hashed_a_rlwes() const {
+        size_t n_hashed_a_rlwes = get_hashed_a_rgsw(0).n_hashed_a_rlwes();
+        return n_hashed_a_rlwes;
+    }
+    size_t n_hashed_a_polys() const {
+        size_t n_hashed_a_polys = get_hashed_a_rgsw(0).n_hashed_a_polys();
+        assert(n_hashed_a_polys == 2);
+        return n_hashed_a_polys;
+    }
+    // using array1d<hashed_a_rgsw, hashed_a_rgsw_vec>::pow;
+    hashed_rlwe get_hash_sec(const rlwe_decomp_vec& other) const {
+        size_t n = other.size();
+        assert(size() == n);
+        size_t n_hashed_a_polys_ = n_hashed_a_polys();
+        assert(n_hashed_a_polys_ == 2);
+        hashed_rlwe_vec res_vec(n, n_hashed_a_polys_);
+        hashed_rlwe res(n_hashed_a_polys_);
+        res.set_coeffs_to_one();
+        // #pragma omp parallel for num_threads(12)
+        for (size_t i = 0; i < n; i++) {
+            auto val = get(i).get_hash_sec(other.get(i));
+            res_vec.set(i, val);
+        }
+        for (auto& prod : res_vec) {
+            res = res.group_mult(prod);
+        }
+        return res;
+    }
+};
+
 
 class rgsw_vec : public array1d<rgsw, rgsw_vec> {
 private:
@@ -1156,6 +1317,14 @@ public:
         hashed_rgsw_vec hash(size(), n_rlwes(), n_polys()); // FIXME n_polys, do better (global?)
         for (size_t i = 0; i < size(); i++) {
             hash.set(i, get(i).get_hash(eval_pows));
+        }
+        return hash;
+    }
+    // calls rgsw's get_hash_a
+    auto get_hash_a(vector_i128 eval_pows) const {
+        hashed_a_rgsw_vec hash(size(), n_rlwes(), n_polys(), n_coeffs()); // FIXME n_polys, do better (global?)
+        for (size_t i = 0; i < size(); i++) {
+            hash.set(i, get(i).get_hash_a(eval_pows));
         }
         return hash;
     }
@@ -1511,12 +1680,12 @@ public:
 };
 
 struct eval_key {
-    vector_i128 gr;
-    hashed_rgsw_vec grFr;
-    hashed_rgsw_vec gsHr;
-    vector_i128 gr_rho;
-    hashed_rgsw_vec grFr_alpha;
-    hashed_rgsw_vec gsHr_gamma;
+    std::vector<hashed_a_poly> gr;
+    hashed_a_rgsw_vec grFr;
+    hashed_a_rgsw_vec gsHr;
+    std::vector<hashed_a_poly> gr_rho;
+    hashed_a_rgsw_vec grFr_alpha;
+    hashed_a_rgsw_vec gsHr_gamma;
 };
 
 struct veri_key {
