@@ -494,7 +494,8 @@ public:
     }
     poly convolve_ntt(const poly& other) const {
         TIMING(auto start = std::chrono::high_resolution_clock::now();)
-        TIMING(int thread_num = omp_get_thread_num();)
+        // TIMING(int thread_num = omp_get_thread_num();)
+        int thread_num = 0;
         TIMING(times_counts.calls_convolve[thread_num] += 1;)
 
         // turn *this and other into vector_i128's

@@ -662,7 +662,7 @@ void print_times_and_counts() {
 }
 
 int main() {
-    omp_set_nested(1);
+    // omp_set_nested(1);
     TIMING(auto start = std::chrono::high_resolution_clock::now();)
 
     run_control_loop();

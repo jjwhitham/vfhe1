@@ -347,7 +347,7 @@ int main() {
     test_rlwe_decomp();
     test_rlwe_decomp_vec();
     test_full();
-    omp_set_nested(1);
+    // omp_set_nested(1);
     // omp_set_num_threads(1);
     // std::cout << "omp num threads: " << omp_get_max_threads() << std::endl;
     // std::cout << " omp num threads: " << omp_get_num_threads() << std::endl;
