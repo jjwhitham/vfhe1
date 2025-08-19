@@ -17,7 +17,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    const unsigned int BITS = 1000;
+    const unsigned int BITS = 1024;
 
     gmp_randclass rng(gmp_randinit_default);
     rng.seed(static_cast<unsigned long>(time(nullptr)));

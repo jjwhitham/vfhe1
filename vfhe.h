@@ -1,6 +1,6 @@
-// TODO should default constructors init T arr to nullptrs? size=0...
 // TODO replace vectori128 by an array1d i128 subclass which:
     // TODO implements scalar mult (should be covered by base class anyway...)
+// TODO use unsigned ints so that mod runs quicker
 #pragma once
 
 #include <iostream>
@@ -9,9 +9,9 @@
 #include <chrono>
 #include "omp.h"
 #include "shared.h"
-#include "atcoder/convolution.hpp" // Download from AtCoder ACL
+#include "convolution.hpp" // Download from AtCoder ACL
 
-using namespace atcoder;
+// using namespace atcoder;
 
 #ifdef TIMING_ON
 #  define TIMING(x) x
@@ -37,6 +37,8 @@ using namespace atcoder;
 
 typedef struct {
     int calls_convolve[N_THREADS] = { 0 };
+    int calls_nega_ntt[N_THREADS] = { 0 };
+    int calls_conv_to_nega[N_THREADS] = { 0 };
     i128 iter_ = 0;
     std::chrono::duration<double, std::milli> elapsed_verify{};
     std::chrono::duration<double, std::milli> elapsed_proof{};
@@ -471,7 +473,7 @@ public:
     std::vector<i128> convolution_(const std::vector<i128>& a, const std::vector<i128>& b) const {
         i128 n = a.size();
         std::vector<i128> a_pad = a, b_pad = b;
-        std::vector<i128> conv = convolution<FIELD_MODULUS>(a_pad, b_pad);
+        std::vector<i128> conv = atcoder::convolution<FIELD_MODULUS>(a_pad, b_pad);
         assert(conv.size() == 2 * n - 1);
         return conv;
     }
@@ -538,6 +540,9 @@ public:
             return convolve_naive(other);
     }
     poly nega_ntt(const poly& other) const {
+        // TIMING(int thread_num = omp_get_thread_num();)
+        TIMING(int thread_num = 0;)
+        TIMING(times_counts.calls_nega_ntt[thread_num] += 1;)
         // turn *this and other into vector_i128's
         size_t n = n_coeffs();
         vector_i128 a(n);
@@ -583,6 +588,9 @@ public:
             return nega_naive(other);
     }
     auto conv_to_nega(size_t N) const {
+        // TIMING(int thread_num = omp_get_thread_num();)
+        TIMING(int thread_num = 0;)
+        TIMING(times_counts.calls_conv_to_nega[thread_num] += 1;)
         assert(n_coeffs() == 2 * N - 1);
         i128 conv_degree = n_coeffs() - 1;
         // HACK can't return *this after defining array1d move semantics

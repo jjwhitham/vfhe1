@@ -673,8 +673,18 @@ void print_times_and_counts() {
     int convolve_calls = 0;
     for (size_t i = 0; i < N_THREADS; i++)
         convolve_calls += times_counts.calls_convolve[i];
+    int nega_ntt_calls = 0;
+    for (size_t i = 0; i < N_THREADS; i++)
+        nega_ntt_calls += times_counts.calls_nega_ntt[i];
+    int conv_to_nega_calls = 0;
+    for (size_t i = 0; i < N_THREADS; i++)
+        conv_to_nega_calls += times_counts.calls_conv_to_nega[i];
     std::cout << "  Convolve (per loop): ";
     std::cout << convolve_calls / iter_ << "\n";
+    std::cout << "  Negacyclic (per loop): ";
+    std::cout << nega_ntt_calls / iter_ << "\n";
+    std::cout << "  Conv-to-nega (per loop): ";
+    std::cout << conv_to_nega_calls / iter_ << "\n";
 }
 
 int main() {
