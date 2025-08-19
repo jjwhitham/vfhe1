@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <algorithm>
+// #include "gmpxx.h"
 
 // FIXME check if this is being used correctly, i.e. are some negs required?
 // typedef __uint128_t i128;
@@ -143,6 +144,15 @@ i128 mod_(i128 val, i128 q) {
     }
     return val;
 }
+
+// mpz_class mod_(mpz_class val, mpz_class q) {
+//     val %= q;
+//     if (val < 0) {
+//         val += q;
+//     }
+//     return val;
+// }
+
 
 vector_i128 mod_(const vector_i128& vals, i128 q) {
     vector_i128 res(vals.size());

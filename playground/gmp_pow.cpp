@@ -6,6 +6,29 @@
 #include <cstdlib>
 #include <cstring>
 
+mpz_class mod_(mpz_class val, mpz_class q) {
+    val %= q;
+    if (val < 0) {
+        val += q;
+    }
+    return val;
+}
+
+// mpz_class pow_(mpz_class base, mpz_class power, mpz_class FIELD_MODULUS, mpz_class GROUP_MODULUS) {
+mpz_class pow_(mpz_class base, mpz_class power, mpz_class GROUP_MODULUS) {
+    // power = mod_(power, FIELD_MODULUS);
+    // base = mod_(base, GROUP_MODULUS);
+    mpz_class result = 1;
+    while (power > 0) {
+        bool is_power_odd = (power % 2) == 1;
+        if (is_power_odd)
+            result = (result * base) % GROUP_MODULUS;
+        power >>= 1;
+        base = (base * base) % GROUP_MODULUS;
+    }
+    return result;
+}
+
 int main(int argc, char* argv[]) {
     if (argc != 2) {
         std::cerr << "Usage: " << argv[0] << " <number_of_integers>\n";
@@ -61,7 +84,7 @@ int main(int argc, char* argv[]) {
     // Generate random 256 bit numbers (plain integers)
     std::vector<mpz_class> nums1;
     nums1.reserve(ncount);
-    int n_bits_exponent = 160;
+    const unsigned int n_bits_exponent = 160;
     // int n_bits_exponent = 256;
     for (int i = 0; i < ncount; ++i) nums1.emplace_back(rng.get_z_bits(n_bits_exponent));
 
@@ -75,10 +98,27 @@ int main(int argc, char* argv[]) {
     }
     auto end_pow = std::chrono::high_resolution_clock::now();
     auto total_ms_pow = std::chrono::duration<double,std::milli>(end_pow - start_pow).count();
+
     // Timing
     std::cout << "=== High-level GMP (a^b % p) ===\n";
     std::cout << "Total time (loop only): " << total_ms_pow << " ms\n";
     std::cout << "Average per power: " << (total_ms_pow / (ncount * ncount) * 1000.0) << " µs\n\n";
 
+    // -------------------------------
+    // 3) My pow timing: (a*b) % modulus
+    // -------------------------------
+    auto start_pow1 = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < ncount; ++i) {
+        for (int j = 0; j < ncount; ++j) {
+            mpz_class exp = pow_(nums[i], nums[j], modulus);
+            (void)exp;
+        }
+    }
+    auto end_pow1 = std::chrono::high_resolution_clock::now();
+    auto total_ms_pow1 = std::chrono::duration<double,std::milli>(end_pow1 - start_pow1).count();
+
+    std::cout << "=== My pow (a^b % p) ===\n";
+    std::cout << "Total time (loop only): " << total_ms_pow1 << " ms\n";
+    std::cout << "Average per power: " << (total_ms_pow1 / (ncount * ncount) * 1000.0) << " µs\n\n";
     return 0;
 }

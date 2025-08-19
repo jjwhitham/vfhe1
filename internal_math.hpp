@@ -17,41 +17,41 @@ constexpr long long safe_mod(long long x, long long m) {
     return x;
 }
 
-// Fast modular multiplication by barrett reduction
-// Reference: https://en.wikipedia.org/wiki/Barrett_reduction
-// NOTE: reconsider after Ice Lake
-struct barrett {
-    unsigned int _m;
-    unsigned long long im;
+// // Fast modular multiplication by barrett reduction
+// // Reference: https://en.wikipedia.org/wiki/Barrett_reduction
+// // NOTE: reconsider after Ice Lake
+// struct barrett {
+//     unsigned int _m;
+//     unsigned long long im;
 
-    // @param m `1 <= m`
-    explicit barrett(unsigned int m) : _m(m), im((unsigned long long)(-1) / m + 1) {}
+//     // @param m `1 <= m`
+//     explicit barrett(unsigned int m) : _m(m), im((unsigned long long)(-1) / m + 1) {}
 
-    // @return m
-    unsigned int umod() const { return _m; }
+//     // @return m
+//     unsigned int umod() const { return _m; }
 
-    // @param a `0 <= a < m`
-    // @param b `0 <= b < m`
-    // @return `a * b % m`
-    unsigned int mul(unsigned int a, unsigned int b) const {
-        // [1] m = 1
-        // a = b = im = 0, so okay
+//     // @param a `0 <= a < m`
+//     // @param b `0 <= b < m`
+//     // @return `a * b % m`
+//     unsigned int mul(unsigned int a, unsigned int b) const {
+//         // [1] m = 1
+//         // a = b = im = 0, so okay
 
-        // [2] m >= 2
-        // im = ceil(2^64 / m)
-        // -> im * m = 2^64 + r (0 <= r < m)
-        // let z = a*b = c*m + d (0 <= c, d < m)
-        // a*b * im = (c*m + d) * im = c*(im*m) + d*im = c*2^64 + c*r + d*im
-        // c*r + d*im < m * m + m * im < m * m + 2^64 + m <= 2^64 + m * (m + 1) < 2^64 * 2
-        // ((ab * im) >> 64) == c or c + 1
-        unsigned long long z = a;
-        z *= b;
-        unsigned long long x =
-            (unsigned long long)(((u128)(z)*im) >> 64);
-        unsigned long long y = x * _m;
-        return (unsigned int)(z - y + (z < y ? _m : 0));
-    }
-};
+//         // [2] m >= 2
+//         // im = ceil(2^64 / m)
+//         // -> im * m = 2^64 + r (0 <= r < m)
+//         // let z = a*b = c*m + d (0 <= c, d < m)
+//         // a*b * im = (c*m + d) * im = c*(im*m) + d*im = c*2^64 + c*r + d*im
+//         // c*r + d*im < m * m + m * im < m * m + 2^64 + m <= 2^64 + m * (m + 1) < 2^64 * 2
+//         // ((ab * im) >> 64) == c or c + 1
+//         unsigned long long z = a;
+//         z *= b;
+//         unsigned long long x =
+//             (unsigned long long)(((u128)(z)*im) >> 64);
+//         unsigned long long y = x * _m;
+//         return (unsigned int)(z - y + (z < y ? _m : 0));
+//     }
+// };
 
 // @param n `0 <= n`
 // @param m `1 <= m`
@@ -169,34 +169,34 @@ constexpr int primitive_root_constexpr(int m) {
 }
 template <int m> constexpr int primitive_root = primitive_root_constexpr(m);
 
-// @param n `n < 2^32`
-// @param m `1 <= m < 2^32`
-// @return sum_{i=0}^{n-1} floor((ai + b) / m) (mod 2^64)
-unsigned long long floor_sum_unsigned(unsigned long long n,
-                                      unsigned long long m,
-                                      unsigned long long a,
-                                      unsigned long long b) {
-    unsigned long long ans = 0;
-    while (true) {
-        if (a >= m) {
-            ans += n * (n - 1) / 2 * (a / m);
-            a %= m;
-        }
-        if (b >= m) {
-            ans += n * (b / m);
-            b %= m;
-        }
+// // @param n `n < 2^32`
+// // @param m `1 <= m < 2^32`
+// // @return sum_{i=0}^{n-1} floor((ai + b) / m) (mod 2^64)
+// unsigned long long floor_sum_unsigned(unsigned long long n,
+//                                       unsigned long long m,
+//                                       unsigned long long a,
+//                                       unsigned long long b) {
+//     unsigned long long ans = 0;
+//     while (true) {
+//         if (a >= m) {
+//             ans += n * (n - 1) / 2 * (a / m);
+//             a %= m;
+//         }
+//         if (b >= m) {
+//             ans += n * (b / m);
+//             b %= m;
+//         }
 
-        unsigned long long y_max = a * n + b;
-        if (y_max < m) break;
-        // y_max < m * (n + 1)
-        // floor(y_max / m) <= n
-        n = (unsigned long long)(y_max / m);
-        b = (unsigned long long)(y_max % m);
-        std::swap(m, a);
-    }
-    return ans;
-}
+//         unsigned long long y_max = a * n + b;
+//         if (y_max < m) break;
+//         // y_max < m * (n + 1)
+//         // floor(y_max / m) <= n
+//         n = (unsigned long long)(y_max / m);
+//         b = (unsigned long long)(y_max % m);
+//         std::swap(m, a);
+//     }
+//     return ans;
+// }
 
 }  // namespace internal
 
