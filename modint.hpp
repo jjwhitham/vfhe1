@@ -8,6 +8,12 @@
 #include "internal_math.hpp"
 // #include "internal_type_traits.hpp"
 
+// constexpr std::string m = "11";
+// constexpr mpz_class get_m(std::string m_) {
+//     return mpz_class(m_);
+// }
+// const mpz_class MOD = mpz_class(5);
+
 namespace atcoder {
 
 namespace internal {

@@ -86,7 +86,7 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key> compute_eval_and_veri_keys(
     auto vec_mat_mult = [](const vector_i128& vec, const rgsw_mat& mat) -> rgsw_vec {
         size_t rows = mat.n_rows();
         size_t cols = mat.n_cols();
-        assert(vec.size() == rows);
+        ASSERT(vec.size() == rows);
         rgsw_vec res(cols, mat.n_rlwes(), mat.n_polys(), mat.n_coeffs());
         for (size_t j = 0; j < cols; ++j) {
             rgsw sum(mat.n_rlwes(), mat.n_polys(), mat.n_coeffs());
@@ -115,8 +115,8 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key> compute_eval_and_veri_keys(
         p.set(0, r_1[i]);
         r_1_rgsw.set(i, enc.encode_rgsw(p).get_hash_a(eval_pows));
     }
-    assert(r_0_rgsw.size() == rF_0.size());
-    // assert(r_0_rgsw[0].rows() == rF_0[0].rows()); // FIXME
+    ASSERT(r_0_rgsw.size() == rF_0.size());
+    // ASSERT(r_0_rgsw[0].rows() == rF_0[0].rows()); // FIXME
 
     hashed_a_rgsw_vec rF_0_r_1(rF_0.size());
     hashed_a_rgsw_vec rF_1_r_0(rF_1.size());
@@ -217,7 +217,7 @@ Proof compute_proof(
     // pow_() raises each element of the vector to the power of each element of the hashed_rlwe_decomp_vec
     // and returns a hashed_rlwe
     auto pow_ = [](const std::vector<hashed_a_poly>& vec, const rlwe_vec& rv) -> hashed_rlwe {
-        assert(vec.size() == rv.size());
+        ASSERT(vec.size() == rv.size());
         hashed_rlwe res(rv.n_polys());
         res.set_coeffs_to_one();
         for (size_t i = 0; i < vec.size(); i++) {
@@ -298,7 +298,7 @@ void verify_with_lin_and_dyn_checks(
     }
 
     auto vec_dot_prod = [](const vector_i128& vec, const hashed_rlwe_vec& hvec) -> hashed_rlwe {
-        assert(vec.size() == hvec.size());
+        ASSERT(vec.size() == hvec.size());
         hashed_rlwe sum(N_POLYS_IN_RLWE);
         for (size_t i = 0; i < vec.size(); ++i) {
             sum = sum + hvec.get(i) * vec[i];
@@ -306,7 +306,7 @@ void verify_with_lin_and_dyn_checks(
         return sum;
     };
     auto vec_dot_prod_enc = [](const hashed_rgsw_vec& rgsw_v, const rlwe_vec& rlwe_v, const vector_i128& eval_pows, i128 v, i128 d) -> hashed_rlwe {
-        assert(rgsw_v.size() == rlwe_v.size());
+        ASSERT(rgsw_v.size() == rlwe_v.size());
         hashed_rlwe sum(N_POLYS_IN_RLWE);
         for (size_t i = 0; i < rgsw_v.size(); ++i) {
             // For each element, hash rlwe_v[i] and multiply by rgsw_v[i]
@@ -376,13 +376,14 @@ void run_control_loop() {
     i128 ss = pms.s;
     i128 L = pms.L;
     i128 iter_ = pms.iter_;
-    DEBUG(iter_ = 1000;)
+    DEBUG(iter_ = 2;)
 
     i128 from = 1;
     i128 to_inclusive = q - 1;
     // TODO Params should sample
     auto knowledge_exps = pms.sample_knowledge_exponents(from, to_inclusive);
-    knowledge_exps = vector_i128({1, 1, 3, 3, 2, 3});
+    // TODO make DEBUG
+    DEBUG(knowledge_exps = vector_i128({1, 1, 3, 3, 2, 3});)
     // DEBUG(std::cout << "knowledge_exps: ";)
     // DEBUG(print_vector_i128(knowledge_exps);)
     i128 alpha_0 = knowledge_exps.at(0);
@@ -399,20 +400,20 @@ void run_control_loop() {
     // s: 1, 3,
     auto verification_vectors = pms.sample_verification_vectors(m, n, from, to_inclusive);
     vector_i128 r_0 = verification_vectors.at(0);
-    r_0 = vector_i128({1, 2, 4, 3, 1});
+    DEBUG1(r_0 = vector_i128({1, 2, 4, 3, 1});)
     // DEBUG(std::cout << "r_0: ";)
     // DEBUG(print_vector_i128(r_0);)
     vector_i128 r_1 = verification_vectors.at(1);
-    r_1 = vector_i128({2, 4, 1, 4, 2});
+    DEBUG1(r_1 = vector_i128({2, 4, 1, 4, 2});)
     // DEBUG(std::cout << "r_1: ";)
     // DEBUG(print_vector_i128(r_1);)
     vector_i128 s = verification_vectors.at(2);
-    s = vector_i128({1, 3});
+    DEBUG1(s = vector_i128({1, 3});)
     // DEBUG(std::cout << "s: ";)
     // DEBUG(print_vector_i128(s);)
 
-    const i128 N = N_;
-    DEBUG1(const i128 N = 1 << 2;)
+    i128 N = N_;
+    DEBUG1(N = 2;)
     // DEBUG(std::cout << "N_THREADS: ";)
     // DEBUG(std::cout << N_THREADS << "\n" ;)
     // DEBUG(std::cout << "N: ";)
@@ -423,7 +424,8 @@ void run_control_loop() {
     // DEBUG(std::cout << "sk: ";)
     // DEBUG(print_vector_i128(sk);)
     // TODO move to Params
-    const i128 d = 4;
+    i128 d = 4;
+    DEBUG1(d = 2;)
     // const i128 d = 2;
     // DEBUG(std::cout << "d: ";)
     // DEBUG(std::cout << print_to_string_i128(d) << "\n" ;)
@@ -469,7 +471,7 @@ void run_control_loop() {
     auto x_cont_ctx_hashed = x_cont_ctx.get_hash(eval_pows);
 
     auto vec_dot_prod = [](const vector_i128& vec, const hashed_rlwe_vec& hvec) -> hashed_rlwe {
-        assert(vec.size() == hvec.size());
+        ASSERT(vec.size() == hvec.size());
         hashed_rlwe sum(N_POLYS_IN_RLWE);
         for (size_t i = 0; i < vec.size(); ++i) {
             sum = sum + hvec.get(i) * vec[i];
@@ -482,7 +484,7 @@ void run_control_loop() {
     old_proof.g_1 = g1;
 
     auto mat_vec_mult = [](const matrix_double& mat, const vector_double& vec) -> vector_double {
-        assert(mat[0].size() == vec.size());
+        ASSERT(mat[0].size() == vec.size());
         vector_double result(mat.size());
         for (size_t i = 0; i < mat.size(); ++i) {
             double sum = 0;
@@ -704,9 +706,9 @@ int main() {
 // DONE timings
 //  TODO csv output for timings
 // TODO 128bit atcoder
-// TODO fix verify bug
+// DONE fix verify bug
 // TODO multiprecision library
-// TODO add secure hash
+// DONE add secure hash
 // TODO increase group size
 // TODO implement packing?
 // TODO keep polys in NTT form?

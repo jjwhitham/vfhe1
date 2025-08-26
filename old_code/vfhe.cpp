@@ -272,7 +272,7 @@ vector<i128>
 add_vec(vector<i128> v1, vector<i128> v2, i128 q) {
     vector<i128> v(v1.size());
     for (size_t i = 0; i < v1.size(); i++) {
-        assert(v.at(i) == 0);
+        ASSERT(v.at(i) == 0);
         v.at(i) = (v1.at(i) + v2.at(i)) % q;
     }
     return v;
@@ -307,7 +307,7 @@ void test_scalar_mat_mult() {
     cout << "M[2][1]: ";
     print_i128(M.at(2).at(1));
     cout << "\n";
-    assert(M.at(2).at(1) == 12);
+    ASSERT(M.at(2).at(1) == 12);
 }
 
 // class array2d_vec {

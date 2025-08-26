@@ -202,19 +202,48 @@ std::vector<mint> convolution_naive(const std::vector<mint>& a,
 // template <class mint, internal::is_static_modint_t<mint>* = nullptr>
 template <class mint>
 std::vector<mint> convolution_fft(std::vector<mint> a, std::vector<mint> b) {
-    int n = int(a.size()), m = int(b.size());
-    int z = (int)internal::bit_ceil((unsigned int)(n + m - 1));
-    a.resize(z);
+    int n = int(a.size());
+    // int z = (int)internal::bit_ceil((unsigned int)(n + m - 1));
+    a.resize(2 * n);
     internal::butterfly(a);
-    b.resize(z);
+    b.resize(2 * n);
     internal::butterfly(b);
-    for (int i = 0; i < z; i++) {
+    for (int i = 0; i < 2 * n; i++) {
         a[i] *= b[i];
     }
     internal::butterfly_inv(a);
-    a.resize(n + m - 1);
-    mint iz = mint(z).inv();
-    for (int i = 0; i < n + m - 1; i++) a[i] *= iz;
+    a.resize(2 * n - 1);
+    mint iz = mint(2 * n).inv();
+    for (int i = 0; i < 2 * n - 1; i++) a[i] *= iz;
+    return a;
+}
+
+// TODO
+// template <class mint, internal::is_static_modint_t<mint>* = nullptr>
+template <class mint>
+std::vector<mint> _ntt(std::vector<mint> a) {
+    int n = int(a.size());
+    // int z = (int)internal::bit_ceil((unsigned int)(2 * n - 1));
+    a.resize(2 * n);
+    internal::butterfly(a);
+    // a.resize(2 * n - 1);
+    // mint iz = mint(z).inv();
+    // for (int i = 0; i < 2 * n - 1; i++) a[i] *= iz;
+    return a;
+}
+
+// TODO
+// template <class mint, internal::is_static_modint_t<mint>* = nullptr>
+template <class mint>
+std::vector<mint> _intt(std::vector<mint> a) {
+    int m = int(a.size());
+    int n = m / 2;
+    // int z = (int)internal::bit_ceil((unsigned int)(2 * n - 1));
+    // a.resize(2 * n);
+    internal::butterfly_inv(a);
+    a.resize(2 * n - 1);
+    mint iz = mint(2 * n).inv();
+    for (int i = 0; i < 2 * n - 1; i++) a[i] *= iz;
     return a;
 }
 
@@ -226,8 +255,8 @@ std::vector<mint> convolution(std::vector<mint>&& a, std::vector<mint>&& b) {
     int n = int(a.size()), m = int(b.size());
     if (!n || !m) return {};
 
-    int z = (int)internal::bit_ceil((unsigned int)(n + m - 1));
-    assert((mint::mod() - 1) % z == 0);
+    // int z = (int)internal::bit_ceil((unsigned int)(n + m - 1));
+    // assert((mint::mod() - 1) % z == 0);
 
     if (std::min(n, m) <= 60) return convolution_naive(std::move(a), std::move(b));
     return internal::convolution_fft(std::move(a), std::move(b));
@@ -256,8 +285,8 @@ std::vector<T> convolution(const std::vector<T>& a, const std::vector<T>& b) {
 
     using mint = static_modint<mod>;
 
-    int z = (int)internal::bit_ceil((unsigned int)(n + m - 1));
-    assert((mint::mod() - 1) % z == 0);
+    // int z = (int)internal::bit_ceil((unsigned int)(n + m - 1));
+    // assert((mint::mod() - 1) % z == 0);
 
     std::vector<mint> a2(n), b2(m);
     for (int i = 0; i < n; i++) {
@@ -269,6 +298,74 @@ std::vector<T> convolution(const std::vector<T>& a, const std::vector<T>& b) {
     auto c2 = convolution(std::move(a2), std::move(b2));
     std::vector<T> c(n + m - 1);
     for (int i = 0; i < n + m - 1; i++) {
+        c[i] = c2[i].val();
+    }
+    return c;
+}
+
+template <class mint>
+std::vector<mint> ntt(std::vector<mint>&& a) {
+    int n = int(a.size());
+    if (!n) return {};
+
+    // int z = (int)internal::bit_ceil((unsigned int)(2 * n - 1));
+    assert((mint::mod() - 1) % (2 * n) == 0);
+
+    // if (std::min(n, m) <= 60) return convolution_naive(std::move(a), std::move(b));
+    return internal::_ntt(std::move(a));
+}
+
+template <class mint>
+std::vector<mint> intt(std::vector<mint>&& a) {
+    int m = int(a.size());
+    if (!m) return {};
+    int n = m / 2;
+    // int z = (int)internal::bit_ceil((unsigned int)(2 * n - 1));
+    assert((mint::mod() - 1) % (2 * n) == 0);
+
+    // if (std::min(n, m) <= 60) return convolution_naive(std::move(a), std::move(b));
+    return internal::_intt(std::move(a));
+}
+
+template <unsigned int mod = 998244353, class T>
+std::vector<T> ntt(const std::vector<T>& a) {
+    int n = int(a.size());
+    if (!n) return {};
+
+    using mint = static_modint<mod>;
+
+    // int z = (int)internal::bit_ceil((unsigned int)(2 * n - 1));
+    assert((mint::mod() - 1) % (2 * n) == 0);
+
+    std::vector<mint> a2(n);
+    for (int i = 0; i < n; i++) {
+        a2[i] = mint(a[i]);
+    }
+    auto c2 = ntt(std::move(a2));
+    std::vector<T> c(2 * n);
+    for (int i = 0; i < 2 * n; i++) {
+        c[i] = c2[i].val();
+    }
+    return c;
+}
+
+template <unsigned int mod = 998244353, class T>
+std::vector<T> intt(const std::vector<T>& a) {
+    int n = int(a.size());
+    if (!n) return {};
+
+    using mint = static_modint<mod>;
+
+    // int z = (int)internal::bit_ceil((unsigned int)(2 * n - 1));
+    assert((mint::mod() - 1) % n == 0);
+
+    std::vector<mint> a2(n);
+    for (int i = 0; i < n; i++) {
+        a2[i] = mint(a[i]);
+    }
+    auto c2 = intt(std::move(a2));
+    std::vector<T> c(2 * n - 1);
+    for (int i = 0; i < 2 * n - 1; i++) {
         c[i] = c2[i].val();
     }
     return c;

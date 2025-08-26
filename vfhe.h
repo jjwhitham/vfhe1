@@ -31,8 +31,14 @@
 #  define DEBUG1(x)
 #endif
 
+#ifdef ASSERT_ON
+#  define ASSERT(x) assert(x)
+#else
+#  define ASSERT(x)
+#endif
+
 #ifndef N_THREADS
-#  define N_THREADS 8
+#  define N_THREADS 1
 #endif
 
 typedef struct {
@@ -471,10 +477,10 @@ public:
     auto get_hash_a(vector_i128 eval_pows) const;
 
     std::vector<i128> convolution_(const std::vector<i128>& a, const std::vector<i128>& b) const {
-        i128 n = a.size();
         std::vector<i128> a_pad = a, b_pad = b;
         std::vector<i128> conv = atcoder::convolution<FIELD_MODULUS>(a_pad, b_pad);
-        assert(conv.size() == 2 * n - 1);
+        i128 n = a.size();
+        ASSERT(conv.size() == 2 * n - 1);
         return conv;
     }
 
@@ -521,7 +527,7 @@ public:
         // call negacyclic_convolution_()
         vector_i128 conv = convolution_(a, b);
         size_t n_conv = 2 * n - 1;
-        assert(conv.size() == n_conv);
+        ASSERT(conv.size() == n_conv);
         // create poly of result
         poly res(n_conv);
         for (size_t i = 0; i < n_conv; i++)
@@ -532,7 +538,7 @@ public:
         return res;
     }
     poly convolve(const poly& other) const {
-        assert(n_coeffs() == other.n_coeffs());
+        ASSERT(n_coeffs() == other.n_coeffs());
         bool using_ntt = true;
         if (using_ntt)
             return convolve_ntt(other);
@@ -553,7 +559,7 @@ public:
         }
         // call negacyclic_convolution_()
         vector_i128 conv = negacyclic_convolution_(a, b);
-        assert(conv.size() == n);
+        ASSERT(conv.size() == n);
         // create poly of result
         poly res(n);
         for (size_t i = 0; i < n; i++)
@@ -577,10 +583,21 @@ public:
         }
         return neg_conv;
     }
+    void convert_to_ntt() {
+        ASSERT(isNTT == false);
+        size_t n = size();
+        vector_i128 self(n);
+        for (size_t i = 0; i < n; i++)
+            self.at(i) = get(i);
+
+        std::vector<i128> ntt_self = atcoder::ntt<FIELD_MODULUS>(self);
+        isNTT = true;
+    }
+
     using array1d<i128, poly>::operator*;
     poly operator*(const poly& other) const {
         size_t N = n_coeffs();
-        assert(N == other.n_coeffs());
+        ASSERT(N == other.n_coeffs());
         bool using_ntt = true;
         if (using_ntt)
             return nega_ntt(other);
@@ -591,10 +608,10 @@ public:
         // TIMING(int thread_num = omp_get_thread_num();)
         TIMING(int thread_num = 0;)
         TIMING(times_counts.calls_conv_to_nega[thread_num] += 1;)
-        assert(n_coeffs() == 2 * N - 1);
+        ASSERT(n_coeffs() == 2 * N - 1);
         i128 conv_degree = n_coeffs() - 1;
         // HACK can't return *this after defining array1d move semantics
-        // assert(conv_degree >= N);
+        // ASSERT(conv_degree >= N);
         if (conv_degree < N)
             return *this;
         poly negacyclic(N);
@@ -624,7 +641,7 @@ public:
     }
     i128 get_hash_sec(const poly& other) const {
         // HACK get around gr having hashed_a_polys of length 2n-1, but x_nega_ only length n
-        assert(size() == other.size() || size() == (2 * other.size() - 1));
+        ASSERT(size() == other.size() || size() == (2 * other.size() - 1));
         i128 result = 1;
         poly raised(other.size());
         for (size_t i = 0; i < other.size(); i++) {
@@ -762,7 +779,7 @@ public:
     hashed_a_rlwe() : array1d<hashed_a_poly, hashed_a_rlwe>() {}
     hashed_a_rlwe(size_t n_hashed_a_polys) : array1d<hashed_a_poly, hashed_a_rlwe>(n_hashed_a_polys) {}
     hashed_a_rlwe(size_t n_hashed_a_polys, size_t n_coeffs) : array1d<hashed_a_poly, hashed_a_rlwe>(n_hashed_a_polys) {
-        assert(n_hashed_a_polys == N_POLYS_IN_RLWE);
+        ASSERT(n_hashed_a_polys == N_POLYS_IN_RLWE);
         for (size_t i = 0; i < n_hashed_a_polys; i++) {
             set(i, hashed_a_poly(n_coeffs));
         }
@@ -786,7 +803,7 @@ public:
     // NOTE hashed_rlwe always has two hashed_polys
     hashed_rlwe() : array1d<i128, hashed_rlwe>() {}
     hashed_rlwe(size_t n_hashed_polys) : array1d<i128, hashed_rlwe>(n_hashed_polys) {
-        assert(n_hashed_polys == N_POLYS_IN_RLWE);
+        ASSERT(n_hashed_polys == N_POLYS_IN_RLWE);
     }
     auto& get_hashed_poly(size_t n) const {
         return get(n);
@@ -807,10 +824,10 @@ public:
     // NOTE rlwe always has two polys
     rlwe() : array1d<poly, rlwe>() {}
     rlwe(size_t n_polys) : array1d<poly, rlwe>(n_polys) {
-        assert(n_polys == 2);
+        ASSERT(n_polys == 2);
     }
     rlwe(size_t n_polys, size_t n_coeffs) : array1d<poly, rlwe>(n_polys) {
-        assert(n_polys == 2);
+        ASSERT(n_polys == 2);
         for (size_t i = 0; i < n_polys; i++) {
             set(i, poly(n_coeffs));
         }
@@ -856,11 +873,11 @@ public:
         i128 power = static_cast<i128>(std::ceil((std::log2(FIELD_MODULUS) / d)));
         // TODO remove double up of computation of v in run_control_loop
         i128 v = 1 << power;
-        assert(v == v_);
-        assert(d >= 1);
+        ASSERT(v == v_);
+        ASSERT(d >= 1);
         // FIXME not sure if we really need the lower bounds check. Fails sometimes
-        // assert(v**(d-1) < q and q <= v**d)
-        assert(FIELD_MODULUS <= static_cast<i128>(std::pow(v, d)));
+        // ASSERT(v**(d-1) < q and q <= v**d)
+        ASSERT(FIELD_MODULUS <= static_cast<i128>(std::pow(v, d)));
 
         // decompose poly into d polynomials of degree d-1
         // polys = []
@@ -877,7 +894,7 @@ public:
             for (size_t i = 0; i < n_coeffs(); i++) {
                 for (size_t j = 0; j < d; j++) {
                     i128 decomped_coeff = (v - 1) & (pol.get_coeff(i) / pow_(v, j));
-                    assert(decomped_coeff < v);
+                    ASSERT(decomped_coeff < v);
                     polys.get_poly(d * k + j).set(i, decomped_coeff);
                 }
             }
@@ -903,7 +920,7 @@ public:
         size_t n_hashed_rlwes, size_t n_hashed_polys
     ) : array1d<hashed_rlwe, hashed_rlwe_vec>(n_hashed_rlwes) {
         for (size_t i = 0; i < n_hashed_rlwes; i++) {
-            assert(n_hashed_polys == 2);
+            ASSERT(n_hashed_polys == 2);
             set(i, hashed_rlwe(n_hashed_polys));
         }
     }
@@ -991,9 +1008,9 @@ public:
     // using array1d<hashed_a_rlwe, hashed_a_rgsw>::pow;
     hashed_rlwe get_hash_sec(const rlwe_decomp& other) const {
         size_t n_polys_ = n_hashed_a_polys();
-        assert(n_polys_ == N_POLYS_IN_RLWE);
+        ASSERT(n_polys_ == N_POLYS_IN_RLWE);
         size_t N = size();
-        assert(N == other.size());
+        ASSERT(N == other.size());
         hashed_rlwe_vec res_vec(N, n_polys_);
         // #pragma omp parallel for num_threads(2)
         for (size_t i = 0; i < N; i++) {
@@ -1037,9 +1054,9 @@ public:
     using array1d<hashed_rlwe, hashed_rgsw>::pow;
     hashed_rlwe pow(const hashed_rlwe_decomp& other) const {
         size_t n_polys_ = n_hashed_polys();
-        assert(n_polys_ == N_POLYS_IN_RLWE);
+        ASSERT(n_polys_ == N_POLYS_IN_RLWE);
         size_t N = size();
-        assert(N == other.size());
+        ASSERT(N == other.size());
         hashed_rlwe_vec res_vec(N, n_polys_);
         // #pragma omp parallel for num_threads(2)
         for (size_t i = 0; i < N; i++) {
@@ -1087,7 +1104,7 @@ public:
     using array1d<rlwe, rgsw>::operator*;
     rlwe operator*(const rlwe_decomp& other) const {
         size_t N = size();
-        assert(N == other.size());
+        ASSERT(N == other.size());
         rlwe res(n_polys(), n_coeffs());
         // TODO wrap in loop
         poly& p0 = res.get(0);
@@ -1105,7 +1122,7 @@ public:
 
     rlwe convolve(const rlwe_decomp& other) const {
         size_t N = size();
-        assert(N == other.size());
+        ASSERT(N == other.size());
         rlwe res(n_polys(), 2 * n_coeffs() - 1);
         // TODO wrap in loop
         poly& p0 = res.get(0);
@@ -1129,7 +1146,7 @@ public:
         size_t n_polys_ = n_polys();
         size_t n_coeffs_ = n_coeffs();
         size_t N = size();
-        assert(N == other.size());
+        ASSERT(N == other.size());
         rlwe_vec res_vec(N, n_polys_, n_coeffs_);
         // TODO wrap in loop
         // #pragma omp parallel for num_threads(N_THREADS)
@@ -1190,15 +1207,15 @@ public:
     }
     size_t n_hashed_polys() const {
         size_t n_hashed_polys = get_hashed_rgsw(0).n_hashed_polys();
-        assert(n_hashed_polys == 2);
+        ASSERT(n_hashed_polys == 2);
         return n_hashed_polys;
     }
     using array1d<hashed_rgsw, hashed_rgsw_vec>::pow;
     hashed_rlwe pow(const hashed_rlwe_decomp_vec& other) const {
         size_t n = other.size();
-        assert(size() == n);
+        ASSERT(size() == n);
         size_t n_hashed_polys_ = n_hashed_polys();
-        assert(n_hashed_polys_ == 2);
+        ASSERT(n_hashed_polys_ == 2);
         hashed_rlwe_vec res_vec(n, n_hashed_polys_);
         hashed_rlwe res(n_hashed_polys_);
         res.set_coeffs_to_one();
@@ -1238,15 +1255,15 @@ public:
     }
     size_t n_hashed_a_polys() const {
         size_t n_hashed_a_polys = get_hashed_a_rgsw(0).n_hashed_a_polys();
-        assert(n_hashed_a_polys == 2);
+        ASSERT(n_hashed_a_polys == 2);
         return n_hashed_a_polys;
     }
     // using array1d<hashed_a_rgsw, hashed_a_rgsw_vec>::pow;
     hashed_rlwe get_hash_sec(const rlwe_decomp_vec& other) const {
         size_t n = other.size();
-        assert(size() == n);
+        ASSERT(size() == n);
         size_t n_hashed_a_polys_ = n_hashed_a_polys();
-        assert(n_hashed_a_polys_ == 2);
+        ASSERT(n_hashed_a_polys_ == 2);
         hashed_rlwe_vec res_vec(n, n_hashed_a_polys_);
         hashed_rlwe res(n_hashed_a_polys_);
         res.set_coeffs_to_one();
@@ -1293,7 +1310,7 @@ public:
     using array1d<rgsw, rgsw_vec>::operator*;
     rlwe operator*(const rlwe_decomp_vec& other) const {
         size_t n = other.size();
-        assert(size() == n);
+        ASSERT(size() == n);
         rlwe sum(n_polys(), n_coeffs());
         for (size_t i = 0; i < n; i++) {
             auto val = get(i) * other.get(i);
@@ -1304,7 +1321,7 @@ public:
     using array1d<rgsw, rgsw_vec>::pow;
     rlwe pow(const rlwe_decomp_vec& other) const {
         size_t n = other.size();
-        assert(size() == n);
+        ASSERT(size() == n);
         size_t n_polys_ = n_polys();
         size_t n_coeffs_ = n_coeffs();
         rlwe_vec res_vec(n, n_polys_, n_coeffs_);
@@ -1357,11 +1374,11 @@ public:
     rlwe_vec operator*(const rlwe_decomp_vec& other) const {
         size_t rows = n_rows();
         size_t cols = n_cols();
-        assert(cols == other.size());
+        ASSERT(cols == other.size());
         size_t n_polys_ = n_polys();
         size_t n_coeffs_ = n_coeffs();
         size_t n_coeffs_other = other.n_coeffs();
-        assert(n_coeffs_ == n_coeffs_other);
+        ASSERT(n_coeffs_ == n_coeffs_other);
 
         rlwe_vec res(rows, n_polys_, n_coeffs_);
         for (size_t i = 0; i < rows; i++) {
@@ -1377,11 +1394,11 @@ public:
     rlwe_vec convolve(const rlwe_decomp_vec& other) const {
         size_t rows = n_rows();
         size_t cols = n_cols();
-        assert(cols == other.size());
+        ASSERT(cols == other.size());
         size_t n_polys_ = n_polys();
         size_t n_coeffs_ = n_coeffs();
         size_t n_coeffs_other = other.n_coeffs();
-        assert(n_coeffs_ == n_coeffs_other);
+        ASSERT(n_coeffs_ == n_coeffs_other);
 
         rlwe_vec res(rows, n_polys_, 2 * n_coeffs_ - 1);
         for (size_t i = 0; i < rows; i++) {
@@ -1397,7 +1414,7 @@ public:
     rlwe_vec pow(const rlwe_decomp_vec& other) const {
         size_t rows = n_rows();
         size_t cols = n_cols();
-        assert(cols == other.size());
+        ASSERT(cols == other.size());
         rgsw& rg = get(0, 0);
         size_t n_coeffs = rg.n_coeffs();
         size_t n_polys = rg.n_polys();
@@ -1440,7 +1457,7 @@ public:
     rgsw_vec operator*(const rgsw_mat& other) const {
         size_t rows = other.n_rows();
         size_t cols = other.n_cols();
-        assert(rows == size());
+        ASSERT(rows == size());
         size_t n_rlwes = other.n_rlwes();
         size_t n_polys = other.n_polys();
         size_t n_coeffs = other.n_coeffs();
@@ -1458,7 +1475,7 @@ public:
     }
     rlwe operator*(const rlwe_vec& other) const {
         size_t n = other.size();
-        assert(size() == n);
+        ASSERT(size() == n);
         size_t n_polys = other.get(0).size();
         size_t n_coeffs = other.get(0).get(0).size();
         rlwe sum(n_polys, n_coeffs);
@@ -1472,7 +1489,7 @@ public:
     using array1d<i128, veri_vec_scalar>::pow;
     rlwe pow(const rlwe_vec& other) const {
         size_t n = other.size();
-        assert(size() == n);
+        ASSERT(size() == n);
         size_t n_polys = other.get(0).size();
         size_t n_coeffs = other.get(0).get(0).size();
         rlwe product(n_polys, n_coeffs);
@@ -1543,19 +1560,19 @@ private:
     vector_i128 scalar_vec_mult(i128 scalar, vector_double& vec, i128 q) {
         // TODO update to array1d<i128> (add as another class?)
         vector_i128 result(vec.size());
-        assert(result.capacity() == result.size());
+        ASSERT(result.capacity() == result.size());
         for (size_t i = 0; i < vec.size(); ++i) {
             result.at(i) = mod_(static_cast<i128>(std::round(scalar * vec[i])), q);
         }
         return result;
     }
 
-    void generate_field_and_group_params() {
-        // TODO use NTL and add funcs from Python implementation
-        p = GROUP_MODULUS;
-        q = FIELD_MODULUS;
-        g = GENERATOR;
-    }
+    // void generate_field_and_group_params() {
+    //     // TODO use NTL and add funcs from Python implementation
+    //     p = GROUP_MODULUS;
+    //     q = FIELD_MODULUS;
+    //     g = GENERATOR;
+    // }
 
 public:
     Params() :
@@ -1566,15 +1583,15 @@ public:
         s(10001),
         L(10001),
         r(10001),
-        iter_(10),
+        iter_(3),
         F(F_.size(), F_.at(0).size()),
         G_bar(scalar_mat_mult(s, G, q, G.size(), G.at(0).size())),
         R_bar(scalar_mat_mult(s, R, q, R.size(), R.at(0).size())),
         H_bar(scalar_mat_mult(s, H, q, H.size(), H.at(0).size()))
     {
         // TODO update or remove
-        assert(A.size() == B.size());
-        assert(A.size() == F_.size());
+        ASSERT(A.size() == B.size());
+        ASSERT(A.size() == F_.size());
         // generate_field_and_group_params();
         // TODO move into initialiser list
         x_cont_init_scaled = scalar_vec_mult(r * s * L, x_cont_init, q);

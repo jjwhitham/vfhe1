@@ -5,8 +5,8 @@
 #include <numeric>
 #include <type_traits>
 
-typedef __int128_t i128;
-typedef __uint128_t u128;
+// typedef __int128_t i128;
+// typedef __uint128_t u128;
 
 namespace atcoder {
 

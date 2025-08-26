@@ -3,7 +3,7 @@
 
 #include <utility>
 
-typedef __uint128_t u128;
+// typedef __uint128_t u128;
 
 namespace atcoder {
 

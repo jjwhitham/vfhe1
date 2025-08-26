@@ -5,9 +5,6 @@
 #include <numeric>
 #include <type_traits>
 
-typedef __int128_t i128;
-typedef __uint128_t u128;
-
 namespace atcoder {
 
 namespace internal {
@@ -15,23 +12,21 @@ namespace internal {
 #ifndef _MSC_VER
 template <class T>
 using is_signed_int128 =
-    typename std::conditional<std::is_same<T, i128>::value ||
-                                  std::is_same<T, i128>::value,
+    typename std::conditional<std::is_same<T, __int128_t>::value,
                               std::true_type,
                               std::false_type>::type;
 
 template <class T>
 using is_unsigned_int128 =
-    typename std::conditional<std::is_same<T, u128>::value ||
-                                  std::is_same<T, u128>::value,
+    typename std::conditional<std::is_same<T, __uint128_t>::value,
                               std::true_type,
                               std::false_type>::type;
 
 template <class T>
 using make_unsigned_int128 =
-    typename std::conditional<std::is_same<T, i128>::value,
-                              u128,
-                              u128>;
+    typename std::conditional<std::is_same<T, __int128_t>::value,
+                              __uint128_t,
+                              __uint128_t>;
 
 template <class T>
 using is_integral = typename std::conditional<std::is_integral<T>::value ||

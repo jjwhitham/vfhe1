@@ -126,7 +126,7 @@ public:
     }
 
     poly decrypt_rlwe(const rlwe& ctx) const {
-        assert(ctx.n_polys() == 2);
+        ASSERT(ctx.n_polys() == 2);
         poly b = ctx.get_poly(0);
         poly a = ctx.get_poly(1);
 
