@@ -67,6 +67,8 @@ constexpr i128 N_ = 4096;
 constexpr i128 GROUP_MODULUS = 17180000273;
 constexpr i128 FIELD_MODULUS = 1073750017;
 constexpr i128 GENERATOR = 65536;
+constexpr i128 NTH_ROU = 625534531;
+constexpr i128 TWO_ROU = 996876704;
 
 
 

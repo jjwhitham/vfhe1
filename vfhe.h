@@ -10,6 +10,7 @@
 #include "omp.h"
 #include "shared.h"
 #include "convolution.hpp" // Download from AtCoder ACL
+#include "ntt.hpp"
 
 // using namespace atcoder;
 
@@ -477,9 +478,27 @@ public:
     auto get_hash_a(vector_i128 eval_pows) const;
 
     std::vector<i128> convolution_(const std::vector<i128>& a, const std::vector<i128>& b) const {
-        std::vector<i128> a_pad = a, b_pad = b;
-        std::vector<i128> conv = atcoder::convolution<FIELD_MODULUS>(a_pad, b_pad);
         i128 n = a.size();
+        std::vector<i128> a_pad = a, b_pad = b;
+        a_pad.resize(2 * n);
+        b_pad.resize(2 * n);
+        for (size_t i = n; i < 2 * n; i++) {
+            assert(a_pad[i] == 0);
+            assert(b_pad[i] == 0);
+        }
+        // std::vector<i128> conv = atcoder::convolution<FIELD_MODULUS>(a_pad, b_pad);
+        constexpr u128 INV_2ROU = pow_constexpr(TWO_ROU, FIELD_MOD - 2, FIELD_MOD);
+        constexpr u128 INV_2N = pow_constexpr(2 * POLY_SIZE, FIELD_MOD - 2, FIELD_MOD);
+        constexpr arr_u128 psi_pows = get_rou_pows(TWO_ROU);
+        constexpr arr_u128 psi_inv_pows = get_rou_pows(INV_2ROU);
+        ntt_iter(a_pad, psi_pows);
+        ntt_iter(b_pad, psi_pows);
+        for (size_t i = 0; i < 2 * POLY_SIZE; i++) {
+            a_pad[i] = (a_pad[i] * b_pad[i]) % FIELD_MOD;
+        }
+        intt_iter(a_pad, psi_inv_pows, INV_2N);
+        a_pad.resize(2 * n - 1);
+        std::vector<i128> conv = a_pad;
         ASSERT(conv.size() == 2 * n - 1);
         return conv;
     }
