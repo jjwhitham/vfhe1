@@ -38,6 +38,12 @@
 #  define ASSERT(x)
 #endif
 
+#ifdef CHECK_ON
+#  define CHECK(x)
+#else
+#  define CHECK(x)
+#endif
+
 #ifndef N_THREADS
 #  define N_THREADS 1
 #endif
@@ -147,9 +153,9 @@ public:
     }
     // T& get(size_t n, bool disable_value_check = true) const {
     T& get(size_t n) const {
-        DEBUG(check_index_bounds(n);)
+        CHECK(check_index_bounds(n);)
         // if (!disable_value_check)
-        DEBUG(check_value_bounds(arr[n]);)
+        CHECK(check_value_bounds(arr[n]);)
         return arr[n];
     }
     void check_value_bounds(const T& val) const {
@@ -166,13 +172,16 @@ public:
     }
     // void set(int n, T val, bool disable_value_check = false) { // FIXME should be T& ?
     void set(int n, const T& val) {
-        DEBUG(check_index_bounds(n);)
+        CHECK(check_index_bounds(n);)
         // if (!disable_value_check)
-        DEBUG(check_value_bounds(val);)
+        CHECK(check_value_bounds(val);)
         arr[n] = val;
     }
     size_t size() const {
         return size_;
+    }
+    T& operator[](int i) const {
+        return get(i);
     }
     // Copy assignment operator
     array1d& operator=(const array1d& other) {
@@ -226,8 +235,6 @@ public:
         for (size_t i = 0; i < N; i++) {
             T val;
             if constexpr (std::is_same_v<T, i128>) {
-                // val = (get(i) * other.get(i));
-                // val = mod_(val, GROUP_MODULUS);
                 val = group_mult_(get(i), other.get(i));
             } else {
                 val = get(i).group_mult(other.get(i));
@@ -242,8 +249,6 @@ public:
         for (size_t i = 0; i < N; i++) {
             T val;
             if constexpr (std::is_same_v<T, i128>) {
-                // val = get(i) * scalar;
-                // val = mod_(val, GROUP_MODULUS);
                 val = group_mult_(get(i) * scalar, GROUP_MODULUS);
             } else {
                 val = get(i).group_mult(scalar);
@@ -268,9 +273,11 @@ public:
         size_t N = size();
         Derived neg_other(N);
         for (size_t i = 0; i < N; i++) {
-            auto val = get(i) - other.get(i);
+            T val;
             if constexpr (std::is_same_v<T, i128>)
-                val = mod_(val, FIELD_MODULUS);
+                val = mod_sub(get(i), other.get(i));
+            else
+                val = get(i) - other.get(i);
             neg_other.set(i, val);
         }
         return neg_other;
@@ -477,47 +484,18 @@ public:
     // See inline definition below class hashed_a_poly (avoids circular definitions)
     auto get_hash_a(vector_i128 eval_pows) const;
 
-    std::vector<i128> convolution_(const std::vector<i128>& a, const std::vector<i128>& b) const {
-        i128 n = a.size();
-        std::vector<i128> a_pad = a, b_pad = b;
-        a_pad.resize(2 * n);
-        b_pad.resize(2 * n);
-        for (size_t i = n; i < 2 * n; i++) {
-            assert(a_pad[i] == 0);
-            assert(b_pad[i] == 0);
+    poly conv_to_nega_(poly& conv) const {
+        size_t n = conv.size() / 2;
+        assert(conv.get(2 * n - 1) == 0);
+        poly res(n);
+        for (size_t i = 0; i < n - 1; i++) {
+            i128 val = mod_(conv.get(i) - conv.get(i + n), FIELD_MODULUS);
+            res.set(i, val);
         }
-        // std::vector<i128> conv = atcoder::convolution<FIELD_MODULUS>(a_pad, b_pad);
-        constexpr u128 INV_2ROU = pow_constexpr(TWO_ROU, FIELD_MOD - 2, FIELD_MOD);
-        constexpr u128 INV_2N = pow_constexpr(2 * POLY_SIZE, FIELD_MOD - 2, FIELD_MOD);
-        constexpr arr_u128 psi_pows = get_rou_pows(TWO_ROU);
-        constexpr arr_u128 psi_inv_pows = get_rou_pows(INV_2ROU);
-        ntt_iter(a_pad, psi_pows);
-        ntt_iter(b_pad, psi_pows);
-        for (size_t i = 0; i < 2 * POLY_SIZE; i++) {
-            a_pad[i] = (a_pad[i] * b_pad[i]) % FIELD_MOD;
-        }
-        intt_iter(a_pad, psi_inv_pows, INV_2N);
-        a_pad.resize(2 * n - 1);
-        std::vector<i128> conv = a_pad;
-        ASSERT(conv.size() == 2 * n - 1);
-        return conv;
-    }
-
-    std::vector<i128> conv_to_nega_(const std::vector<i128> conv) const {
-        i128 n = (conv.size() + 1) / 2;
-        std::vector<i128> res(n);
-        for (i128 i = 0; i < n - 1; i++) {
-            i128 val = mod_(conv[i] - conv[i + n], FIELD_MODULUS);
-            res[i] = val;
-        }
-        res.at(n - 1) = conv.at(n - 1);
+        res.set(n - 1, conv.get(n - 1));
         return res;
     }
-    std::vector<i128> negacyclic_convolution_(const std::vector<i128>& a, const std::vector<i128>& b) const {
-        std::vector<i128> res = convolution_(a, b);
-        std::vector<i128> res1 = conv_to_nega_(res);
-        return res1;
-    }
+
     poly convolve_naive(const poly& other) const {
         poly convolved(2 * n_coeffs() - 1);
         for (size_t i = 0; i < n_coeffs(); i++) {
@@ -535,26 +513,30 @@ public:
         TIMING(int thread_num = 0;)
         TIMING(times_counts.calls_convolve[thread_num] += 1;)
 
-        // turn *this and other into vector_i128's
         size_t n = n_coeffs();
-        vector_i128 a(n);
-        vector_i128 b(n);
+        // NOTE constructor zero-initialises
+        poly a(2 * n);
+        poly b(2 * n);
         for (size_t i = 0; i < n; i++) {
-            a.at(i) = get(i);
-            b.at(i) = other.get(i);
+            a.set(i, get(i));
+            b.set(i, other.get(i));
         }
-        // call negacyclic_convolution_()
-        vector_i128 conv = convolution_(a, b);
-        size_t n_conv = 2 * n - 1;
-        ASSERT(conv.size() == n_conv);
-        // create poly of result
-        poly res(n_conv);
-        for (size_t i = 0; i < n_conv; i++)
-            res.set(i, conv.at(i));
+
+        // std::vector<i128> conv = atcoder::convolution<FIELD_MODULUS>(a_pad, b_pad);
+        constexpr u128 INV_2ROU = pow_constexpr(TWO_ROU, FIELD_MOD - 2, FIELD_MOD);
+        constexpr u128 INV_2N = pow_constexpr(2 * POLY_SIZE, FIELD_MOD - 2, FIELD_MOD);
+        constexpr arr_u128 psi_pows = get_rou_pows(TWO_ROU);
+        constexpr arr_u128 psi_inv_pows = get_rou_pows(INV_2ROU);
+        ntt_iter(a, psi_pows);
+        ntt_iter(b, psi_pows);
+        for (size_t i = 0; i < 2 * POLY_SIZE; i++) {
+            a.set(i, (a.get(i) * b.get(i)) % FIELD_MOD);
+        }
+        intt_iter(a, psi_inv_pows, INV_2N);
 
         TIMING(auto end = std::chrono::high_resolution_clock::now();)
         TIMING(times_counts.convolve[thread_num] += end - start;)
-        return res;
+        return a;
     }
     poly convolve(const poly& other) const {
         ASSERT(n_coeffs() == other.n_coeffs());
@@ -568,21 +550,9 @@ public:
         // TIMING(int thread_num = omp_get_thread_num();)
         TIMING(int thread_num = 0;)
         TIMING(times_counts.calls_nega_ntt[thread_num] += 1;)
-        // turn *this and other into vector_i128's
-        size_t n = n_coeffs();
-        vector_i128 a(n);
-        vector_i128 b(n);
-        for (size_t i = 0; i < n; i++) {
-            a.at(i) = get(i);
-            b.at(i) = other.get(i);
-        }
-        // call negacyclic_convolution_()
-        vector_i128 conv = negacyclic_convolution_(a, b);
-        ASSERT(conv.size() == n);
-        // create poly of result
-        poly res(n);
-        for (size_t i = 0; i < n; i++)
-            res.set(i, conv.at(i));
+        poly res = convolve_ntt(other);
+        ASSERT(res.size() == 2 * size());
+        res = conv_to_nega_(res);
         return res;
     }
     poly nega_naive(const poly& other) const {
@@ -628,7 +598,7 @@ public:
         TIMING(int thread_num = 0;)
         TIMING(times_counts.calls_conv_to_nega[thread_num] += 1;)
         ASSERT(n_coeffs() == 2 * N - 1);
-        i128 conv_degree = n_coeffs() - 1;
+        size_t conv_degree = n_coeffs() - 1;
         // HACK can't return *this after defining array1d move semantics
         // ASSERT(conv_degree >= N);
         if (conv_degree < N)

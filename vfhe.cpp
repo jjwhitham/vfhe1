@@ -39,21 +39,6 @@ vector_i128 eval_poly_pows(size_t n, i128 base, i128 q) {
     return res;
 }
 
-// Anonymous function for cyclic exponentiation: (g^e1)^e2 mod p
-i128 cyclic_exp(i128 base, i128 exp, i128 q, i128 p) {
-    // Compute base^exp mod p
-    i128 result = 1;
-    base = mod_(base, p);
-    exp = mod_(exp, q);
-    while (exp > 0) {
-        if (exp & 1)
-            result = mod_(result * base, p);
-        exp >>= 1;
-        base = mod_(base * base, p);
-    }
-    return result;
-};
-
 std::tuple<std::tuple<eval_key, eval_key>, veri_key> compute_eval_and_veri_keys(
     const rgsw_mat& F_ctx, const rgsw_mat& G_bar_ctx, const rgsw_mat& R_bar_ctx, const rgsw_mat& H_bar_ctx,
     const vector_i128& r_0, const vector_i128& r_1, const vector_i128& s,

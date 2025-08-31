@@ -1,4 +1,4 @@
-#include "ntt.hpp"
+#include "ntt.h"
 
 int main() {
     constexpr u128 INV_2ROU = pow_constexpr(TWO_ROU, FIELD_MOD - 2, FIELD_MOD);
