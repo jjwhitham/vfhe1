@@ -8,7 +8,8 @@
 
 // FIXME check if this is being used correctly, i.e. are some negs required?
 // typedef __uint128_t i128;
-typedef __int128_t i128;
+typedef unsigned long i128;
+// typedef __int128_t i128;
 
 // constexpr i128 N_ = 2;
 // constexpr i128 GROUP_MODULUS = 11; // p
@@ -141,9 +142,9 @@ using vector_i128 = std::vector<i128>;
 // FIXME make types __uint128 so that regular modding works
 i128 mod_(i128 val, i128 q) {
     val %= q;
-    if (val < 0) {
-        val += q;
-    }
+    // if (val < 0) {
+    //     val += q;
+    // }
     return val;
 }
 
@@ -168,17 +169,17 @@ std::string print_to_string_i128(i128 n) {
     if (n == 0) {
         return "0";
     }
-    bool neg = false;
-    if (n < 0) {
-        neg = true;
-        n = -n;
-    }
+    // bool neg = false;
+    // if (n < 0) {
+    //     neg = true;
+    //     n = -n;
+    // }
     std::string buf;
     while (n > 0) {
         buf += '0' + (n % 10);
         n /= 10;
     }
-    if (neg) buf += '-';
+    // if (neg) buf += '-';
     std::reverse(buf.begin(), buf.end());
     return buf;
 }

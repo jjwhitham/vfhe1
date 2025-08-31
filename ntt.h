@@ -11,7 +11,8 @@
 #include "vfhe.h"
 #include "shared.h"
 
-using u128 = __uint128_t;
+// using u128 = __uint128_t;
+using u128 = i128;
 using u32 = unsigned int;
 using vec_u128 = std::vector<u128>;
 

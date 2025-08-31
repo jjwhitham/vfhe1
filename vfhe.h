@@ -10,7 +10,7 @@
 #include "omp.h"
 #include "shared.h"
 #include "convolution.hpp" // Download from AtCoder ACL
-#include "ntt.hpp"
+#include "ntt.h"
 
 // using namespace atcoder;
 
@@ -508,10 +508,6 @@ public:
         return convolved;
     }
     poly convolve_ntt(const poly& other) const {
-        TIMING(auto start = std::chrono::high_resolution_clock::now();)
-        // TIMING(int thread_num = omp_get_thread_num();)
-        TIMING(int thread_num = 0;)
-        TIMING(times_counts.calls_convolve[thread_num] += 1;)
 
         size_t n = n_coeffs();
         // NOTE constructor zero-initialises
@@ -534,17 +530,23 @@ public:
         }
         intt_iter(a, psi_inv_pows, INV_2N);
 
-        TIMING(auto end = std::chrono::high_resolution_clock::now();)
-        TIMING(times_counts.convolve[thread_num] += end - start;)
         return a;
     }
     poly convolve(const poly& other) const {
+        TIMING(auto start = std::chrono::high_resolution_clock::now();)
+        // TIMING(int thread_num = omp_get_thread_num();)
+        TIMING(int thread_num = 0;)
+        TIMING(times_counts.calls_convolve[thread_num] += 1;)
+
         ASSERT(n_coeffs() == other.n_coeffs());
         bool using_ntt = true;
         if (using_ntt)
+            TIMING(auto end = std::chrono::high_resolution_clock::now();)
+            TIMING(times_counts.convolve[thread_num] += end - start;)
             return convolve_ntt(other);
         else
             return convolve_naive(other);
+
     }
     poly nega_ntt(const poly& other) const {
         // TIMING(int thread_num = omp_get_thread_num();)
