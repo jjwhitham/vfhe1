@@ -453,6 +453,12 @@ void run_control_loop() {
     auto ek = std::get<0>(keys);
     veri_key vk = std::get<1>(keys);
 
+    // convert rgsw mats to ntt/eval form
+    F_ctx.conv_to_ntt();
+    G_bar_ctx.conv_to_ntt();
+    R_bar_ctx.conv_to_ntt();
+    H_bar_ctx.conv_to_ntt();
+
     auto x_cont_ctx_hashed = x_cont_ctx.get_hash(eval_pows);
 
     auto vec_dot_prod = [](const vector_i128& vec, const hashed_rlwe_vec& hvec) -> hashed_rlwe {
@@ -652,9 +658,9 @@ void print_times_and_counts() {
     double convolve = 0.0;
     for (size_t i = 0; i < N_THREADS; i++)
         convolve += times_counts.convolve[i].count();
-    std::cout << "Convolve (per loop): ";
+    std::cout << "NTT (per loop): ";
     std::cout  << convolve / iter_ << "\n";
-    std::cout << "Convolve (per loop, per thread): ";
+    std::cout << "NTT (per loop, per thread): ";
     std::cout << convolve / N_THREADS / iter_ << "\n";
     std::cout << "Number of calls:\n";
     int convolve_calls = 0;

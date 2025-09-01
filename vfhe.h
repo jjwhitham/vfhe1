@@ -508,8 +508,9 @@ public:
         return convolved;
     }
     poly convolve_ntt(const poly& other) const {
-
-        size_t n = n_coeffs();
+        TIMING(int thread_num = 0;)
+        TIMING(auto start = std::chrono::high_resolution_clock::now();)
+        size_t n = POLY_SIZE;
         // NOTE constructor zero-initialises
         poly a(2 * n);
         poly b(2 * n);
@@ -523,17 +524,24 @@ public:
         constexpr u128 INV_2N = pow_constexpr(2 * POLY_SIZE, FIELD_MOD - 2, FIELD_MOD);
         constexpr arr_u128 psi_pows = get_rou_pows(TWO_ROU);
         constexpr arr_u128 psi_inv_pows = get_rou_pows(INV_2ROU);
-        ntt_iter(a, psi_pows);
+        // NOTE rgsw mats should already be converted to NTT form
+        if (isNTT) {
+            for (size_t i = 0; i < 2 * n; i++)
+                a.set(i, get(i));
+        } else {
+            ntt_iter(a, psi_pows);
+        }
         ntt_iter(b, psi_pows);
         for (size_t i = 0; i < 2 * POLY_SIZE; i++) {
             a.set(i, (a.get(i) * b.get(i)) % FIELD_MOD);
         }
         intt_iter(a, psi_inv_pows, INV_2N);
 
+        TIMING(auto end = std::chrono::high_resolution_clock::now();)
+        TIMING(times_counts.convolve[thread_num] += end - start;)
         return a;
     }
     poly convolve(const poly& other) const {
-        TIMING(auto start = std::chrono::high_resolution_clock::now();)
         // TIMING(int thread_num = omp_get_thread_num();)
         TIMING(int thread_num = 0;)
         TIMING(times_counts.calls_convolve[thread_num] += 1;)
@@ -541,8 +549,6 @@ public:
         ASSERT(n_coeffs() == other.n_coeffs());
         bool using_ntt = true;
         if (using_ntt)
-            TIMING(auto end = std::chrono::high_resolution_clock::now();)
-            TIMING(times_counts.convolve[thread_num] += end - start;)
             return convolve_ntt(other);
         else
             return convolve_naive(other);
@@ -574,15 +580,18 @@ public:
         }
         return neg_conv;
     }
-    void convert_to_ntt() {
+    poly conv_to_ntt() {
         ASSERT(isNTT == false);
-        size_t n = size();
-        vector_i128 self(n);
-        for (size_t i = 0; i < n; i++)
-            self.at(i) = get(i);
-
-        std::vector<i128> ntt_self = atcoder::ntt<FIELD_MODULUS>(self);
-        isNTT = true;
+        size_t n = n_coeffs();
+        // NOTE constructor zero-initialises
+        poly a(2 * n);
+        for (size_t i = 0; i < n; i++) {
+            a.set(i, get(i));
+        }
+        constexpr arr_u128 psi_pows = get_rou_pows(TWO_ROU);
+        ntt_iter(a, psi_pows);
+        a.isNTT = true;
+        return a;
     }
 
     using array1d<i128, poly>::operator*;
@@ -900,6 +909,11 @@ public:
         }
         return conv;
     }
+    void conv_to_ntt() {
+        for (size_t i = 0; i < N_POLYS_IN_RLWE; i++) {
+            set(i, get_poly(i).conv_to_ntt());
+        }
+    }
 };
 
 class hashed_rlwe_vec : public array1d<hashed_rlwe, hashed_rlwe_vec> {
@@ -1114,7 +1128,7 @@ public:
     rlwe convolve(const rlwe_decomp& other) const {
         size_t N = size();
         ASSERT(N == other.size());
-        rlwe res(n_polys(), 2 * n_coeffs() - 1);
+        rlwe res(n_polys(), 2 * POLY_SIZE- 1); // FIXME
         // TODO wrap in loop
         poly& p0 = res.get(0);
         poly& p1 = res.get(1);
@@ -1130,6 +1144,11 @@ public:
         res.set(0, p0);
         res.set(1, p1);
         return res;
+    }
+
+    void conv_to_ntt() {
+        for (size_t i = 0 ; i < n_rlwes(); i++)
+            get_rlwe(i).conv_to_ntt();
     }
 
     using array1d<rlwe, rgsw>::pow;
@@ -1387,7 +1406,7 @@ public:
         size_t cols = n_cols();
         ASSERT(cols == other.size());
         size_t n_polys_ = n_polys();
-        size_t n_coeffs_ = n_coeffs();
+        size_t n_coeffs_ = POLY_SIZE; // FIXME
         size_t n_coeffs_other = other.n_coeffs();
         ASSERT(n_coeffs_ == n_coeffs_other);
 
@@ -1420,6 +1439,13 @@ public:
             res.set(i, sum);
         }
         return res;
+    }
+    void conv_to_ntt() {
+        for (size_t row = 0; row < n_rows(); row++) {
+            for (size_t col = 0; col < n_cols(); col++) {
+                get_rgsw(row, col).conv_to_ntt();
+            }
+        }
     }
     rgsw& get_rgsw(size_t row, size_t col) const {
         return get(row, col);

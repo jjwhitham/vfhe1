@@ -168,6 +168,7 @@ public:
 
         // Encryptions of zero
         std::vector<rlwe> encs_of_zero(2 * d);
+        // FIXME is this correct? I'm using the same zero poly for each call
         poly zero_poly(N);
         for (i128 i = 0; i < 2 * d; ++i) {
             encs_of_zero[i] = encrypt_rlwe(zero_poly);

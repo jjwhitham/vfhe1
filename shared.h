@@ -7,8 +7,9 @@
 // #include "gmpxx.h"
 
 // FIXME check if this is being used correctly, i.e. are some negs required?
-// typedef __uint128_t i128;
-typedef unsigned long i128;
+typedef __uint128_t i128;
+// typedef __uint128_t _ExtInt(256);
+// typedef unsigned long i128;
 // typedef __int128_t i128;
 
 // constexpr i128 N_ = 2;
