@@ -519,7 +519,6 @@ public:
             b.set(i, other.get(i));
         }
 
-        // std::vector<i128> conv = atcoder::convolution<FIELD_MODULUS>(a_pad, b_pad);
         constexpr u128 INV_2ROU = pow_constexpr(TWO_ROU, FIELD_MOD - 2, FIELD_MOD);
         constexpr u128 INV_2N = pow_constexpr(2 * POLY_SIZE, FIELD_MOD - 2, FIELD_MOD);
         constexpr arr_u128 psi_pows = get_rou_pows(TWO_ROU);

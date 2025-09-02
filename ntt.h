@@ -225,10 +225,10 @@ void ntt_iter_(auto& x, const arr_u128& w) {
         for (size_t chunk = 0; chunk < n_chunks; chunk++) {
             const size_t j = len_chunk * chunk;
             for (size_t i = 0; i < half; i++) {
-                const auto even = x.get(i + j);
-                const auto w_odd = (w[i * n_chunks] * x.get(i + j + half)) % FIELD_MOD;
-                x.set(i + j, (even + w_odd) % FIELD_MOD);
-                x.set(i + j + half, mod_sub(even, w_odd));
+                const auto even = x[i + j];
+                const auto w_odd = (w[i * n_chunks] * x[i + j + half]) % FIELD_MOD;
+                x[i + j] = (even + w_odd) % FIELD_MOD;
+                x[i + j + half] = mod_sub(even, w_odd);
             }
         }
     }
