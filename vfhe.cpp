@@ -530,6 +530,7 @@ void run_control_loop() {
         // DEBUG(std::cout << "x_cont_ctx_decomp:\n";)
         // DEBUG(x_cont_ctx_decomp.print();)
         rlwe_vec u_out_ctx_convolved = H_bar_ctx.convolve(x_cont_ctx_decomp); // C -> P
+        u_out_ctx_convolved.conv_to_coeff();
         // DEBUG(std::cout << "u_out_ctx_convolved:\n";)
         // DEBUG(u_out_ctx_convolved.print();)
 
@@ -588,6 +589,7 @@ void run_control_loop() {
         // DEBUG(std::cout << "R_u:\n";)
         // DEBUG(R_u.print();)
         rlwe_vec x_cont_ctx_convolved = F_x + G_y + R_u;
+        x_cont_ctx_convolved.conv_to_coeff();
         x_cont_ctx = x_cont_ctx_convolved.conv_to_nega(N);
         DEBUG(std::cout << "x_cont_ctx_convolved:\n";)
         DEBUG(x_cont_ctx_convolved.print();)

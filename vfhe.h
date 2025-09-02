@@ -485,11 +485,13 @@ public:
     auto get_hash_a(vector_i128 eval_pows) const;
 
     poly conv_to_nega_(poly& conv) const {
+        // std::cout << conv.size() << "\n";
         size_t n = conv.size() / 2;
         assert(conv.get(2 * n - 1) == 0);
         poly res(n);
         for (size_t i = 0; i < n - 1; i++) {
-            i128 val = mod_(conv.get(i) - conv.get(i + n), FIELD_MODULUS);
+            // i128 val = mod_(conv.get(i) - conv.get(i + n), FIELD_MODULUS);
+            i128 val = mod_sub(conv.get(i), conv.get(i + n));
             res.set(i, val);
         }
         res.set(n - 1, conv.get(n - 1));
@@ -525,7 +527,7 @@ public:
         constexpr arr_u128 psi_inv_pows = get_rou_pows(INV_2ROU);
         // NOTE rgsw mats should already be converted to NTT form
         if (isNTT) {
-            for (size_t i = 0; i < 2 * n; i++)
+            for (size_t i = n; i < 2 * n; i++)
                 a.set(i, get(i));
         } else {
             ntt_iter(a, psi_pows);
@@ -534,7 +536,8 @@ public:
         for (size_t i = 0; i < 2 * POLY_SIZE; i++) {
             a.set(i, (a.get(i) * b.get(i)) % FIELD_MOD);
         }
-        intt_iter(a, psi_inv_pows, INV_2N);
+        if (!isNTT)
+            intt_iter(a, psi_inv_pows, INV_2N);
 
         TIMING(auto end = std::chrono::high_resolution_clock::now();)
         TIMING(times_counts.convolve[thread_num] += end - start;)
@@ -590,6 +593,22 @@ public:
         constexpr arr_u128 psi_pows = get_rou_pows(TWO_ROU);
         ntt_iter(a, psi_pows);
         a.isNTT = true;
+        return a;
+    }
+    poly conv_to_coeff() {
+        ASSERT(isNTT == true);
+        size_t n = n_coeffs();
+        // NOTE constructor zero-initialises
+        poly a(n);
+        for (size_t i = 0; i < n; i++) {
+            a.set(i, get(i));
+        }
+        constexpr u128 INV_2ROU = pow_constexpr(TWO_ROU, FIELD_MOD - 2, FIELD_MOD);
+        constexpr arr_u128 psi_inv_pows = get_rou_pows(INV_2ROU);
+        constexpr u128 INV_2N = pow_constexpr(2 * POLY_SIZE, FIELD_MOD - 2, FIELD_MOD);
+        intt_iter(a, psi_inv_pows, INV_2N);
+        a.isNTT = false;
+        assert(a.get(n - 1) == 0);
         return a;
     }
 
@@ -789,11 +808,6 @@ public:
     size_t n_hashed_a_polys() const {
         return size();
     }
-    // void set_coeffs_to_one() {
-    //     for (size_t i = 0; i < size(); i++) {
-    //         set(i, 1);
-    //     }
-    // }
 };
 
 class hashed_rlwe : public array1d<i128, hashed_rlwe> {
@@ -880,6 +894,7 @@ public:
 
         // decompose poly into d polynomials of degree d-1
         // polys = []
+        // TODO v is a power of 2, so just use bitshifts
         auto pow_ = [](i128 base, i128 exp) {
             i128 res = 1;
             for (i128 i = 0; i < exp; ++i) {
@@ -911,6 +926,11 @@ public:
     void conv_to_ntt() {
         for (size_t i = 0; i < N_POLYS_IN_RLWE; i++) {
             set(i, get_poly(i).conv_to_ntt());
+        }
+    }
+    void conv_to_coeff() {
+        for (size_t i = 0; i < N_POLYS_IN_RLWE; i++) {
+            set(i, get_poly(i).conv_to_coeff());
         }
     }
 };
@@ -985,6 +1005,11 @@ public:
             conv.set(i, r);
         }
         return conv;
+    }
+    void conv_to_coeff() const {
+        for (size_t i = 0; i < n_rlwes(); i++) {
+            get_rlwe(i).conv_to_coeff();
+        }
     }
 };
 
@@ -1127,7 +1152,7 @@ public:
     rlwe convolve(const rlwe_decomp& other) const {
         size_t N = size();
         ASSERT(N == other.size());
-        rlwe res(n_polys(), 2 * POLY_SIZE- 1); // FIXME
+        rlwe res(n_polys(), 2 * POLY_SIZE); // FIXME
         // TODO wrap in loop
         poly& p0 = res.get(0);
         poly& p1 = res.get(1);
@@ -1409,9 +1434,9 @@ public:
         size_t n_coeffs_other = other.n_coeffs();
         ASSERT(n_coeffs_ == n_coeffs_other);
 
-        rlwe_vec res(rows, n_polys_, 2 * n_coeffs_ - 1);
+        rlwe_vec res(rows, n_polys_, 2 * n_coeffs_);
         for (size_t i = 0; i < rows; i++) {
-            rlwe sum(n_polys_, 2 * n_coeffs_ - 1);
+            rlwe sum(n_polys_, 2 * n_coeffs_);
             for (size_t j = 0; j < cols; j++) {
                 auto val = get(i, j).convolve(other.get(j));
                 sum = sum + val;
