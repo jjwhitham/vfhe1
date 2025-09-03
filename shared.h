@@ -8,6 +8,7 @@
 
 // FIXME check if this is being used correctly, i.e. are some negs required?
 typedef __uint128_t i128;
+typedef __uint32_t u32;
 // typedef __uint128_t _ExtInt(256);
 // typedef unsigned long i128;
 // typedef __int128_t i128;
@@ -184,7 +185,7 @@ std::string print_to_string_i128(i128 n) {
     std::reverse(buf.begin(), buf.end());
     return buf;
 }
-vector_i128 scalar_vec_mult (i128 scalar, const vector_i128& vec, i128 q) {
+vector_i128 scalar_vec_mult(i128 scalar, const vector_i128& vec, i128 q) {
     vector_i128 result(vec.size());
     for (size_t i = 0; i < vec.size(); ++i) {
         result[i] = mod_(scalar * vec[i], q);

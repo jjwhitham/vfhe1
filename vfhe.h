@@ -614,8 +614,7 @@ public:
 
     using array1d<i128, poly>::operator*;
     poly operator*(const poly& other) const {
-        size_t N = n_coeffs();
-        ASSERT(N == other.n_coeffs());
+        ASSERT(n_coeffs() == other.n_coeffs());
         bool using_ntt = true;
         if (using_ntt)
             return nega_ntt(other);
@@ -891,7 +890,7 @@ public:
         // FIXME not sure if we really need the lower bounds check. Fails sometimes
         // ASSERT(v**(d-1) < q and q <= v**d)
         ASSERT(FIELD_MODULUS <= static_cast<i128>(std::pow(v, d)));
-
+        (void)v_;
         // decompose poly into d polynomials of degree d-1
         // polys = []
         // TODO v is a power of 2, so just use bitshifts
@@ -1411,8 +1410,7 @@ public:
         ASSERT(cols == other.size());
         size_t n_polys_ = n_polys();
         size_t n_coeffs_ = n_coeffs();
-        size_t n_coeffs_other = other.n_coeffs();
-        ASSERT(n_coeffs_ == n_coeffs_other);
+        ASSERT(n_coeffs_ == other.n_coeffs());
 
         rlwe_vec res(rows, n_polys_, n_coeffs_);
         for (size_t i = 0; i < rows; i++) {
@@ -1431,8 +1429,7 @@ public:
         ASSERT(cols == other.size());
         size_t n_polys_ = n_polys();
         size_t n_coeffs_ = POLY_SIZE; // FIXME
-        size_t n_coeffs_other = other.n_coeffs();
-        ASSERT(n_coeffs_ == n_coeffs_other);
+        ASSERT(n_coeffs_ == other.n_coeffs());
 
         rlwe_vec res(rows, n_polys_, 2 * n_coeffs_);
         for (size_t i = 0; i < rows; i++) {
@@ -1494,20 +1491,14 @@ public:
     veri_vec_scalar() : array1d<i128, veri_vec_scalar>() {}
     veri_vec_scalar(size_t N) : array1d<i128, veri_vec_scalar>(N) {}
     ~veri_vec_scalar() {}
-
     rgsw_vec operator*(const rgsw_mat& other) const {
-        size_t rows = other.n_rows();
-        size_t cols = other.n_cols();
-        ASSERT(rows == size());
-        size_t n_rlwes = other.n_rlwes();
-        size_t n_polys = other.n_polys();
-        size_t n_coeffs = other.n_coeffs();
-        rgsw_vec res(cols, n_rlwes, n_polys, n_coeffs);
-        for (size_t j = 0; j < cols; j++) {
-            rgsw sum(n_rlwes, n_polys, n_coeffs);
-            for (size_t i = 0; i < rows; i++) {
-                // scalar mult member function from rgsw_vec
-                auto val = other.get(i, j) * get(i);
+        const rgsw_mat& o = other;
+        ASSERT(o.n_rows() == size());
+        rgsw_vec res(o.n_cols(), o.n_rlwes(), o.n_polys(), o.n_coeffs());
+        for (size_t j = 0; j < o.n_cols(); j++) {
+            rgsw sum(o.n_rlwes(), o.n_polys(), o.n_coeffs());
+            for (size_t i = 0; i < o.n_rows(); i++) {
+                auto val = o.get(i, j) * get(i);
                 sum = sum + val;
             }
             res.set(j, sum);
@@ -1520,7 +1511,6 @@ public:
         size_t n_polys = other.get(0).size();
         size_t n_coeffs = other.get(0).get(0).size();
         rlwe sum(n_polys, n_coeffs);
-
         for (size_t i = 0; i < n; i++) {
             auto val = other.get(i) * get(i);
             sum = sum + val;
@@ -1618,13 +1608,13 @@ private:
 public:
     Params() :
         N(N_),
-        p(GROUP_MODULUS),
-        q(FIELD_MODULUS),
-        g(GENERATOR),
+        iter_(3),
         s(10001),
         L(10001),
         r(10001),
-        iter_(3),
+        p(GROUP_MODULUS),
+        q(FIELD_MODULUS),
+        g(GENERATOR),
         F(F_.size(), F_.at(0).size()),
         G_bar(scalar_mat_mult(s, G, q, G.size(), G.at(0).size())),
         R_bar(scalar_mat_mult(s, R, q, R.size(), R.at(0).size())),
@@ -1643,7 +1633,10 @@ public:
             }
         }
     }
-    i128 N, p, q, g, s, L, r, iter_, x_dim, y_dim, u_dim;
+    size_t N, iter_;
+    u32 s, L, r;
+    i128 p, q, g;
+
     array2d<i128> F, G_bar, R_bar, H_bar;
     // TODO update to array1d<i128> (add as another class?)
     vector_i128 x_cont_init_scaled;
@@ -1714,7 +1707,7 @@ public:
     }
     // TODO pass in gen as a param
     vector_i128 sample_knowledge_exponents(i128 from, i128 to_inclusive) {
-        i128 N = 6;
+        size_t N = 6;
         vector_i128 res(N);
         for (size_t i = 0; i < N; i++) {
             // TODO update range
@@ -1727,7 +1720,7 @@ public:
 
     // TODO pass in gen as a param
     std::vector<vector_i128> sample_verification_vectors(i128 m, i128 n, i128 from, i128 to_inclusive) {
-        i128 N = 3;
+        size_t N = 3;
         std::vector<vector_i128> res(N);
         for (size_t i = 0; i < N - 1; i++) {
             res.at(i) = vector_i128(n);

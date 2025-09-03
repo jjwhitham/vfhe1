@@ -43,13 +43,13 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key> compute_eval_and_veri_keys(
     const rgsw_mat& F_ctx, const rgsw_mat& G_bar_ctx, const rgsw_mat& R_bar_ctx, const rgsw_mat& H_bar_ctx,
     const vector_i128& r_0, const vector_i128& r_1, const vector_i128& s,
     i128 rho_0, i128 rho_1, i128 alpha_0, i128 alpha_1, i128 gamma_0, i128 gamma_1,
-    i128 d, i128 q, i128 N, const vector_i128& eval_pows, const Encryptor& enc
+    u32 d, u32 q, size_t N, const vector_i128& eval_pows, const Encryptor& enc
 ) {
     // Converts a vector of i128s v to a vector of g^v[i] mod p
     auto convert_vec_to_cyclic_a = [&](const vector_i128& v, const vector_i128& eval_pows) -> std::vector<hashed_a_poly> {
         std::vector<hashed_a_poly> res(v.size());
         // HACK ? halving eval_pows size
-        i128 N = eval_pows.size() / 2;
+        size_t N = eval_pows.size() / 2;
         N = 2 * N - 1;
         hashed_a_poly eval_pows_a(N);
         for (size_t i = 0; i < N; i++)
@@ -87,7 +87,7 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key> compute_eval_and_veri_keys(
     hashed_a_rgsw_vec rF_1 = vec_mat_mult(r_1, F_ctx).get_hash_a(eval_pows);
 
     // Make rgsw_vec for r_0 and r_1
-    i128 n_hashed_a_coeffs = eval_pows.size() / 2;
+    size_t n_hashed_a_coeffs = eval_pows.size() / 2;
     hashed_a_rgsw_vec r_0_rgsw(r_0.size(), N_POLYS_IN_RLWE * d, N_POLYS_IN_RLWE, n_hashed_a_coeffs);
     hashed_a_rgsw_vec r_1_rgsw(r_1.size(), N_POLYS_IN_RLWE * d, N_POLYS_IN_RLWE, n_hashed_a_coeffs);
     for (size_t i = 0; i < r_0.size(); ++i) {
@@ -190,7 +190,7 @@ Proof compute_proof(
     const rlwe_vec& x_nega_,
     const rlwe_vec& x_,
     const rlwe_vec& x,
-    i128 v, i128 d
+    u32 v, u32 d
 ) {
     const std::vector<hashed_a_poly>& gr = ek.gr;
     const hashed_a_rgsw_vec& grFr = ek.grFr;
@@ -239,9 +239,9 @@ Proof compute_proof(
 }
 
 void verify_with_lin_and_dyn_checks(
-    const veri_key& vk, const Proof& proof, const Proof& old_proof, i128 k,
+    const veri_key& vk, const Proof& proof, const Proof& old_proof, size_t k,
     const rlwe_vec& y, const hashed_rlwe_vec& u, const rlwe_vec& u_reenc,
-    i128 v, i128 d, const vector_i128& eval_pows
+    u32 v, u32 d, const vector_i128& eval_pows
 ) {
     // Unpack veri_key
     const vector_i128& s = vk.s;
@@ -290,7 +290,7 @@ void verify_with_lin_and_dyn_checks(
         }
         return sum;
     };
-    auto vec_dot_prod_enc = [](const hashed_rgsw_vec& rgsw_v, const rlwe_vec& rlwe_v, const vector_i128& eval_pows, i128 v, i128 d) -> hashed_rlwe {
+    auto vec_dot_prod_enc = [](const hashed_rgsw_vec& rgsw_v, const rlwe_vec& rlwe_v, const vector_i128& eval_pows, u32 v, u32 d) -> hashed_rlwe {
         ASSERT(rgsw_v.size() == rlwe_v.size());
         hashed_rlwe sum(N_POLYS_IN_RLWE);
         for (size_t i = 0; i < rgsw_v.size(); ++i) {
@@ -357,10 +357,10 @@ void run_control_loop() {
     DEBUG(for (auto& x : C) print_vector_double(x);)
     DEBUG(std::cout << "x_plant:\n";)
     DEBUG(print_vector_double(x_plant);)
-    i128 rr = pms.r;
-    i128 ss = pms.s;
-    i128 L = pms.L;
-    i128 iter_ = pms.iter_;
+    u32 rr = pms.r;
+    u32 ss = pms.s;
+    u32 L = pms.L;
+    size_t iter_ = pms.iter_;
     DEBUG(iter_ = 2;)
 
     i128 from = 1;
@@ -377,8 +377,8 @@ void run_control_loop() {
     i128 gamma_1 = knowledge_exps.at(3);
     i128 rho_0 = knowledge_exps.at(4);
     i128 rho_1 = knowledge_exps.at(5);
-    i128 m = H_bar.n_rows();
-    i128 n = F.n_rows();
+    size_t m = H_bar.n_rows();
+    size_t n = F.n_rows();
     // TODO Params should sample
     // r_0: 1, 2, 4, 3, 11
     // r_1: 2, 4, 1, 4, 2,
@@ -397,7 +397,7 @@ void run_control_loop() {
     // DEBUG(std::cout << "s: ";)
     // DEBUG(print_vector_i128(s);)
 
-    i128 N = N_;
+    size_t N = N_;
     DEBUG1(N = 2;)
     // DEBUG(std::cout << "N_THREADS: ";)
     // DEBUG(std::cout << N_THREADS << "\n" ;)
@@ -409,7 +409,7 @@ void run_control_loop() {
     // DEBUG(std::cout << "sk: ";)
     // DEBUG(print_vector_i128(sk);)
     // TODO move to Params
-    i128 d = 4;
+    u32 d = 4;
     DEBUG1(d = 2;)
     // const i128 d = 2;
     // DEBUG(std::cout << "d: ";)
@@ -420,7 +420,7 @@ void run_control_loop() {
     // DEBUG(std::cout << log2q << "\n" ;)
     // TODO move to Params
     int power = static_cast<int>(std::ceil(log2q / static_cast<double>(d)));
-    i128 v = static_cast<i128>(1) << power;
+    u32 v = static_cast<u32>(1) << power;
     // DEBUG(std::cout << "v: ";)
     // DEBUG(std::cout << print_to_string_i128(v) << "\n" ;)
 
