@@ -880,33 +880,25 @@ public:
     // creates d polynomials for each of the two polynomials in the rlwe object,
     // where the i'th coefficient has been decomposed with base v and depth d.
     // The i'th coefficient is spread across the i'th coefficients of the d polynomials.
-    rlwe_decomp decompose(const i128& v_, const i128& d) const {
+    rlwe_decomp decompose(const u32& v_, const u32& d) const {
         // v - power of 2, s.t. v^{d-1} < q < v^d
-        i128 power = static_cast<i128>(std::ceil((std::log2(FIELD_MODULUS) / d)));
+        u32 power = static_cast<u32>(std::ceil((std::log2(FIELD_MODULUS) / d)));
         // TODO remove double up of computation of v in run_control_loop
-        i128 v = 1 << power;
+        u32 v = 1 << power;
         ASSERT(v == v_);
         ASSERT(d >= 1);
         // FIXME not sure if we really need the lower bounds check. Fails sometimes
         // ASSERT(v**(d-1) < q and q <= v**d)
-        ASSERT(FIELD_MODULUS <= static_cast<i128>(std::pow(v, d)));
+        ASSERT(FIELD_MODULUS <= static_cast<i128>(v << d));
         (void)v_;
         // decompose poly into d polynomials of degree d-1
-        // polys = []
-        // TODO v is a power of 2, so just use bitshifts
-        auto pow_ = [](i128 base, i128 exp) {
-            i128 res = 1;
-            for (i128 i = 0; i < exp; ++i) {
-                res *= base;
-            }
-            return res;
-        };
+
         rlwe_decomp polys(2 * d, n_coeffs());
         for (size_t k = 0; k < N_POLYS_IN_RLWE; k++) {
             poly pol = get_poly(k);
             for (size_t i = 0; i < n_coeffs(); i++) {
                 for (size_t j = 0; j < d; j++) {
-                    i128 decomped_coeff = (v - 1) & (pol.get_coeff(i) / pow_(v, j));
+                    i128 decomped_coeff = (v - 1) & (pol.get_coeff(i) >> (power * j));
                     ASSERT(decomped_coeff < v);
                     polys.get_poly(d * k + j).set(i, decomped_coeff);
                 }
@@ -1035,21 +1027,20 @@ public:
     }
     // using array1d<hashed_a_rlwe, hashed_a_rgsw>::pow;
     hashed_rlwe get_hash_sec(const rlwe_decomp& other) const {
-        size_t n_polys_ = n_hashed_a_polys();
-        ASSERT(n_polys_ == N_POLYS_IN_RLWE);
-        size_t N = size();
-        ASSERT(N == other.size());
-        hashed_rlwe_vec res_vec(N, n_polys_);
+        // size_t n_polys_ = n_hashed_a_polys();
+        ASSERT(n_hashed_a_polys() == N_POLYS_IN_RLWE);
+        ASSERT(n_hashed_a_rlwes() == other.size());
+        hashed_rlwe_vec res_vec(n_hashed_a_rlwes(), n_hashed_a_polys());
         // #pragma omp parallel for num_threads(2)
-        for (size_t i = 0; i < N; i++) {
-            auto val0 = get(i).get(0).get_hash_sec(other.get(i));
-            auto val1 = get(i).get(1).get_hash_sec(other.get(i));
+        for (size_t i = 0; i < n_hashed_a_rlwes(); i++) {
             hashed_rlwe& res = res_vec.get(i);
-            res.set(0, val0);
-            res.set(1, val1);
+            for (size_t j = 0; j < n_hashed_a_polys(); j++) {
+                auto val = get(i).get(j).get_hash_sec(other.get(i));
+                res.set(j, val);
+            }
         }
 
-        hashed_rlwe res(n_polys_);
+        hashed_rlwe res(n_hashed_a_polys());
         res.set_coeffs_to_one();
         for (auto& hashed_a_rlwe_ : res_vec) {
             res = res.group_mult(hashed_a_rlwe_);
@@ -1081,22 +1072,20 @@ public:
     }
     using array1d<hashed_rlwe, hashed_rgsw>::pow;
     hashed_rlwe pow(const hashed_rlwe_decomp& other) const {
-        size_t n_polys_ = n_hashed_polys();
-        ASSERT(n_polys_ == N_POLYS_IN_RLWE);
-        size_t N = size();
-        ASSERT(N == other.size());
-        hashed_rlwe_vec res_vec(N, n_polys_);
+        ASSERT(n_hashed_polys() == N_POLYS_IN_RLWE);
+        ASSERT(n_hashed_rlwes() == other.n_hashed_polys());
+        hashed_rlwe_vec res_vec(n_hashed_rlwes(), n_hashed_polys());
         // #pragma omp parallel for num_threads(2)
-        for (size_t i = 0; i < N; i++) {
+        for (size_t i = 0; i < n_hashed_rlwes(); i++) {
             // FIXME a bit hacky - obj.pow(scalar) is scalar^obj, do we need obj^scalar???
-            auto val0 = pow_(get(i).get(0), (other.get(i)));
-            auto val1 = pow_(get(i).get(1), (other.get(i)));
             hashed_rlwe& res = res_vec.get(i);
-            res.set(0, val0);
-            res.set(1, val1);
+            for (size_t j = 0; j < n_hashed_polys(); j++) {
+                auto val = pow_(get(i).get(j), (other.get(i)));
+                res.set(j, val);
+            }
         }
 
-        hashed_rlwe res(n_polys_);
+        hashed_rlwe res(n_hashed_polys());
         res.set_coeffs_to_one();
         for (auto& hashed_rlwe_ : res_vec) {
             res = res.group_mult(hashed_rlwe_);
@@ -1131,41 +1120,30 @@ public:
     }
     using array1d<rlwe, rgsw>::operator*;
     rlwe operator*(const rlwe_decomp& other) const {
-        size_t N = size();
-        ASSERT(N == other.size());
+        ASSERT(n_rlwes() == other.n_polys());
         rlwe res(n_polys(), n_coeffs());
-        // TODO wrap in loop
-        poly& p0 = res.get(0);
-        poly& p1 = res.get(1);
-        for (size_t i = 0; i < N; i++) {
-            auto val0 = get(i).get(0) * other.get(i);
-            auto val1 = get(i).get(1) * other.get(i);
-            p0 = p0 + val0;
-            p1 = p1 + val1;
+        for (size_t i = 0; i < n_rlwes(); i++) {
+            for (size_t j = 0; j < n_polys(); j++) {
+                poly& p = res.get(j);
+                auto val = get(i).get(j) * other.get(i);
+                p = p + val;
+            }
         }
-        res.set(0, p0);
-        res.set(1, p1);
         return res;
     }
 
     rlwe convolve(const rlwe_decomp& other) const {
-        size_t N = size();
-        ASSERT(N == other.size());
+        ASSERT(n_rlwes() == other.n_polys());
         rlwe res(n_polys(), 2 * POLY_SIZE); // FIXME
-        // TODO wrap in loop
-        poly& p0 = res.get(0);
-        poly& p1 = res.get(1);
-        // TODO wrap in outer loop
-        // FIXME need thread array to accumulate sum
+        // TODO need thread array to accumulate sum
         // #pragma omp parallel for num_threads(N_THREADS)
-        for (size_t i = 0; i < N; i++) {
-            auto val0 = get(i).get(0).convolve(other.get(i));
-            auto val1 = get(i).get(1).convolve(other.get(i));
-            p0 = p0 + val0;
-            p1 = p1 + val1;
+        for (size_t i = 0; i < n_rlwes(); i++) {
+            for (size_t j = 0; j < n_polys(); j++) {
+                poly& p = res.get(j);
+                auto val = get(i).get(j).convolve(other.get(i));
+                p = p + val;
+            }
         }
-        res.set(0, p0);
-        res.set(1, p1);
         return res;
     }
 
@@ -1176,22 +1154,18 @@ public:
 
     using array1d<rlwe, rgsw>::pow;
     rlwe pow(const rlwe_decomp& other) const {
-        size_t n_polys_ = n_polys();
-        size_t n_coeffs_ = n_coeffs();
-        size_t N = size();
-        ASSERT(N == other.size());
-        rlwe_vec res_vec(N, n_polys_, n_coeffs_);
-        // TODO wrap in loop
+        ASSERT(n_rlwes() == other.n_polys());
+        rlwe_vec res_vec(n_rlwes(), n_polys(), n_coeffs());
         // #pragma omp parallel for num_threads(N_THREADS)
-        for (size_t i = 0; i < N; i++) {
+        for (size_t i = 0; i < n_rlwes(); i++) {
             rlwe& res = res_vec.get(i);
-            auto val0 = get(i).get(0).pow(other.get(i));
-            auto val1 = get(i).get(1).pow(other.get(i));
-            res.set(0, val0);
-            res.set(1, val1);
+            for (size_t j = 0; j < n_polys(); j++) {
+                auto val = get(i).get(j).pow(other.get(i));
+                res.set(j, val);
+            }
         }
 
-        rlwe res(n_polys_, n_coeffs_);
+        rlwe res(n_polys(), n_coeffs());
         res.set_coeffs_to_one();
         for (auto& rlwe_ : res_vec) {
             res = res.group_mult(rlwe_);
@@ -1245,15 +1219,13 @@ public:
     }
     using array1d<hashed_rgsw, hashed_rgsw_vec>::pow;
     hashed_rlwe pow(const hashed_rlwe_decomp_vec& other) const {
-        size_t n = other.size();
-        ASSERT(size() == n);
-        size_t n_hashed_polys_ = n_hashed_polys();
-        ASSERT(n_hashed_polys_ == 2);
-        hashed_rlwe_vec res_vec(n, n_hashed_polys_);
-        hashed_rlwe res(n_hashed_polys_);
+        ASSERT(n_hashed_rgsws() == other.n_hashed_rlwe_decomps());
+        ASSERT(n_hashed_polys() == 2);
+        hashed_rlwe_vec res_vec(n_hashed_rgsws(), n_hashed_polys());
+        hashed_rlwe res(n_hashed_polys());
         res.set_coeffs_to_one();
         // #pragma omp parallel for num_threads(12)
-        for (size_t i = 0; i < n; i++) {
+        for (size_t i = 0; i < n_hashed_rgsws(); i++) {
             auto val = get(i).pow(other.get(i));
             res_vec.set(i, val);
         }
@@ -1293,15 +1265,13 @@ public:
     }
     // using array1d<hashed_a_rgsw, hashed_a_rgsw_vec>::pow;
     hashed_rlwe get_hash_sec(const rlwe_decomp_vec& other) const {
-        size_t n = other.size();
-        ASSERT(size() == n);
-        size_t n_hashed_a_polys_ = n_hashed_a_polys();
-        ASSERT(n_hashed_a_polys_ == 2);
-        hashed_rlwe_vec res_vec(n, n_hashed_a_polys_);
-        hashed_rlwe res(n_hashed_a_polys_);
+        ASSERT(n_hashed_a_rgsws() == other.n_rlwe_decomps());
+        ASSERT(n_hashed_a_polys() == 2);
+        hashed_rlwe_vec res_vec(n_hashed_a_rgsws(), n_hashed_a_polys());
+        hashed_rlwe res(n_hashed_a_polys());
         res.set_coeffs_to_one();
         // #pragma omp parallel for num_threads(12)
-        for (size_t i = 0; i < n; i++) {
+        for (size_t i = 0; i < n_hashed_a_rgsws(); i++) {
             auto val = get(i).get_hash_sec(other.get(i));
             res_vec.set(i, val);
         }
@@ -1342,10 +1312,9 @@ public:
     }
     using array1d<rgsw, rgsw_vec>::operator*;
     rlwe operator*(const rlwe_decomp_vec& other) const {
-        size_t n = other.size();
-        ASSERT(size() == n);
+        ASSERT(n_rgsws() == other.n_rlwe_decomps());
         rlwe sum(n_polys(), n_coeffs());
-        for (size_t i = 0; i < n; i++) {
+        for (size_t i = 0; i < n_rgsws(); i++) {
             auto val = get(i) * other.get(i);
             sum = sum + val;
         }
@@ -1353,15 +1322,12 @@ public:
     }
     using array1d<rgsw, rgsw_vec>::pow;
     rlwe pow(const rlwe_decomp_vec& other) const {
-        size_t n = other.size();
-        ASSERT(size() == n);
-        size_t n_polys_ = n_polys();
-        size_t n_coeffs_ = n_coeffs();
-        rlwe_vec res_vec(n, n_polys_, n_coeffs_);
-        rlwe res(n_polys_, n_coeffs_);
+        ASSERT(n_rgsws() == other.n_rlwe_decomps());
+        rlwe_vec res_vec(n_rgsws(), n_polys(), n_coeffs());
+        rlwe res(n_polys(), n_coeffs());
         res.set_coeffs_to_one();
         // #pragma omp parallel for num_threads(N_THREADS)
-        for (size_t i = 0; i < n; i++) {
+        for (size_t i = 0; i < n_rgsws(); i++) {
             auto val = get(i).pow(other.get(i));
             res_vec.set(i, val);
         }
@@ -1405,17 +1371,13 @@ public:
     }
 
     rlwe_vec operator*(const rlwe_decomp_vec& other) const {
-        size_t rows = n_rows();
-        size_t cols = n_cols();
-        ASSERT(cols == other.size());
-        size_t n_polys_ = n_polys();
-        size_t n_coeffs_ = n_coeffs();
-        ASSERT(n_coeffs_ == other.n_coeffs());
+        ASSERT(n_cols() == other.size());
+        ASSERT(n_coeffs() == other.n_coeffs());
 
-        rlwe_vec res(rows, n_polys_, n_coeffs_);
-        for (size_t i = 0; i < rows; i++) {
-            rlwe sum(n_polys_, n_coeffs_);
-            for (size_t j = 0; j < cols; j++) {
+        rlwe_vec res(n_rows(), n_polys(), n_coeffs());
+        for (size_t i = 0; i < n_rows(); i++) {
+            rlwe sum(n_polys(), n_coeffs());
+            for (size_t j = 0; j < n_cols(); j++) {
                 auto val = get(i, j) * other.get(j);
                 sum = sum + val;
             }
@@ -1424,17 +1386,13 @@ public:
         return res;
     }
     rlwe_vec convolve(const rlwe_decomp_vec& other) const {
-        size_t rows = n_rows();
-        size_t cols = n_cols();
-        ASSERT(cols == other.size());
-        size_t n_polys_ = n_polys();
-        size_t n_coeffs_ = POLY_SIZE; // FIXME
-        ASSERT(n_coeffs_ == other.n_coeffs());
+        ASSERT(n_cols() == other.size());
+        ASSERT(POLY_SIZE == other.n_coeffs()); // FIXME
 
-        rlwe_vec res(rows, n_polys_, 2 * n_coeffs_);
-        for (size_t i = 0; i < rows; i++) {
-            rlwe sum(n_polys_, 2 * n_coeffs_);
-            for (size_t j = 0; j < cols; j++) {
+        rlwe_vec res(n_rows(), n_polys(), 2 * n_coeffs());
+        for (size_t i = 0; i < n_rows(); i++) {
+            rlwe sum(n_polys(), 2 * POLY_SIZE); // FIXME
+            for (size_t j = 0; j < n_cols(); j++) {
                 auto val = get(i, j).convolve(other.get(j));
                 sum = sum + val;
             }
@@ -1443,17 +1401,14 @@ public:
         return res;
     }
     rlwe_vec pow(const rlwe_decomp_vec& other) const {
-        size_t rows = n_rows();
-        size_t cols = n_cols();
-        ASSERT(cols == other.size());
+        ASSERT(n_cols() == other.size());
+
         rgsw& rg = get(0, 0);
-        size_t n_coeffs = rg.n_coeffs();
-        size_t n_polys = rg.n_polys();
-        rlwe_vec res(rows, n_polys, n_coeffs);
-        for (size_t i = 0; i < rows; i++) {
-            rlwe sum(n_polys, n_coeffs);
+        rlwe_vec res(n_rows(), rg.n_polys(), rg.n_coeffs());
+        for (size_t i = 0; i < n_rows(); i++) {
+            rlwe sum(rg.n_polys(), rg.n_coeffs());
             sum.set_coeffs_to_one();
-            for (size_t j = 0; j < cols; j++) {
+            for (size_t j = 0; j < n_cols(); j++) {
                 auto val = get(i, j).pow(other.get(j));
                 sum = sum.group_mult(val);
             }
