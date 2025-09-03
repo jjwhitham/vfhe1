@@ -161,7 +161,7 @@ i128 mod_(i128 val, i128 q) {
 
 vector_i128 mod_(const vector_i128& vals, i128 q) {
     vector_i128 res(vals.size());
-    for (size_t i = 0; i < vals.size(); ++i) {
+    for (size_t i = 0; i < vals.size(); i++) {
         res[i] = mod_(vals[i], q);
     }
     return res;
@@ -187,7 +187,7 @@ std::string print_to_string_i128(i128 n) {
 }
 vector_i128 scalar_vec_mult(i128 scalar, const vector_i128& vec, i128 q) {
     vector_i128 result(vec.size());
-    for (size_t i = 0; i < vec.size(); ++i) {
+    for (size_t i = 0; i < vec.size(); i++) {
         result[i] = mod_(scalar * vec[i], q);
     }
     return result;

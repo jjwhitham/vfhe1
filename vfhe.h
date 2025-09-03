@@ -52,6 +52,7 @@ typedef struct {
     int calls_convolve[N_THREADS] = { 0 };
     int calls_nega_ntt[N_THREADS] = { 0 };
     int calls_conv_to_nega[N_THREADS] = { 0 };
+    int n_get_hash_sec = 0;
     i128 iter_ = 0;
     std::chrono::duration<double, std::milli> elapsed_verify{};
     std::chrono::duration<double, std::milli> elapsed_proof{};
@@ -59,6 +60,7 @@ typedef struct {
     std::chrono::duration<double, std::milli> elapsed_plant{};
     std::chrono::duration<double, std::milli> elapsed_total{};
     std::chrono::duration<double, std::milli> convolve[N_THREADS]{};
+    std::chrono::duration<double, std::milli> get_hash_sec{};
 } times_and_counts;
 
 // NOTE inline keyword for structs allows the struct to be used in multiple
@@ -87,7 +89,7 @@ vector_i128 sample_secret_key(size_t N) {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::discrete_distribution<int> dist({0.25, 0.5, 0.25});
-    for (size_t i = 0; i < N; ++i) {
+    for (size_t i = 0; i < N; i++) {
         int val = dist(gen);
         // TODO uncomment and deal with potential check_val_bounds errors
         // if (val == 0) s[i] = -1;
@@ -107,7 +109,7 @@ vector_i128 sample_random_polynomial(size_t N, i128 q) {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<i128> dist(0, q - 1);
-    for (size_t i = 0; i < N; ++i) {
+    for (size_t i = 0; i < N; i++) {
         poly[i] = dist(gen);
     }
     #ifdef DEBUG1_ON
@@ -133,7 +135,7 @@ public:
     }
     // Copy constructor
     array1d(const array1d& other) : size_(other.size_), arr(new T[other.size_]) {
-        for (size_t i = 0; i < size_; ++i) arr[i] = other.arr[i];
+        for (size_t i = 0; i < size_; i++) arr[i] = other.arr[i];
     }
     // Move constructor
     array1d(array1d&& other) noexcept : size_(other.size_), arr(other.arr) {
@@ -189,7 +191,7 @@ public:
             delete[] arr;
             size_ = other.size_;
             arr = new T[size_];
-            for (size_t i = 0; i < size_; ++i) arr[i] = other.arr[i];
+            for (size_t i = 0; i < size_; i++) arr[i] = other.arr[i];
         }
         return *this;
     }
@@ -338,8 +340,8 @@ public:
     }
     // base case binary modular exponentiation
     i128 pow_(i128 base, i128 power) const {
-        power = mod_(power, FIELD_MODULUS);
-        base = mod_(base, GROUP_MODULUS);
+        // power = mod_(power, FIELD_MODULUS);
+        // base = mod_(base, GROUP_MODULUS);
         i128 result = 1;
         while (power > 0) {
             bool is_power_odd = (power % 2) == 1;
@@ -657,6 +659,8 @@ public:
         return size();
     }
     i128 get_hash_sec(const poly& other) const {
+        TIMING(auto start = std::chrono::high_resolution_clock::now();)
+        TIMING(times_counts.n_get_hash_sec += 1;)
         // HACK get around gr having hashed_a_polys of length 2n-1, but x_nega_ only length n
         ASSERT(size() == other.size() || size() == (2 * other.size() - 1));
         i128 result = 1;
@@ -667,6 +671,8 @@ public:
         for (size_t i = 0; i < other.size(); i++) {
             result = group_mult_(result, raised.get(i));
         }
+        TIMING(auto end = std::chrono::high_resolution_clock::now();)
+        TIMING(times_counts.get_hash_sec += end - start;)
         return result;
     }
 };
@@ -1534,8 +1540,8 @@ private:
     // ======== Scale up G, R, and H to integers ========
     array2d<i128> scalar_mat_mult(i128 scalar, std::vector<std::vector<double>>& mat, i128 q, size_t rows, size_t cols) {
         array2d<i128> result(rows, cols);
-        for (size_t i = 0; i < rows; ++i) {
-            for (size_t j = 0; j < cols; ++j) {
+        for (size_t i = 0; i < rows; i++) {
+            for (size_t j = 0; j < cols; j++) {
                 result.set(i, j, mod_(static_cast<i128>(std::round(scalar * mat[i][j])), q));
             }
         }
@@ -1547,7 +1553,7 @@ private:
         // TODO update to array1d<i128> (add as another class?)
         vector_i128 result(vec.size());
         ASSERT(result.capacity() == result.size());
-        for (size_t i = 0; i < vec.size(); ++i) {
+        for (size_t i = 0; i < vec.size(); i++) {
             result.at(i) = mod_(static_cast<i128>(std::round(scalar * vec[i])), q);
         }
         return result;

@@ -54,7 +54,7 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key> compute_eval_and_veri_keys(
         hashed_a_poly eval_pows_a(N);
         for (size_t i = 0; i < N; i++)
             eval_pows_a.set(i, eval_pows.at(i));
-        for (size_t i = 0; i < v.size(); ++i) {
+        for (size_t i = 0; i < v.size(); i++) {
             // mult v[i] by eval_pows
             hashed_a_poly hash_a = eval_pows_a * v[i];
             res.at(i) = hash_a.pow();
@@ -73,9 +73,9 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key> compute_eval_and_veri_keys(
         size_t cols = mat.n_cols();
         ASSERT(vec.size() == rows);
         rgsw_vec res(cols, mat.n_rlwes(), mat.n_polys(), mat.n_coeffs());
-        for (size_t j = 0; j < cols; ++j) {
+        for (size_t j = 0; j < cols; j++) {
             rgsw sum(mat.n_rlwes(), mat.n_polys(), mat.n_coeffs());
-            for (size_t i = 0; i < rows; ++i) {
+            for (size_t i = 0; i < rows; i++) {
                 sum = sum + (mat.get(i, j) * vec[i]);
             }
             res.set(j, sum);
@@ -90,12 +90,12 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key> compute_eval_and_veri_keys(
     size_t n_hashed_a_coeffs = eval_pows.size() / 2;
     hashed_a_rgsw_vec r_0_rgsw(r_0.size(), N_POLYS_IN_RLWE * d, N_POLYS_IN_RLWE, n_hashed_a_coeffs);
     hashed_a_rgsw_vec r_1_rgsw(r_1.size(), N_POLYS_IN_RLWE * d, N_POLYS_IN_RLWE, n_hashed_a_coeffs);
-    for (size_t i = 0; i < r_0.size(); ++i) {
+    for (size_t i = 0; i < r_0.size(); i++) {
         poly p(N);
         p.set(0, r_0[i]);
         r_0_rgsw.set(i, enc.encode_rgsw(p).get_hash_a(eval_pows));
     }
-    for (size_t i = 0; i < r_1.size(); ++i) {
+    for (size_t i = 0; i < r_1.size(); i++) {
         poly p(N);
         p.set(0, r_1[i]);
         r_1_rgsw.set(i, enc.encode_rgsw(p).get_hash_a(eval_pows));
@@ -105,9 +105,9 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key> compute_eval_and_veri_keys(
 
     hashed_a_rgsw_vec rF_0_r_1(rF_0.size());
     hashed_a_rgsw_vec rF_1_r_0(rF_1.size());
-    for (size_t i = 0; i < rF_0.size(); ++i)
+    for (size_t i = 0; i < rF_0.size(); i++)
         rF_0_r_1.set(i, rF_0.get(i) - r_1_rgsw.get(i));
-    for (size_t i = 0; i < rF_1.size(); ++i)
+    for (size_t i = 0; i < rF_1.size(); i++)
         rF_1_r_0.set(i, rF_1.get(i) - r_0_rgsw.get(i));
 
     hashed_a_rgsw_vec grFr_0 = rF_0_r_1.pow();
@@ -124,9 +124,9 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key> compute_eval_and_veri_keys(
 
     hashed_a_rgsw_vec sH_r_1(sH.size());
     hashed_a_rgsw_vec sH_r_0(sH.size());
-    for (size_t i = 0; i < sH.size(); ++i)
+    for (size_t i = 0; i < sH.size(); i++)
         sH_r_1.set(i, sH.get(i) - r_1_rgsw.get(i));
-    for (size_t i = 0; i < sH.size(); ++i)
+    for (size_t i = 0; i < sH.size(); i++)
         sH_r_0.set(i, sH.get(i) - r_0_rgsw.get(i));
 
     hashed_a_rgsw_vec gsHr_0 = sH_r_1.pow();
@@ -178,7 +178,7 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key> compute_eval_and_veri_keys(
 template<typename vector_T>
 auto scalar_vec_mult (double scalar, const vector_T& vec) {
     vector_double result(vec.size());
-    for (size_t i = 0; i < vec.size(); ++i) {
+    for (size_t i = 0; i < vec.size(); i++) {
         result[i] = scalar * vec[i];
     }
     return result;
@@ -201,6 +201,8 @@ Proof compute_proof(
 
     // pow_() raises each element of the vector to the power of each element of the hashed_rlwe_decomp_vec
     // and returns a hashed_rlwe
+    // TODO clean up
+    // TODO move to vfhe.h perhaps a new 'class hashed_a_poly_vec'
     auto pow_ = [](const std::vector<hashed_a_poly>& vec, const rlwe_vec& rv) -> hashed_rlwe {
         ASSERT(vec.size() == rv.size());
         hashed_rlwe res(rv.n_polys());
@@ -267,25 +269,22 @@ void verify_with_lin_and_dyn_checks(
 
     // Select parameters based on k
     i128 rho, alpha, gamma;
-    const hashed_rgsw_vec *rG, *rR;
+    const hashed_rgsw_vec &rG = (k % 2 == 0) ? rG_0 : rG_1;
+    const hashed_rgsw_vec &rR = (k % 2 == 0) ? rR_0 : rR_1;
     if (k % 2 == 0) {
         rho = rho_0;
         alpha = alpha_1;
         gamma = gamma_1;
-        rG = &rG_0;
-        rR = &rR_0;
     } else {
         rho = rho_1;
         alpha = alpha_0;
         gamma = gamma_0;
-        rG = &rG_1;
-        rR = &rR_1;
     }
 
     auto vec_dot_prod = [](const vector_i128& vec, const hashed_rlwe_vec& hvec) -> hashed_rlwe {
         ASSERT(vec.size() == hvec.size());
         hashed_rlwe sum(N_POLYS_IN_RLWE);
-        for (size_t i = 0; i < vec.size(); ++i) {
+        for (size_t i = 0; i < vec.size(); i++) {
             sum = sum + hvec.get(i) * vec[i];
         }
         return sum;
@@ -293,10 +292,10 @@ void verify_with_lin_and_dyn_checks(
     auto vec_dot_prod_enc = [](const hashed_rgsw_vec& rgsw_v, const rlwe_vec& rlwe_v, const vector_i128& eval_pows, u32 v, u32 d) -> hashed_rlwe {
         ASSERT(rgsw_v.size() == rlwe_v.size());
         hashed_rlwe sum(N_POLYS_IN_RLWE);
-        for (size_t i = 0; i < rgsw_v.size(); ++i) {
+        for (size_t i = 0; i < rgsw_v.size(); i++) {
             // For each element, hash rlwe_v[i] and multiply by rgsw_v[i]
             auto hashed = rlwe_v.get(i).decompose(v, d).get_hash(eval_pows);
-            for (size_t j = 0; j < hashed.size(); ++j) {
+            for (size_t j = 0; j < hashed.size(); j++) {
                 sum = sum + rgsw_v.get(i).get(j) * hashed.get(j);
             }
         }
@@ -327,10 +326,10 @@ void verify_with_lin_and_dyn_checks(
         assert(gsu.get(i) == rhs_u.get(i));
 
     hashed_rlwe rhs = G_2.group_mult(g_1);
-    hashed_rlwe rGy = vec_dot_prod_enc(*rG, y, eval_pows, v, d);
+    hashed_rlwe rGy = vec_dot_prod_enc(rG, y, eval_pows, v, d);
     hashed_rlwe grGy = rGy.pow();
     rhs = rhs.group_mult(grGy);
-    hashed_rlwe rRu = vec_dot_prod_enc(*rR, u_reenc, eval_pows, v, d);
+    hashed_rlwe rRu = vec_dot_prod_enc(rR, u_reenc, eval_pows, v, d);
     hashed_rlwe grRu = rRu.pow();
     rhs = rhs.group_mult(grRu);
     for (size_t i = 0; i < 2; i++)
@@ -409,7 +408,7 @@ void run_control_loop() {
     // DEBUG(std::cout << "sk: ";)
     // DEBUG(print_vector_i128(sk);)
     // TODO move to Params
-    u32 d = 4;
+    u32 d = 2;
     DEBUG1(d = 2;)
     // const i128 d = 2;
     // DEBUG(std::cout << "d: ";)
@@ -464,7 +463,7 @@ void run_control_loop() {
     auto vec_dot_prod = [](const vector_i128& vec, const hashed_rlwe_vec& hvec) -> hashed_rlwe {
         ASSERT(vec.size() == hvec.size());
         hashed_rlwe sum(N_POLYS_IN_RLWE);
-        for (size_t i = 0; i < vec.size(); ++i) {
+        for (size_t i = 0; i < vec.size(); i++) {
             sum = sum + hvec.get(i) * vec[i];
         }
         return sum;
@@ -477,9 +476,9 @@ void run_control_loop() {
     auto mat_vec_mult = [](const matrix_double& mat, const vector_double& vec) -> vector_double {
         ASSERT(mat[0].size() == vec.size());
         vector_double result(mat.size());
-        for (size_t i = 0; i < mat.size(); ++i) {
+        for (size_t i = 0; i < mat.size(); i++) {
             double sum = 0;
-            for (size_t j = 0; j < mat[i].size(); ++j) {
+            for (size_t j = 0; j < mat[i].size(); j++) {
                 sum += mat[i][j] * vec[j];
             }
             result[i] = sum;
@@ -489,7 +488,7 @@ void run_control_loop() {
 
     auto round_and_mod_vec = [](const vector_double& vec) -> vector_i128 {
         vector_i128 res(vec.size());
-        for (size_t i = 0; i < vec.size(); ++i) {
+        for (size_t i = 0; i < vec.size(); i++) {
             i128 rounded = static_cast<i128>(std::round(vec[i]));
             i128 modded = mod_(rounded, FIELD_MODULUS);
             res[i] = modded;
@@ -655,6 +654,8 @@ void print_times_and_counts() {
     std::cout << times_counts.elapsed_total.count() << "\n";
     std::cout << "Total Elapsed time (per loop): ";
     std::cout << times_counts.elapsed_total.count() / iter_ << "\n";
+    std::cout << "get_hash_sec (per loop): ";
+    std::cout << times_counts.get_hash_sec.count() / iter_ << "\n";
 
     std::cout << "\n";
     double convolve = 0.0;
@@ -680,6 +681,8 @@ void print_times_and_counts() {
     std::cout << nega_ntt_calls / iter_ << "\n";
     std::cout << "  Conv-to-nega (per loop): ";
     std::cout << conv_to_nega_calls / iter_ << "\n";
+    std::cout << "  get_hash_sec (per loop): ";
+    std::cout << times_counts.n_get_hash_sec / iter_ << "\n";
 }
 
 int main() {

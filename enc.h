@@ -154,16 +154,16 @@ public:
     rgsw encrypt_rgsw(const poly& M) {
         // Compute v powers: v^0, v^1, ..., v^{d-1}
         vector_i128 v_powers(d);
-        for (size_t i = 0; i < d; ++i) {
+        for (size_t i = 0; i < d; i++) {
             v_powers[i] = 1;
-            for (size_t j = 0; j < i; ++j) {
+            for (size_t j = 0; j < i; j++) {
                 v_powers[i] = mod_((v_powers[i] * v), q);
             }
         }
 
         // Build G matrix: 2 x 2d, each row is [v_powers, 0...], [0..., v_powers]
         std::vector<vector_i128> G(2, vector_i128(2 * d, 0));
-        for (size_t i = 0; i < d; ++i) {
+        for (size_t i = 0; i < d; i++) {
             G[0][i] = v_powers[i];
             G[1][d + i] = v_powers[i];
         }
@@ -172,15 +172,15 @@ public:
         std::vector<rlwe> encs_of_zero(2 * d);
         // FIXME is this correct? I'm using the same zero poly for each call
         poly zero_poly(N);
-        for (size_t i = 0; i < 2 * d; ++i) {
+        for (size_t i = 0; i < 2 * d; i++) {
             encs_of_zero[i] = encrypt_rlwe(zero_poly);
         }
 
         // Compute M * G and add to RLWE encryptions
         // NOTE needs modification for
         // FIXME
-        for (size_t i = 0; i < N; ++i) {
-            for (size_t j = 0; j < 2 * d; ++j) {
+        for (size_t i = 0; i < N; i++) {
+            for (size_t j = 0; j < 2 * d; j++) {
                 // Add M[i] * G[row][j] to b poly of RLWE
                 for (size_t k = 0; k < 2; k++) {
                     i128 val = mod_(M.get(i) * G.at(k).at(j), q);
@@ -193,7 +193,7 @@ public:
 
         // Pack RLWE encryptions into RGSW
         rgsw res(2 * d, N_POLYS_IN_RLWE, N);
-        for (size_t i = 0; i < 2 * d; ++i) {
+        for (size_t i = 0; i < 2 * d; i++) {
             res.set(i, encs_of_zero[i]);
         }
         return res;
@@ -203,8 +203,8 @@ public:
         size_t rows = mat.n_rows();
         size_t cols = mat.n_cols();
         rgsw_mat res(rows, cols, 2 * d, N_POLYS_IN_RLWE, N);
-        for (size_t i = 0; i < rows; ++i) {
-            for (size_t j = 0; j < cols; ++j) {
+        for (size_t i = 0; i < rows; i++) {
+            for (size_t j = 0; j < cols; j++) {
                 poly p(N);
                 // Set only the poly's constant coeff
                 p.set(0, mod_(mat.get(i, j), FIELD_MODULUS));
@@ -219,27 +219,27 @@ public:
     rgsw encode_rgsw(const poly& M) const {
         // Compute v powers: v^0, v^1, ..., v^{d-1}
         vector_i128 v_powers(d);
-        for (size_t i = 0; i < d; ++i) {
+        for (size_t i = 0; i < d; i++) {
             v_powers[i] = 1;
-            for (size_t j = 0; j < i; ++j) {
+            for (size_t j = 0; j < i; j++) {
                 v_powers[i] = mod_(v_powers[i] * v, q);
             }
         }
 
         // Build G matrix: 2 x 2d, each row is [v_powers, 0...], [0..., v_powers]
         std::vector<vector_i128> G(2, vector_i128(2 * d, 0));
-        for (size_t i = 0; i < d; ++i) {
+        for (size_t i = 0; i < d; i++) {
             G[0][i] = v_powers[i];
             G[1][d + i] = v_powers[i];
         }
 
         // Create rgsw object
         rgsw res(2 * d, 2, N);
-        for (size_t j = 0; j < 2 * d; ++j) {
+        for (size_t j = 0; j < 2 * d; j++) {
             rlwe ct(2, N);
             for (size_t row = 0; row < 2; ++row) {
                 poly p(N);
-                for (size_t i = 0; i < N; ++i) {
+                for (size_t i = 0; i < N; i++) {
                     i128 val = mod_(M.get(i) * G[row][j], q);
                     p.set(i, val);
                 }
