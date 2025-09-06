@@ -43,7 +43,7 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key> compute_eval_and_veri_keys(
     const rgsw_mat& F_ctx, const rgsw_mat& G_bar_ctx, const rgsw_mat& R_bar_ctx, const rgsw_mat& H_bar_ctx,
     const vector_i128& r_0, const vector_i128& r_1, const vector_i128& s,
     i128 rho_0, i128 rho_1, i128 alpha_0, i128 alpha_1, i128 gamma_0, i128 gamma_1,
-    u32 d, u32 q, size_t N, const vector_i128& eval_pows, const Encryptor& enc
+    u32 d, i128 q, size_t N, const vector_i128& eval_pows, const Encryptor& enc
 ) {
     // Converts a vector of i128s v to a vector of g^v[i] mod p
     auto convert_vec_to_cyclic_a = [&](const vector_i128& v, const vector_i128& eval_pows) -> std::vector<hashed_a_poly> {
@@ -209,24 +209,24 @@ Proof compute_proof(
         res.set_coeffs_to_one();
         for (size_t i = 0; i < vec.size(); i++) {
             hashed_a_poly hash_a_poly = vec.at(i);
-            rlwe rl = rv.get(i);
-            // TODO make refs?
-            poly p1 = rl.get(0);
-            poly p2 = rl.get(1);
+            rlwe& rl = rv.get(i);
             hashed_rlwe hash_rl(N_POLYS_IN_RLWE);
-            hash_rl.set(0, hash_a_poly.get_hash_sec(p1));
-            hash_rl.set(1, hash_a_poly.get_hash_sec(p2));
+            for (size_t j = 0; j < N_POLYS_IN_RLWE; j++) {
+                poly p = rl.get(j);
+                hash_rl.set(j, hash_a_poly.get_hash_sec(p));
+            }
             res = res.group_mult(hash_rl);
         }
         return res;
     };
 
+    rlwe_decomp_vec x_decomped = x.decompose(v, d);
     auto grx_ = pow_(gr, x_); // G_1
-    auto grFrx = grFr.get_hash_sec(x.decompose(v, d)); // G_2
-    auto gsHrx = gsHr.get_hash_sec(x.decompose(v, d)); // G_3
+    auto grFrx = grFr.get_hash_sec(x_decomped); // G_2
+    auto gsHrx = gsHr.get_hash_sec(x_decomped); // G_3
     auto gr_rho_x_ = pow_(gr_rho, x_); // G_1_
-    auto grFr_alpha_x = grFr_alpha.get_hash_sec(x.decompose(v, d)); // G_2_
-    auto gsHr_gamma_x = gsHr_gamma.get_hash_sec(x.decompose(v, d)); // G_3_
+    auto grFr_alpha_x = grFr_alpha.get_hash_sec(x_decomped); // G_2_
+    auto gsHr_gamma_x = gsHr_gamma.get_hash_sec(x_decomped); // G_3_
     auto g_1 = pow_(gr, x_nega_); // g_1
 
     return Proof {
@@ -609,7 +609,7 @@ void run_control_loop() {
         const eval_key& ek_i = (k % 2 == 0) ? std::get<0>(ek) : std::get<1>(ek);
         Proof proof = compute_proof(ek_i, x_cont_ctx, x_cont_ctx_convolved, x_cont_old_ctx, v, d); // C -> P
 
-#ifdef TIMING_ON
+        #ifdef TIMING_ON
             auto end_proof = std::chrono::high_resolution_clock::now();
             times_counts.elapsed_proof += end_proof - start_proof;
             end_controller = std::chrono::high_resolution_clock::now();

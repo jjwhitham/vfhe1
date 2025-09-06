@@ -76,11 +76,13 @@ constexpr i128 TWO_ROU = 996876704;
 
 
 
-// // q_pow = 5;
+// q_pow = 5;
 // constexpr i128 N_ = 4096;
 // constexpr i128 GROUP_MODULUS = 327689;
 // constexpr i128 FIELD_MODULUS = 40961;
 // constexpr i128 GENERATOR = 256;
+// constexpr i128 NTH_ROU = 18088;
+// constexpr i128 TWO_ROU = 243;
 
 // // q_pow = 10;
 // constexpr i128 N_ = 4096;
@@ -130,10 +132,12 @@ constexpr i128 TWO_ROU = 996876704;
 // constexpr i128 GENERATOR = 64;
 
 // N = 2^12, q > 2^54
+// constexpr i128 N_ = 4096;
 // constexpr i128 GROUP_MODULUS = 540431955285196831;
-// constexpr unsigned int FIELD_MODULUS = 18014398509506561;
 // constexpr i128 FIELD_MODULUS = 18014398509506561;
 // constexpr i128 GENERATOR = 1073741824;
+// constexpr i128 NTH_ROU = 5194839201355896;
+// constexpr i128 TWO_ROU = 9455140237568613;
 
 
 constexpr i128 N_POLYS_IN_RLWE = 2;
