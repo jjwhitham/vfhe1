@@ -190,7 +190,7 @@ Proof compute_proof(
     const rlwe_vec& x_nega_,
     const rlwe_vec& x_,
     const rlwe_vec& x,
-    u32 v, u32 d
+    u32 v, u32 d, i128 power
 ) {
     const std::vector<hashed_a_poly>& gr = ek.gr;
     const hashed_a_rgsw_vec& grFr = ek.grFr;
@@ -220,7 +220,7 @@ Proof compute_proof(
         return res;
     };
 
-    rlwe_decomp_vec x_decomped = x.decompose(v, d);
+    rlwe_decomp_vec x_decomped = x.decompose(v, d, power);
     auto grx_ = pow_(gr, x_); // G_1
     auto grFrx = grFr.get_hash_sec(x_decomped); // G_2
     auto gsHrx = gsHr.get_hash_sec(x_decomped); // G_3
@@ -243,7 +243,7 @@ Proof compute_proof(
 void verify_with_lin_and_dyn_checks(
     const veri_key& vk, const Proof& proof, const Proof& old_proof, size_t k,
     const rlwe_vec& y, const hashed_rlwe_vec& u, const rlwe_vec& u_reenc,
-    u32 v, u32 d, const vector_i128& eval_pows
+    u32 v, u32 d, i128 power, const vector_i128& eval_pows
 ) {
     // Unpack veri_key
     const vector_i128& s = vk.s;
@@ -289,12 +289,12 @@ void verify_with_lin_and_dyn_checks(
         }
         return sum;
     };
-    auto vec_dot_prod_enc = [](const hashed_rgsw_vec& rgsw_v, const rlwe_vec& rlwe_v, const vector_i128& eval_pows, u32 v, u32 d) -> hashed_rlwe {
+    auto vec_dot_prod_enc = [](const hashed_rgsw_vec& rgsw_v, const rlwe_vec& rlwe_v, const vector_i128& eval_pows, u32 v, u32 d, i128 power) -> hashed_rlwe {
         ASSERT(rgsw_v.size() == rlwe_v.size());
         hashed_rlwe sum(N_POLYS_IN_RLWE);
         for (size_t i = 0; i < rgsw_v.size(); i++) {
             // For each element, hash rlwe_v[i] and multiply by rgsw_v[i]
-            auto hashed = rlwe_v.get(i).decompose(v, d).get_hash(eval_pows);
+            auto hashed = rlwe_v.get(i).decompose(v, d, power).get_hash(eval_pows);
             for (size_t j = 0; j < hashed.size(); j++) {
                 sum = sum + rgsw_v.get(i).get(j) * hashed.get(j);
             }
@@ -326,10 +326,10 @@ void verify_with_lin_and_dyn_checks(
         assert(gsu.get(i) == rhs_u.get(i));
 
     hashed_rlwe rhs = G_2.group_mult(g_1);
-    hashed_rlwe rGy = vec_dot_prod_enc(rG, y, eval_pows, v, d);
+    hashed_rlwe rGy = vec_dot_prod_enc(rG, y, eval_pows, v, d, power);
     hashed_rlwe grGy = rGy.pow();
     rhs = rhs.group_mult(grGy);
-    hashed_rlwe rRu = vec_dot_prod_enc(rR, u_reenc, eval_pows, v, d);
+    hashed_rlwe rRu = vec_dot_prod_enc(rR, u_reenc, eval_pows, v, d, power);
     hashed_rlwe grRu = rRu.pow();
     rhs = rhs.group_mult(grRu);
     for (size_t i = 0; i < 2; i++)
@@ -408,18 +408,11 @@ void run_control_loop() {
     // DEBUG(std::cout << "sk: ";)
     // DEBUG(print_vector_i128(sk);)
     // TODO move to Params
-    u32 d = 2;
-    DEBUG1(d = 2;)
-    // const i128 d = 2;
-    // DEBUG(std::cout << "d: ";)
-    // DEBUG(std::cout << print_to_string_i128(d) << "\n" ;)
-    // TODO move to Params
-    double log2q = std::log2(static_cast<double>(FIELD_MODULUS));
-    // DEBUG(std::cout << "log2q: ";)
-    // DEBUG(std::cout << log2q << "\n" ;)
-    // TODO move to Params
-    int power = static_cast<int>(std::ceil(log2q / static_cast<double>(d)));
-    u32 v = static_cast<u32>(1) << power;
+    u32 d = Params::d;
+    // DEBUG(std::cout << "d: " << d << "\n";)
+    u32 power = Params::power;
+    // DEBUG(std::cout << "power: " << power << "\n";)
+    i128 v = Params::v;
     // DEBUG(std::cout << "v: ";)
     // DEBUG(std::cout << print_to_string_i128(v) << "\n" ;)
 
@@ -525,7 +518,7 @@ void run_control_loop() {
         #endif
 
         // Controller: Compute output
-        rlwe_decomp_vec x_cont_ctx_decomp = x_cont_ctx.decompose(v, d);
+        rlwe_decomp_vec x_cont_ctx_decomp = x_cont_ctx.decompose(v, d, power);
         // DEBUG(std::cout << "x_cont_ctx_decomp:\n";)
         // DEBUG(x_cont_ctx_decomp.print();)
         rlwe_vec u_out_ctx_convolved = H_bar_ctx.convolve(x_cont_ctx_decomp); // C -> P
@@ -569,10 +562,10 @@ void run_control_loop() {
         rlwe_vec x_cont_old_ctx = x_cont_ctx;
         DEBUG(std::cout << "x_cont_old_ctx:\n";)
         DEBUG(x_cont_old_ctx.print();)
-        rlwe_vec F_x = F_ctx.convolve(x_cont_ctx.decompose(v, d));
+        rlwe_vec F_x = F_ctx.convolve(x_cont_ctx.decompose(v, d, power));
         // DEBUG(std::cout << "F_x:\n";)
         // DEBUG(F_x.print();)
-        rlwe_decomp_vec y_out_ctx_decomped = y_out_ctx.decompose(v, d);
+        rlwe_decomp_vec y_out_ctx_decomped = y_out_ctx.decompose(v, d, power);
         rlwe_vec G_y = G_bar_ctx.convolve(y_out_ctx_decomped);
         // DEBUG(std::cout << "y_out_ctx_decomped:\n";)
         // DEBUG(y_out_ctx_decomped.print();)
@@ -582,7 +575,7 @@ void run_control_loop() {
         // DEBUG(y_out_ctx.print();)
         // DEBUG(std::cout << "G_y:\n";)
         // DEBUG(G_y.print();)
-        rlwe_vec R_u = R_bar_ctx.convolve(u_reenc_ctx.decompose(v, d));
+        rlwe_vec R_u = R_bar_ctx.convolve(u_reenc_ctx.decompose(v, d, power));
         // DEBUG(std::cout << "u_reenc_ctx:\n";)
         // DEBUG(u_reenc_ctx.print();)
         // DEBUG(std::cout << "R_u:\n";)
@@ -607,7 +600,7 @@ void run_control_loop() {
         #endif
 
         const eval_key& ek_i = (k % 2 == 0) ? std::get<0>(ek) : std::get<1>(ek);
-        Proof proof = compute_proof(ek_i, x_cont_ctx, x_cont_ctx_convolved, x_cont_old_ctx, v, d); // C -> P
+        Proof proof = compute_proof(ek_i, x_cont_ctx, x_cont_ctx_convolved, x_cont_old_ctx, v, d, power); // C -> P
 
         #ifdef TIMING_ON
             auto end_proof = std::chrono::high_resolution_clock::now();
@@ -623,7 +616,7 @@ void run_control_loop() {
             auto start_verify = std::chrono::high_resolution_clock::now();
         #endif
 
-        verify_with_lin_and_dyn_checks(vk, proof, old_proof, k, y_out_ctx, u_out_ctx_hashed, u_reenc_ctx, v, d, eval_pows);
+        verify_with_lin_and_dyn_checks(vk, proof, old_proof, k, y_out_ctx, u_out_ctx_hashed, u_reenc_ctx, v, d, power, eval_pows);
 
         #ifdef TIMING_ON
             auto end_verify = std::chrono::high_resolution_clock::now();

@@ -234,6 +234,47 @@ void ntt_iter_(auto& x, const arr_u128& w) {
     }
 }
 
+void ntt_iter_ct_no_bo(auto& a, const arr_u128& psi) {
+    // constexpr size_t n = 2 * POLY_SIZE;
+    constexpr size_t n = POLY_SIZE;
+    size_t t = n;
+    for (size_t m = 1; m < n; m = 2 * m) {
+        t = t / 2;
+        for (size_t i = 0; i < m; i++) {
+            size_t j1 = 2 * i * t;
+            size_t j2 = j1 + t - 1;
+            for (size_t j = j1; j <= j2; j++) {
+                auto U = a[j];
+                assert((m + i) < psi.size());
+                auto V = (a[j + t] * psi[m + i]) % FIELD_MOD;
+                a[j] = (U + V) % FIELD_MOD;
+                a[j + t] = mod_sub(U, V);
+            }
+        }
+    }
+}
+
+void intt_iter_gs_bo_no(auto& a, const arr_u128& psi) {
+    constexpr size_t n = POLY_SIZE;
+    size_t t = 1;
+    for (size_t m = n; m > 1; m = m / 2) {
+        size_t j1 = 0;
+        size_t h = m / 2;
+        for (size_t i = 0; i < h; i++) {
+            size_t j2 = j1 + t - 1;
+            for (size_t j = j1; j <= j2; j++) {
+                auto U = a[j];
+                auto V = a[j + t];
+                a[j] = (U + V) % FIELD_MOD;
+                assert((h + i) < psi.size());
+                a[j + t] = (mod_sub(U, V) * psi[h + i]) % FIELD_MOD;
+            }
+            j1 += 2 * t;
+        }
+        t = 2 * t;
+    }
+}
+
 void ntt_iter(auto& x, const arr_u128& rou_pows) {
     ntt_iter_(x, rou_pows);
 }

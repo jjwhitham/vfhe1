@@ -9,10 +9,7 @@
 #include <chrono>
 #include "omp.h"
 #include "shared.h"
-#include "convolution.hpp" // Download from AtCoder ACL
 #include "ntt.h"
-
-// using namespace atcoder;
 
 #ifdef TIMING_ON
 #  define TIMING(x) x
@@ -890,21 +887,7 @@ public:
     // creates d polynomials for each of the two polynomials in the rlwe object,
     // where the i'th coefficient has been decomposed with base v and depth d.
     // The i'th coefficient is spread across the i'th coefficients of the d polynomials.
-    rlwe_decomp decompose(const u32& v_, const u32& d) const {
-        // v - power of 2, s.t. v^{d-1} < q < v^d
-        i128 power = static_cast<u32>(std::ceil((std::log2(FIELD_MODULUS) / d)));
-        // TODO remove double up of computation of v in run_control_loop
-        i128 v = 1 << power;
-        ASSERT(v == v_);
-        ASSERT(d >= 1);
-        // FIXME not sure if we really need the lower bounds check. Fails sometimes
-        // ASSERT(v**(d-1) < q and q <= v**d)
-        if (FIELD_MODULUS > static_cast<i128>(1) << (power * d))
-            power += 1;
-        // std::cout << "power: " << power << ", v;" << v << ", d: " << d << "\n";
-        ASSERT(FIELD_MODULUS <= static_cast<i128>(1) << (power * d));
-        (void)v_;
-        // decompose poly into d polynomials of degree d-1
+    rlwe_decomp decompose(const u32& v, const u32& d, const u32& power) const {
         rlwe_decomp polys(2 * d, n_coeffs());
         for (size_t k = 0; k < N_POLYS_IN_RLWE; k++) {
             poly pol = get_poly(k);
@@ -995,10 +978,10 @@ public:
         return get_rlwe(0).get_poly(0).size();
     }
     // calls rlwe's decompose on each rlwe element and returns a rlwe_decomp_vec
-    auto decompose(const i128& v, const i128& d) const {
+    auto decompose(i128 v, u32 d, i128 power) const {
         rlwe_decomp_vec decomps(size(), 2 * d, n_coeffs());
         for (size_t i = 0; i < size(); i++)
-            decomps.set(i, get_rlwe(i).decompose(v, d));
+            decomps.set(i, get_rlwe(i).decompose(v, d, power));
         return decomps;
     }
     auto conv_to_nega(size_t N) const {
@@ -1043,7 +1026,7 @@ public:
         ASSERT(n_hashed_a_polys() == N_POLYS_IN_RLWE);
         ASSERT(n_hashed_a_rlwes() == other.size());
         hashed_rlwe_vec res_vec(n_hashed_a_rlwes(), n_hashed_a_polys());
-        // #pragma omp parallel for num_threads(2)
+        // #pragma omp parallel for num_threads(N_THREADS)
         for (size_t i = 0; i < n_hashed_a_rlwes(); i++) {
             hashed_rlwe& res = res_vec.get(i);
             for (size_t j = 0; j < n_hashed_a_polys(); j++) {
@@ -1236,7 +1219,7 @@ public:
         hashed_rlwe_vec res_vec(n_hashed_rgsws(), n_hashed_polys());
         hashed_rlwe res(n_hashed_polys());
         res.set_coeffs_to_one();
-        // #pragma omp parallel for num_threads(12)
+        // #pragma omp parallel for num_threads(N_THREADS)
         for (size_t i = 0; i < n_hashed_rgsws(); i++) {
             auto val = get(i).pow(other.get(i));
             res_vec.set(i, val);
@@ -1282,7 +1265,7 @@ public:
         hashed_rlwe_vec res_vec(n_hashed_a_rgsws(), n_hashed_a_polys());
         hashed_rlwe res(n_hashed_a_polys());
         res.set_coeffs_to_one();
-        // #pragma omp parallel for num_threads(12)
+        // #pragma omp parallel for num_threads(N_THREADS)
         for (size_t i = 0; i < n_hashed_a_rgsws(); i++) {
             auto val = get(i).get_hash_sec(other.get(i));
             res_vec.set(i, val);
@@ -1510,6 +1493,24 @@ i128 random_i128(i128 from, i128 to_inclusive) {
     return random_number;
 }
 
+constexpr size_t n_bits(i128 n) {
+    size_t x = 0;
+    while (n != 0) {
+        x++;
+        n >>= 1;
+    }
+    return x;
+}
+
+constexpr u32 get_decomp_power() {
+    // v - power of 2, s.t. v^{d-1} < q < v^d
+    constexpr size_t q_bits = n_bits(FIELD_MODULUS);
+    constexpr u32 remainder = q_bits % N_DECOMP;
+    constexpr u32 power = remainder ? q_bits / N_DECOMP + 1 : q_bits / N_DECOMP;
+    static_assert(FIELD_MODULUS <= static_cast<i128>(1) << (power * N_DECOMP));
+    static_assert(FIELD_MODULUS > static_cast<i128>(1) << (power * (N_DECOMP - 1)));
+    return power;
+}
 
 struct Params {
 private:
@@ -1573,6 +1574,9 @@ private:
     // }
 
 public:
+    static constexpr u32 d = N_DECOMP;
+    static constexpr u32 power = get_decomp_power();
+    static constexpr i128 v = static_cast<i128>(1) << power;
     Params() :
         N(N_),
         iter_(3),
@@ -1601,6 +1605,8 @@ public:
                 F.set(i, j, val1);
             }
         }
+        static_assert(d >= 1);
+
     }
     size_t N, iter_;
     u32 s, L, r;
