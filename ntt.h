@@ -285,6 +285,15 @@ void intt_iter(auto& x, const arr_u128& rou_pows, u128 inv_x_len) {
         el = (el * inv_x_len) % FIELD_MOD;
 }
 
+void ntt_iter1(auto& x, const arr_u128& rou_pows) {
+    ntt_iter_ct_no_bo(x, rou_pows);
+}
+void intt_iter1(auto& x, const arr_u128& rou_pows, u128 inv_x_len) {
+    intt_iter_gs_bo_no(x, rou_pows);
+    // scale by N^-1
+    for (auto& el : x)
+        el = (el * inv_x_len) % FIELD_MOD;
+}
 // Computes the recursive ntt
 void ntt_recursive(span_u128 x, u128 nth_root_unity) {
     bit_reverse(x);

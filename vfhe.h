@@ -525,6 +525,7 @@ public:
         constexpr arr_u128 psi_pows = get_rou_pows(TWO_ROU);
         constexpr arr_u128 psi_inv_pows = get_rou_pows(INV_2ROU);
         // NOTE rgsw mats should already be converted to NTT form
+        assert(isNTT);
         if (isNTT) {
             for (size_t i = n; i < 2 * n; i++)
                 a.set(i, get(i));
@@ -563,11 +564,29 @@ public:
         // TIMING(int thread_num = omp_get_thread_num();)
         TIMING(int thread_num = 0;)
         TIMING(times_counts.calls_nega_ntt[thread_num] += 1;)
-        poly res = convolve_ntt(other);
-        ASSERT(res.size() == 2 * size());
-        res = conv_to_nega_(res);
-        return res;
+        size_t n = POLY_SIZE;
+        // NOTE constructor zero-initialises
+        poly a(n);
+        poly b(n);
+        for (size_t i = 0; i < n; i++) {
+            a.set(i, get(i));
+            b.set(i, other.get(i));
+        }
+
+        constexpr u128 INV_2ROU = pow_constexpr(TWO_ROU, FIELD_MOD - 2, FIELD_MOD);
+        constexpr u128 INV_N = pow_constexpr(POLY_SIZE, FIELD_MOD - 2, FIELD_MOD);
+        constexpr arr_u128 psi_pows = get_rou_pows(TWO_ROU);
+        constexpr arr_u128 psi_inv_pows = get_rou_pows(INV_2ROU);
+        // NOTE rgsw mats should already be converted to NTT form
+        ntt_iter1(a, psi_pows);
+        ntt_iter1(b, psi_pows);
+        for (size_t i = 0; i < POLY_SIZE; i++) {
+            a.set(i, (a.get(i) * b.get(i)) % FIELD_MOD);
+        }
+        intt_iter1(a, psi_inv_pows, INV_N);
+        return a;
     }
+
     poly nega_naive(const poly& other) const {
         size_t N = n_coeffs();
         poly neg_conv(N);
