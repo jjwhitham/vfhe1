@@ -1,28 +1,3 @@
-// TODO write more tests
-// TODO rgsw code
-    // TODO PRNG
-    // TODO decomposition
-    // TODO enc/dec
-// TODO control code
-// TODO verification code
-// TODO proof code (linear/dynamic checks)
-// TODO NTT code
-// TODO homomorphic hash variant
-// TODO parallellise
-// TODO cyclic group code
-// TODO replace *this and (*this).member_func() with this and this->member_func() ???
-/*
-Setup:
-rF, rG, sH
-- veri_vec * rgsw_vec
-    - scalar * rgsw
-
-Verfication:
-rx' = rFx + rGx
-su = sHu
-*/
-
-
 #include "shared.h"
 #include "enc.h"
 #include "vfhe.h"
@@ -306,12 +281,12 @@ void verify_with_lin_and_dyn_checks(
     // hashed_rlwe G_1_rho = cyclic_exp_enc(G_1, rho, q, p);
     // TODO better interface self^other, with other as i128,
     // or better interface for i128^i128 (static member func?)
-    DEBUG(std::cout << "G_1: ";)
-    DEBUG(G_1.print();)
-    DEBUG(std::cout << "\n";)
-    DEBUG(std::cout << "G_1_: ";)
-    DEBUG(G_1_.print();)
-    DEBUG(std::cout << "\n";)
+    // DEBUG(std::cout << "G_1: ";)
+    // DEBUG(G_1.print();)
+    // DEBUG(std::cout << "\n";)
+    // DEBUG(std::cout << "G_1_: ";)
+    // DEBUG(G_1_.print();)
+    // DEBUG(std::cout << "\n";)
     for (size_t i = 0; i < 2; i++) {
         assert(G_1.pow_(G_1.get(i), rho) == G_1_.get(i));
         assert(G_2.pow_(G_2.get(i), alpha) == G_2_.get(i));
@@ -336,9 +311,22 @@ void verify_with_lin_and_dyn_checks(
         assert(G_1.get(i) == rhs.get(i));
 }
 
+vector_double mat_vec_mult(const matrix_double& mat, const vector_double& vec) {
+    ASSERT(mat[0].size() == vec.size());
+    vector_double result(mat.size());
+    for (size_t i = 0; i < mat.size(); i++) {
+        double sum = 0;
+        for (size_t j = 0; j < mat[i].size(); j++) {
+            sum += mat[i][j] * vec[j];
+        }
+        result[i] = sum;
+    }
+    return result;
+}
+
 void run_control_loop() {
     Params pms;
-    DEBUG(pms.print();)
+    // DEBUG(pms.print();)
     DEBUG(std::cout << "*** START run_control_loop ***\n";)
     using matrix_i128 = array2d<i128>;
 
@@ -352,22 +340,22 @@ void run_control_loop() {
     matrix_i128 R_bar = pms.R_bar;
     vector_double x_plant = pms.x_plant_init;
     vector_i128 x_cont = pms.x_cont_init_scaled;
-    DEBUG(std::cout << "C:\n";)
-    DEBUG(for (auto& x : C) print_vector_double(x);)
-    DEBUG(std::cout << "x_plant:\n";)
-    DEBUG(print_vector_double(x_plant);)
-    u32 rr = pms.r;
-    u32 ss = pms.s;
-    u32 L = pms.L;
+    // DEBUG(std::cout << "C:\n";)
+    // DEBUG(for (auto& x : C) print_vector_double(x);)
+    // DEBUG(std::cout << "x_plant:\n";)
+    // DEBUG(print_vector_double(x_plant);)
+    double rr = pms.r;
+    double ss = pms.s;
+    double L = pms.L;
     size_t iter_ = pms.iter_;
-    DEBUG(iter_ = 2;)
+    DEBUG(iter_ = 250;)
 
     i128 from = 1;
     i128 to_inclusive = q - 1;
     // TODO Params should sample
     auto knowledge_exps = pms.sample_knowledge_exponents(from, to_inclusive);
     // TODO make DEBUG
-    DEBUG(knowledge_exps = vector_i128({1, 1, 3, 3, 2, 3});)
+    DEBUG1(knowledge_exps = vector_i128({1, 1, 3, 3, 2, 3});)
     // DEBUG(std::cout << "knowledge_exps: ";)
     // DEBUG(print_vector_i128(knowledge_exps);)
     i128 alpha_0 = knowledge_exps.at(0);
@@ -428,11 +416,11 @@ void run_control_loop() {
     // DEBUG(std::cout << "H_bar_ctx.get(0, 0):\n";)
     // DEBUG(H_bar_ctx.get(0, 0).print();)
     rlwe_vec x_cont_ctx = enc.encrypt_rlwe_vec(x_cont);
-    DEBUG(std::cout << "x_cont_ctx:\n";)
-    DEBUG(x_cont_ctx.print();)
+    // DEBUG(std::cout << "x_cont_ctx:\n";)
+    // DEBUG(x_cont_ctx.print();)
     rlwe_vec x_cont_ctx_convolved(x_cont_ctx);
-    DEBUG(std::cout << "x_cont_ctx_convolved:\n";)
-    DEBUG(x_cont_ctx_convolved.print();)
+    // DEBUG(std::cout << "x_cont_ctx_convolved:\n";)
+    // DEBUG(x_cont_ctx_convolved.print();)
 
 
     i128 eval_point = 42;
@@ -466,25 +454,35 @@ void run_control_loop() {
     Proof old_proof {};
     old_proof.g_1 = g1;
 
-    auto mat_vec_mult = [](const matrix_double& mat, const vector_double& vec) -> vector_double {
-        ASSERT(mat[0].size() == vec.size());
-        vector_double result(mat.size());
-        for (size_t i = 0; i < mat.size(); i++) {
-            double sum = 0;
-            for (size_t j = 0; j < mat[i].size(); j++) {
-                sum += mat[i][j] * vec[j];
-            }
-            result[i] = sum;
-        }
-        return result;
+
+
+    auto round_vec = [](const vector_double& vec) -> vector_double {
+        vector_double res(vec.size());
+        for (size_t i = 0; i < vec.size(); i++)
+            res[i] = std::round(vec[i]);
+        return res;
     };
 
-    auto round_and_mod_vec = [](const vector_double& vec) -> vector_i128 {
+    auto map_to_q = [](vector_double& vec) -> vector_i128 {
         vector_i128 res(vec.size());
         for (size_t i = 0; i < vec.size(); i++) {
-            i128 rounded = static_cast<i128>(std::round(vec[i]));
-            i128 modded = mod_(rounded, FIELD_MODULUS);
-            res[i] = modded;
+            double x = vec[i];
+            // assert(x > -1000000000.0);
+            // assert(x < 1000000000.0);
+            __int64_t x1 = static_cast<__int64_t>(x);
+            i128 val = x1 < 0 ? x1 + FIELD_MODULUS : x1;
+            res.at(i) = val;
+        }
+        return res;
+    };
+
+    auto map_to_half_q = [](vector_i128& vec) -> vector_double {
+        vector_double res;
+        for (auto& x : vec) {
+            __int128_t val = x > (FIELD_MODULUS / 2) ? x - FIELD_MODULUS : x;
+            // assert(val > -1000000000);
+            // assert(val < 1000000000);
+            res.push_back(val);
         }
         return res;
     };
@@ -492,32 +490,37 @@ void run_control_loop() {
     TIMING(times_counts.iter_ = iter_;)
     for (size_t k = 0; k < iter_; k++) {
         DEBUG(std::cout << "\n*** START k: " << k << ", run_control_loop ***\n";)
-        // Plant: Compute output
         TIMING(auto start_plant = std::chrono::high_resolution_clock::now();)
 
+        /*  ### Plant: Compute output ### */
         vector_double y_out = mat_vec_mult(C, x_plant);
         DEBUG(std::cout << "y_out:\n";)
         DEBUG(print_vector_double(y_out);)
         vector_double y_out_scaled = scalar_vec_mult(rr, y_out);
         DEBUG(std::cout << "y_out_scaled:\n";)
         DEBUG(print_vector_double(y_out_scaled);)
-        vector_i128 y_out_rounded_modded = round_and_mod_vec(y_out_scaled);
-        DEBUG(std::cout << "y_out_scaled_modded:\n";)
-        DEBUG(print_vector_i128(y_out_rounded_modded);)
-        y_out_scaled = scalar_vec_mult(L, y_out_rounded_modded);
+        vector_double y_out_rounded = round_vec(y_out_scaled);
+        DEBUG(std::cout << "y_out_rounded:\n";)
+        DEBUG(print_vector_double(y_out_rounded);)
+        y_out_scaled = scalar_vec_mult(L, y_out_rounded);
         DEBUG(std::cout << "y_out_scaled:\n";)
         DEBUG(print_vector_double(y_out_scaled);)
-        y_out_rounded_modded = round_and_mod_vec(y_out_scaled);
-        DEBUG(std::cout << "y_out_scaled_modded:\n";)
-        DEBUG(print_vector_i128(y_out_rounded_modded);)
-        rlwe_vec y_out_ctx = enc.encrypt_rlwe_vec(y_out_rounded_modded); // P -> C
+        y_out_rounded = round_vec(y_out_scaled);
+        DEBUG(std::cout << "y_out_rounded:\n";)
+        DEBUG(print_vector_double(y_out_rounded);)
+        vector_i128 y_out_modded = map_to_q(y_out_rounded);
+        DEBUG(std::cout << "y_out_modded:\n";)
+        DEBUG(print_vector_i128(y_out_modded);)
+        rlwe_vec y_out_ctx = enc.encrypt_rlwe_vec(y_out_modded); // P -> C
 
         #ifdef TIMING_ON
             auto end_plant = std::chrono::high_resolution_clock::now();
             times_counts.elapsed_plant += end_plant - start_plant;
+            auto start_controller = std::chrono::high_resolution_clock::now();
         #endif
 
-        // Controller: Compute output
+
+        /* ### Controller: Compute output ### */
         rlwe_decomp_vec x_cont_ctx_decomp = x_cont_ctx.decompose(v, d, power);
         // DEBUG(std::cout << "x_cont_ctx_decomp:\n";)
         // DEBUG(x_cont_ctx_decomp.print();)
@@ -526,9 +529,13 @@ void run_control_loop() {
         // DEBUG(std::cout << "u_out_ctx_convolved:\n";)
         // DEBUG(u_out_ctx_convolved.print();)
 
-        // Plant: Update state (and re-encrypt u)
-        TIMING(start_plant = std::chrono::high_resolution_clock::now();)
+        #ifdef TIMING_ON
+            auto end_controller = std::chrono::high_resolution_clock::now();
+            times_counts.elapsed_controller += end_controller - start_controller;
+            start_plant = std::chrono::high_resolution_clock::now();
+        #endif
 
+        /* ### Plant: Update state (and re-encrypt u) ### */
         hashed_rlwe_vec u_out_ctx_hashed = u_out_ctx_convolved.get_hash(eval_pows);
         // DEBUG(std::cout << "u_out_ctx_hashed:\n";)
         // DEBUG(u_out_ctx_hashed.print();)
@@ -536,32 +543,43 @@ void run_control_loop() {
         // DEBUG(std::cout << "u_out_ctx:\n";)
         // DEBUG(u_out_ctx.print();)
         vector_i128 u_out_ptx = enc.decrypt_rlwe_vec(u_out_ctx);
-        // DEBUG(std::cout << "u_out_ptx:\n";)
-        // DEBUG(print_vector_i128(u_out_ptx);)
-        vector_double u_in = scalar_vec_mult(1.0 / (rr * ss * ss * L), u_out_ptx);
+        DEBUG(std::cout << "u_out_ptx:\n";)
+        DEBUG(print_vector_i128(u_out_ptx);)
+        vector_double u_out_ptx_mapped = map_to_half_q(u_out_ptx);
+        DEBUG(std::cout << "u_out_ptx_mapped:\n";)
+        DEBUG(print_vector_double(u_out_ptx_mapped);)
+        double xyz = 1.0 / (rr * ss * ss * L);
+        DEBUG(std::cout << "\n\n\nxyz: " << xyz << "\n\n\n";)
+        vector_double u_in = scalar_vec_mult(1.0 / (rr * ss * ss * L), u_out_ptx_mapped);
         DEBUG(std::cout << "u_in:\n";)
         DEBUG(print_vector_double(u_in);)
-        vector_i128 u_in_rounded_modded = round_and_mod_vec(scalar_vec_mult(rr, u_in));
-        u_in_rounded_modded = round_and_mod_vec(scalar_vec_mult(L, u_in));
+        vector_double u_in_rounded = round_vec(scalar_vec_mult(rr, u_in));
+        DEBUG(std::cout << "u_in_rounded:\n";)
+        DEBUG(print_vector_double(u_in_rounded);)
+        u_in_rounded = round_vec(scalar_vec_mult(L, u_in_rounded));
+        DEBUG(std::cout << "u_in_rounded:\n";)
+        DEBUG(print_vector_double(u_in_rounded);)
+        vector_i128 u_in_rounded_modded = map_to_q(u_in_rounded);
+        DEBUG(std::cout << "u_in_rounded_modded:\n";)
+        DEBUG(print_vector_i128(u_in_rounded_modded);)
         rlwe_vec u_reenc_ctx = enc.encrypt_rlwe_vec(u_in_rounded_modded); // XXX P->C: Plant re-encrypts u
         x_plant = mat_vec_mult(A, x_plant);
         vector_double B_u = mat_vec_mult(B, u_in);
         for (size_t i = 0; i < B_u.size(); i++)
             x_plant.at(i) += B_u.at(i);
-        DEBUG(std::cout << "x_plant:\n";)
-        DEBUG(print_vector_double(x_plant);)
+        // DEBUG(std::cout << "x_plant:\n";)
+        // DEBUG(print_vector_double(x_plant);)
 
         #ifdef TIMING_ON
             end_plant = std::chrono::high_resolution_clock::now();
             times_counts.elapsed_plant += end_plant - start_plant;
+            start_controller = std::chrono::high_resolution_clock::now();
         #endif
 
-        // Controller: Update state
-        TIMING(auto start_controller = std::chrono::high_resolution_clock::now();)
-
+        /* ###  Controller: Update state ### */
         rlwe_vec x_cont_old_ctx = x_cont_ctx;
-        DEBUG(std::cout << "x_cont_old_ctx:\n";)
-        DEBUG(x_cont_old_ctx.print();)
+        // DEBUG(std::cout << "x_cont_old_ctx:\n";)
+        // DEBUG(x_cont_old_ctx.print();)
         rlwe_vec F_x = F_ctx.convolve(x_cont_ctx.decompose(v, d, power));
         // DEBUG(std::cout << "F_x:\n";)
         // DEBUG(F_x.print();)
@@ -583,22 +601,19 @@ void run_control_loop() {
         rlwe_vec x_cont_ctx_convolved = F_x + G_y + R_u;
         x_cont_ctx_convolved.conv_to_coeff();
         x_cont_ctx = x_cont_ctx_convolved.conv_to_nega(N);
-        DEBUG(std::cout << "x_cont_ctx_convolved:\n";)
-        DEBUG(x_cont_ctx_convolved.print();)
-        DEBUG(std::cout << "x_cont_ctx:\n";)
-        DEBUG(x_cont_ctx.print();)
+        // DEBUG(std::cout << "x_cont_ctx_convolved:\n";)
+        // DEBUG(x_cont_ctx_convolved.print();)
+        // DEBUG(std::cout << "x_cont_ctx:\n";)
+        // DEBUG(x_cont_ctx.print();)
 
         #ifdef TIMING_ON
-            auto end_controller = std::chrono::high_resolution_clock::now();
+            end_controller = std::chrono::high_resolution_clock::now();
             times_counts.elapsed_controller += end_controller - start_controller;
-        #endif
-
-        // Controller: Prove
-        #ifdef TIMING_ON
             start_controller = std::chrono::high_resolution_clock::now();
             auto start_proof = std::chrono::high_resolution_clock::now();
         #endif
 
+        /* ### Controller: Prove ### */
         const eval_key& ek_i = (k % 2 == 0) ? std::get<0>(ek) : std::get<1>(ek);
         Proof proof = compute_proof(ek_i, x_cont_ctx, x_cont_ctx_convolved, x_cont_old_ctx, v, d, power); // C -> P
 
@@ -607,16 +622,13 @@ void run_control_loop() {
             times_counts.elapsed_proof += end_proof - start_proof;
             end_controller = std::chrono::high_resolution_clock::now();
             times_counts.elapsed_controller += end_controller - start_controller;
-        #endif
-
-
-        // Plant: Verify
-        #ifdef TIMING_ON
             start_plant = std::chrono::high_resolution_clock::now();
             auto start_verify = std::chrono::high_resolution_clock::now();
         #endif
 
+        /* ### Plant: Verify ### */
         verify_with_lin_and_dyn_checks(vk, proof, old_proof, k, y_out_ctx, u_out_ctx_hashed, u_reenc_ctx, v, d, power, eval_pows);
+        old_proof = proof;
 
         #ifdef TIMING_ON
             auto end_verify = std::chrono::high_resolution_clock::now();
@@ -625,7 +637,94 @@ void run_control_loop() {
             times_counts.elapsed_plant += end_plant - start_plant;
         #endif
 
-        old_proof = proof;
+        DEBUG(std::cout << "\n\n*** END k: " << k << ", run_control_loop ***\n\n";)
+    }
+}
+
+void run_control_loop_unencrypted() {
+    Params pms;
+    // DEBUG(pms.print();)
+    DEBUG(std::cout << "*** START run_control_loop_unencrypted ***\n";)
+    // using matrix_i128 = array2d<i128>;
+
+    matrix_double A = pms.A;
+    matrix_double B = pms.B;
+    matrix_double C = pms.C;
+    matrix_double F = pms.get_F_();
+    matrix_double G = pms.get_G();
+    matrix_double H = pms.get_H();
+    matrix_double R = pms.get_R();
+    vector_double x_plant_init = pms.x_plant_init;
+    vector_double x_cont_init = pms.get_x_cont_init();
+    size_t iter_ = pms.iter_;
+    DEBUG(iter_ = 2;)
+
+    DEBUG(std::cout << "A:\n";)
+    DEBUG(for (auto& x : A) print_vector_double(x);)
+    DEBUG(std::cout << "B:\n";)
+    DEBUG(for (auto& x : B) print_vector_double(x);)
+    DEBUG(std::cout << "C:\n";)
+    DEBUG(for (auto& x : C) print_vector_double(x);)
+    DEBUG(std::cout << "F:\n";)
+    DEBUG(for (auto& x : F) print_vector_double(x);)
+    DEBUG(std::cout << "G:\n";)
+    DEBUG(for (auto& x : G) print_vector_double(x);)
+    DEBUG(std::cout << "H:\n";)
+    DEBUG(for (auto& x : H) print_vector_double(x);)
+
+    DEBUG(std::cout << "x_plant_init:\n";)
+    DEBUG(print_vector_double(x_plant_init);)
+    DEBUG(std::cout << "x_cont_init:\n";)
+    DEBUG(print_vector_double(x_cont_init);)
+
+    // Initialise Plant and Controller states
+    vector_double x_plant(x_plant_init.size());
+    vector_double x_cont(x_cont_init.size());
+    assert(x_plant_init.size() == x_cont_init.size());
+    for (size_t i = 0; i < x_plant_init.size(); i++) {
+        x_plant.at(i) = x_plant_init.at(i);
+        x_cont.at(i) = x_cont_init.at(i);
+    }
+    DEBUG(std::cout << "x_plant:\n";)
+    DEBUG(print_vector_double(x_plant);)
+    DEBUG(std::cout << "x_cont:\n";)
+    DEBUG(print_vector_double(x_cont);)
+
+    for (size_t k = 0; k < iter_; k++) {
+        DEBUG(std::cout << "\n*** START k: " << k << ", run_control_loop ***\n";)
+
+        // Plant outputs y = Cx
+        vector_double y = mat_vec_mult(C, x_plant);
+        DEBUG(std::cout << "y:\n";)
+        DEBUG(print_vector_double(y);)
+
+        // Controller outputs u = Hx
+        vector_double u = mat_vec_mult(H, x_cont);
+        DEBUG(std::cout << "u:\n";)
+        DEBUG(print_vector_double(u);)
+
+        // Plant updates state x' = Ax + Bu
+        vector_double Ax = mat_vec_mult(A, x_plant);
+        vector_double Bu = mat_vec_mult(B, u);
+        assert(Ax.size() == Bu.size());
+        assert(x_plant.size() == Bu.size());
+        for (size_t i = 0; i < x_plant.size(); i++)
+            x_plant.at(i) = Ax.at(i) + Bu.at(i);
+        DEBUG(std::cout << "x_plant:\n";)
+        DEBUG(print_vector_double(x_plant);)
+
+        // Controller updates state x' = Fx + Gy
+        vector_double Fx = mat_vec_mult(F, x_cont);
+        vector_double Gy = mat_vec_mult(G, y);
+        vector_double Ru = mat_vec_mult(R, u);
+        assert(Fx.size() == Gy.size());
+        assert(Ru.size() == Gy.size());
+        assert(x_cont.size() == Gy.size());
+        for (size_t i = 0; i < x_cont.size(); i++)
+            x_cont.at(i) = Fx.at(i) + Gy.at(i) + Ru.at(i);
+        DEBUG(std::cout << "x_cont:\n";)
+        DEBUG(print_vector_double(x_cont);)
+
         DEBUG(std::cout << "\n\n*** END k: " << k << ", run_control_loop ***\n\n";)
     }
 }
@@ -689,18 +788,8 @@ int main() {
         times_counts.elapsed_total = end - start;
         print_times_and_counts();
     #endif
+
+    std::cout << std::fixed << std::setprecision(2);
+    run_control_loop_unencrypted();
     return 0;
 }
-
-// DONE timings
-//  TODO csv output for timings
-// TODO 128bit atcoder
-// DONE fix verify bug
-// TODO multiprecision library
-// DONE add secure hash
-// TODO increase group size
-// TODO implement packing?
-// TODO keep polys in NTT form?
-    // TODO at what points in the code?
-// TODO what happens when trying to use a cyclic group
-//      when Q=q1*...*qn? Refer to RSA which has composite modulus

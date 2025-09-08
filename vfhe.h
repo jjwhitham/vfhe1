@@ -411,10 +411,11 @@ public:
 
     void check_value_bounds(const T& val) const {
         if constexpr (std::is_same_v<T, i128>) {
-            i128 min_val = -1;
-            min_val <<= 63;
-            i128 max_val = (1UL << 63) - 1;
-            if (val < min_val || val > max_val) {
+            // i128 min_val = -1;
+            // min_val <<= 63;
+            // i128 max_val = (1UL << 63) - 1;
+            // if (val < min_val || val > max_val) {
+            if (val >= FIELD_MODULUS) {
                 throw std::out_of_range(
                     "(array2d) Value out of range: " + print_to_string_i128(val)
                 );
@@ -684,12 +685,15 @@ public:
         // HACK get around gr having hashed_a_polys of length 2n-1, but x_nega_ only length n
         // ASSERT(size() == other.size() || size() == (2 * other.size() - 1));
         i128 result = 1;
-        poly raised(other.size());
+        std::array<i128, N_THREADS> partials;
+        for (size_t t = 0; t < N_THREADS; ++t) partials[t] = 1;
+        #pragma omp parallel for num_threads(N_THREADS)
         for (size_t i = 0; i < other.size(); i++) {
-            raised.set(i, pow_(get(i), other.get(i)));
+            int tid = omp_get_thread_num();
+            partials[tid] = group_mult_(partials[tid], pow_(get(i), other.get(i)));
         }
-        for (size_t i = 0; i < other.size(); i++) {
-            result = group_mult_(result, raised.get(i));
+        for (size_t t = 0; t < N_THREADS; ++t) {
+            result = group_mult_(result, partials[t]);
         }
         TIMING(auto end = std::chrono::high_resolution_clock::now();)
         TIMING(times_counts.get_hash_sec += end - start;)
@@ -1564,23 +1568,27 @@ private:
     };
 
     // ======== Scale up G, R, and H to integers ========
-    array2d<i128> scalar_mat_mult(i128 scalar, std::vector<std::vector<double>>& mat, i128 q, size_t rows, size_t cols) {
+    array2d<i128> scalar_mat_mult(double scalar, std::vector<std::vector<double>>& mat, i128 q, size_t rows, size_t cols) {
         array2d<i128> result(rows, cols);
         for (size_t i = 0; i < rows; i++) {
             for (size_t j = 0; j < cols; j++) {
-                result.set(i, j, mod_(static_cast<i128>(std::round(scalar * mat[i][j])), q));
+                double rounded = std::round(scalar * mat[i][j]);
+                i128 modded = rounded < 0 ? rounded + q : rounded;
+                result.set(i, j, modded);
             }
         }
         return result;
     }
 
     // TODO update to array1d<i128> (add as another class?)
-    vector_i128 scalar_vec_mult(i128 scalar, vector_double& vec, i128 q) {
+    vector_i128 scalar_vec_mult(double scalar, vector_double& vec, i128 q) {
         // TODO update to array1d<i128> (add as another class?)
         vector_i128 result(vec.size());
         ASSERT(result.capacity() == result.size());
         for (size_t i = 0; i < vec.size(); i++) {
-            result.at(i) = mod_(static_cast<i128>(std::round(scalar * vec[i])), q);
+            double rounded = std::round(scalar * vec[i]);
+            i128 modded = rounded < 0 ? rounded + q : rounded;
+            result.at(i) = modded;
         }
         return result;
     }
@@ -1599,9 +1607,9 @@ public:
     Params() :
         N(N_),
         iter_(3),
-        s(10001),
-        L(10001),
-        r(10001),
+        s(100001.0),
+        L(100001.0),
+        r(100001.0),
         p(GROUP_MODULUS),
         q(FIELD_MODULUS),
         g(GENERATOR),
@@ -1620,7 +1628,7 @@ public:
         for (size_t i = 0; i < F_.size(); i++) {
             for (size_t j = 0; j < F_.at(0).size(); j++) {
                 int val = F_.at(i).at(j);
-                i128 val1 = val ? val > 0 : val + FIELD_MODULUS;
+                i128 val1 = val < 0 ? val + FIELD_MODULUS: val;
                 F.set(i, j, val1);
             }
         }
@@ -1628,7 +1636,7 @@ public:
 
     }
     size_t N, iter_;
-    u32 s, L, r;
+    double s, L, r;
     i128 p, q, g;
 
     array2d<i128> F, G_bar, R_bar, H_bar;
@@ -1729,6 +1737,21 @@ public:
         }
         // res <- {r_0, r_1, s}
         return res;
+    }
+    const std::vector<std::vector<double>>& get_F_() const {
+        return F_;
+    }
+    const std::vector<std::vector<double>>& get_G() const {
+        return G;
+    }
+    const std::vector<std::vector<double>>& get_H() const {
+        return H;
+    }
+    const std::vector<std::vector<double>>& get_R() const {
+        return R;
+    }
+    const std::vector<double>& get_x_cont_init() const {
+        return x_cont_init;
     }
 };
 

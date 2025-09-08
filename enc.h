@@ -110,7 +110,7 @@ public:
             b.set(i, mod_(val, q));
         }
 
-        rlwe res(2, N);
+        rlwe res(N_POLYS_IN_RLWE, N);
         res.set(0, b);
         res.set(1, a);
         return res;
