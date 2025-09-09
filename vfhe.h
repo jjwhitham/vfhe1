@@ -1607,9 +1607,9 @@ public:
     Params() :
         N(N_),
         iter_(3),
-        s(100001.0),
-        L(100001.0),
-        r(100001.0),
+        s(10000.0),
+        L(10000.0),
+        r(10000.0),
         p(GROUP_MODULUS),
         q(FIELD_MODULUS),
         g(GENERATOR),
