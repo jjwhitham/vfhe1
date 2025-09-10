@@ -302,19 +302,19 @@ void test_full() {
     // std::cout << "grFx:\n";
     // for (const auto& poly_el : grFx) {
     //     for (const auto& coeff : poly_el)
-    //         std::cout << print_to_string_i128(coeff) << ", ";
+    //         std::cout << i128str(coeff) << ", ";
     //     std::cout << "\n";
     // }
     // std::cout << "grFx2:\n";
     // for (const auto& poly_el : grFx2) {
     //     for (const auto& coeff : poly_el)
-    //         std::cout << print_to_string_i128(coeff) << ", ";
+    //         std::cout << i128str(coeff) << ", ";
     //     std::cout << "\n";
     // }
     // std::cout << "grFx3:\n";
     // for (const auto& poly_el : grFx3) {
     //     for (const auto& coeff : poly_el)
-    //         std::cout << print_to_string_i128(coeff) << ", ";
+    //         std::cout << i128str(coeff) << ", ";
     //     std::cout << "\n";
     // }
     // // std::cout << "r:\n";

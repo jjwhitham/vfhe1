@@ -8,8 +8,8 @@
 #include <string>
 #include <array>
 #include <span>
-#include "vfhe.h"
 #include "shared.h"
+#include "vfhe.h"
 
 // using u128 = __uint128_t;
 using u128 = i128;
@@ -276,23 +276,47 @@ void intt_iter_gs_bo_no(auto& a, const arr_u128& psi) {
 }
 
 void ntt_iter(auto& x, const arr_u128& rou_pows) {
+    TIMING(timing.calls_ntt += 1;)
+    TIMING(auto start = std::chrono::high_resolution_clock::now();)
+
     ntt_iter_(x, rou_pows);
+
+    TIMING(auto end = std::chrono::high_resolution_clock::now();)
+    TIMING(timing.ntt += end - start;)
 }
 void intt_iter(auto& x, const arr_u128& rou_pows, u128 inv_x_len) {
+    TIMING(timing.calls_intt += 1;)
+    TIMING(auto start = std::chrono::high_resolution_clock::now();)
+
     ntt_iter(x, rou_pows);
     // scale by N^-1
     for (auto& el : x)
         el = (el * inv_x_len) % FIELD_MOD;
+
+    TIMING(auto end = std::chrono::high_resolution_clock::now();)
+    TIMING(timing.intt += end - start;)
 }
 
 void ntt_iter1(auto& x, const arr_u128& rou_pows) {
+    TIMING(timing.calls_ntt1 += 1;)
+    TIMING(auto start = std::chrono::high_resolution_clock::now();)
+
     ntt_iter_ct_no_bo(x, rou_pows);
+
+    TIMING(auto end = std::chrono::high_resolution_clock::now();)
+    TIMING(timing.ntt1 += end - start;)
 }
 void intt_iter1(auto& x, const arr_u128& rou_pows, u128 inv_x_len) {
+    TIMING(timing.calls_intt1 += 1;)
+    TIMING(auto start = std::chrono::high_resolution_clock::now();)
+
     intt_iter_gs_bo_no(x, rou_pows);
     // scale by N^-1
     for (auto& el : x)
         el = (el * inv_x_len) % FIELD_MOD;
+
+    TIMING(auto end = std::chrono::high_resolution_clock::now();)
+    TIMING(timing.intt1 += end - start;)
 }
 // Computes the recursive ntt
 void ntt_recursive(span_u128 x, u128 nth_root_unity) {

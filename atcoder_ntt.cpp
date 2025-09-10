@@ -11,7 +11,7 @@ typedef __int128_t i128;
 // const i128 MOD = 1 * (1 << 4) + 1; // 17
 const i128 MOD = 257;
 
-std::string print_to_string_i128(i128 n) {
+std::string i128str(i128 n) {
     if (n == 0) {
         return "0";
     }
@@ -37,7 +37,7 @@ vector<i128> negacyclic_convolution(const vector<i128>& a, const vector<i128>& b
     // a_pad.resize(2 * n - 1);
     // b_pad.resize(2 * n - 1);
     vector<i128> conv = convolution<MOD>(a_pad, b_pad);
-    for (i128 c : conv) std::cout << print_to_string_i128(c) << " ";
+    for (i128 c : conv) std::cout << i128str(c) << " ";
     std::cout << "\n";
     vector<i128> res(n);
     for (i128 i = 0; i < n; ++i) {
@@ -74,10 +74,10 @@ int main() {
     vector<i128> c = convolution<MOD>(a, b);
     vector<i128> c1 = negacyclic_convolution(a, b);
     cout << "Convolution result: ";
-    for (i128 x : c) cout << print_to_string_i128(x) << " ";
+    for (i128 x : c) cout << i128str(x) << " ";
     cout << "\n";
     cout << "negacyclic convolution result: ";
-    for (i128 x : c1) cout << print_to_string_i128(x) << " ";
+    for (i128 x : c1) cout << i128str(x) << " ";
     cout << "\n";
     // arr ar(2);
     // arr aconv = convolution<MOD>(a, b);

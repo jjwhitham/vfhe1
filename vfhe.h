@@ -6,16 +6,9 @@
 #include <iostream>
 #include <cassert>
 #include <random>
-#include <chrono>
 #include "omp.h"
 #include "shared.h"
 #include "ntt.h"
-
-#ifdef TIMING_ON
-#  define TIMING(x) x
-#else
-#  define TIMING(x)
-#endif
 
 #ifdef DEBUG_ON
 #  define DEBUG(x) x
@@ -45,81 +38,7 @@
 #  define N_THREADS 1
 #endif
 
-typedef struct {
-    int calls_convolve[N_THREADS] = { 0 };
-    int calls_nega_ntt[N_THREADS] = { 0 };
-    int calls_conv_to_nega[N_THREADS] = { 0 };
-    int n_get_hash_sec = 0;
-    i128 iter_ = 0;
-    std::chrono::duration<double, std::milli> elapsed_verify{};
-    std::chrono::duration<double, std::milli> elapsed_proof{};
-    std::chrono::duration<double, std::milli> elapsed_controller{};
-    std::chrono::duration<double, std::milli> elapsed_plant{};
-    std::chrono::duration<double, std::milli> elapsed_total{};
-    std::chrono::duration<double, std::milli> convolve[N_THREADS]{};
-    std::chrono::duration<double, std::milli> get_hash_sec{};
-} times_and_counts;
 
-// NOTE inline keyword for structs allows the struct to be used in multiple
-// translation units without causing linker errors
-inline times_and_counts times_counts = { 0 };
-
-vector_i128 sample_discrete_gaussian(size_t N, double mu = 3.2, double sigma = 19.2) {
-    vector_i128 result(N);
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::normal_distribution<double> dist(mu, sigma);
-    for (size_t i = 0; i < N; i++) {
-        i128 res = static_cast<i128>(std::round(dist(gen)));
-        result[i] = mod_(res, FIELD_MODULUS);
-    }
-    #ifdef DEBUG1_ON
-        for (size_t i = 0; i < N; i++)
-            result.at(i) = 1;
-    #endif
-    return result;
-}
-vector_i128 sample_secret_key(size_t N) {
-    // Sample a secret key for the RGSW scheme.
-    // Each entry is -1, 0, or 1, with probabilities 0.25, 0.5, 0.25 respectively.
-    vector_i128 s(N);
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::discrete_distribution<int> dist({0.25, 0.5, 0.25});
-    for (size_t i = 0; i < N; i++) {
-        int val = dist(gen);
-        // TODO uncomment and deal with potential check_val_bounds errors
-        // if (val == 0) s[i] = -1;
-        if (val == 0) s[i] = 1;
-        else if (val == 1) s[i] = 0;
-        else s[i] = 1;
-    }
-    #ifdef DEBUG1_ON
-    for (size_t i = 0; i < N; i++)
-        s.at(i) = 1;
-    #endif
-    return s;
-}
-// Sample a random polynomial of degree N-1 with coefficients in the range [0, q).
-vector_i128 sample_random_polynomial(size_t N, i128 q) {
-    vector_i128 poly(N);
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<i128> dist(0, q - 1);
-    for (size_t i = 0; i < N; i++) {
-        poly[i] = dist(gen);
-    }
-    #ifdef DEBUG1_ON
-        for (size_t i = 0; i < N; i++)
-            poly.at(i) = 1;
-    #endif
-    return poly;
-}
-
-// Sample a noise polynomial of degree N-1 with coefficients from the discrete Gaussian distribution.
-vector_i128 sample_noise_polynomial(size_t N, double mu = 3.2, double sigma = 19.2) {
-    return sample_discrete_gaussian(N, mu, sigma);
-}
 template<typename T, typename Derived>
 class array1d {
 private:
@@ -164,7 +83,7 @@ public:
             if (val < min_val || val > max_val) {
             // if (val > max_val) {
                 throw std::out_of_range(
-                    "(array1d) Value out of range: " + print_to_string_i128(val)
+                    "(array1d) Value out of range: " + i128str(val)
                 );
             }
         }
@@ -277,6 +196,8 @@ public:
                 val = mod_sub(get(i), other.get(i));
             else
                 val = get(i) - other.get(i);
+            // constexpr bool is128 = (std::is_same_v<T, i128>);
+            // T val = is128 ? mod_sub(get(i), other.get(i)) : get(i) - other.get(i);
             neg_other.set(i, val);
         }
         return neg_other;
@@ -359,10 +280,10 @@ public:
         if constexpr (std::is_same_v<T, i128>) {
             std::cout << "{";
             for (size_t i = 0; i < size() - 1; i++) {
-                std::cout << print_to_string_i128(get(i));
+                std::cout << i128str(get(i));
                 std::cout << ", ";
             }
-            std::cout << print_to_string_i128(get(size() - 1)) << "}";
+            std::cout << i128str(get(size() - 1)) << "}";
         } else {
             std::cout << "{";
             for (size_t i = 0; i < size() - 1; i++) {
@@ -417,7 +338,7 @@ public:
             // if (val < min_val || val > max_val) {
             if (val >= FIELD_MODULUS) {
                 throw std::out_of_range(
-                    "(array2d) Value out of range: " + print_to_string_i128(val)
+                    "(array2d) Value out of range: " + i128str(val)
                 );
             }
         }
@@ -437,9 +358,9 @@ public:
         for (size_t i = 0; i < rows_; i++) {
             std::cout << "{";
             for (size_t j = 0; j < cols_ - 1; j++) {
-                std::cout << print_to_string_i128(arr[i][j]) << ", ";
+                std::cout << i128str(arr[i][j]) << ", ";
             }
-            std::cout << print_to_string_i128(arr[i][cols_ - 1]) << "}\n";
+            std::cout << i128str(arr[i][cols_ - 1]) << "}\n";
         }
     }
     void print_array1d() const {
@@ -467,6 +388,12 @@ public:
     poly(size_t N) : array1d<i128, poly>(N) {
         for (size_t i = 0; i < N; i++)
             set(i, 0);
+        if (N == 2 * N_) // FIXME do better
+            isNTT = true;
+    }
+    void set_isNTT(bool isNTT_) {
+        assert(isNTT != isNTT_);
+        isNTT = isNTT_;
     }
     auto& get_coeff(size_t n) const {
         return get(n);
@@ -484,87 +411,33 @@ public:
     // See inline definition below class hashed_a_poly (avoids circular definitions)
     auto get_hash_a(vector_i128 eval_pows) const;
 
-    poly conv_to_nega_(poly& conv) const {
-        // std::cout << conv.size() << "\n";
-        size_t n = conv.size() / 2;
-        assert(conv.get(2 * n - 1) == 0);
-        poly res(n);
-        for (size_t i = 0; i < n - 1; i++) {
-            // i128 val = mod_(conv.get(i) - conv.get(i + n), FIELD_MODULUS);
-            i128 val = mod_sub(conv.get(i), conv.get(i + n));
-            res.set(i, val);
-        }
-        res.set(n - 1, conv.get(n - 1));
-        return res;
-    }
 
-    poly convolve_naive(const poly& other) const {
-        poly convolved(2 * n_coeffs() - 1);
-        for (size_t i = 0; i < n_coeffs(); i++) {
-            for (size_t j = 0; j < n_coeffs(); j++) {
-                i128 val = mod_(get_coeff(i) * other.get_coeff(j), FIELD_MODULUS);
-                val = mod_(convolved.get(i + j) + val, FIELD_MODULUS);
-                convolved.set(i + j, val);
-            }
-        }
-        return convolved;
-    }
-    poly convolve_ntt(const poly& other) const {
-        TIMING(int thread_num = 0;)
-        TIMING(auto start = std::chrono::high_resolution_clock::now();)
-        size_t n = POLY_SIZE;
-        // NOTE constructor zero-initialises
-        poly a(2 * n);
-        poly b(2 * n);
-        for (size_t i = 0; i < n; i++) {
-            a.set(i, get(i));
-            b.set(i, other.get(i));
-        }
-
-        constexpr u128 INV_2ROU = pow_constexpr(TWO_ROU, FIELD_MOD - 2, FIELD_MOD);
-        constexpr u128 INV_2N = pow_constexpr(2 * POLY_SIZE, FIELD_MOD - 2, FIELD_MOD);
-        constexpr arr_u128 psi_pows = get_rou_pows(TWO_ROU);
-        constexpr arr_u128 psi_inv_pows = get_rou_pows(INV_2ROU);
+    poly convolve(const poly& other) const {
+        // FIXME n_coeffs differs when first poly is in NTT form
+        ASSERT(n_coeffs() == 2 * other.n_coeffs());
         // NOTE rgsw mats should already be converted to NTT form
         assert(isNTT);
-        if (isNTT) {
-            for (size_t i = n; i < 2 * n; i++)
-                a.set(i, get(i));
-        } else {
-            ntt_iter(a, psi_pows);
-        }
+
+        size_t n = POLY_SIZE;
+        poly a(2 * n);
+        for (size_t i = 0; i < 2 * n; i++)
+            a.set(i, get(i));
+
+        poly b(2 * n);
+        for (size_t i = 0; i < n; i++)
+            b.set(i, other.get(i));
+        constexpr arr_u128 psi_pows = get_rou_pows(TWO_ROU);
         ntt_iter(b, psi_pows);
+
         for (size_t i = 0; i < 2 * POLY_SIZE; i++) {
             a.set(i, (a.get(i) * b.get(i)) % FIELD_MOD);
         }
-        // FIXME simplify checking/setting isNTT
-        if (!isNTT)
-            intt_iter(a, psi_inv_pows, INV_2N);
-        else
-            a.isNTT = true;
+        a.isNTT = true;
 
-        TIMING(auto end = std::chrono::high_resolution_clock::now();)
-        TIMING(times_counts.convolve[thread_num] += end - start;)
         return a;
     }
-    poly convolve(const poly& other) const {
-        // TIMING(int thread_num = omp_get_thread_num();)
-        TIMING(int thread_num = 0;)
-        TIMING(times_counts.calls_convolve[thread_num] += 1;)
-
-        // FIXME n_coeffs differs when first poly is in NTT form
-        // ASSERT(n_coeffs() == other.n_coeffs());
-        bool using_ntt = true;
-        if (using_ntt)
-            return convolve_ntt(other);
-        else
-            return convolve_naive(other);
-
-    }
     poly nega_ntt(const poly& other) const {
-        // TIMING(int thread_num = omp_get_thread_num();)
-        TIMING(int thread_num = 0;)
-        TIMING(times_counts.calls_nega_ntt[thread_num] += 1;)
+        assert(n_coeffs() == other.n_coeffs());
         size_t n = POLY_SIZE;
         // NOTE constructor zero-initialises
         poly a(n);
@@ -578,7 +451,6 @@ public:
         constexpr u128 INV_N = pow_constexpr(POLY_SIZE, FIELD_MOD - 2, FIELD_MOD);
         constexpr arr_u128 psi_pows = get_rou_pows(TWO_ROU);
         constexpr arr_u128 psi_inv_pows = get_rou_pows(INV_2ROU);
-        // NOTE rgsw mats should already be converted to NTT form
         ntt_iter1(a, psi_pows);
         ntt_iter1(b, psi_pows);
         for (size_t i = 0; i < POLY_SIZE; i++) {
@@ -588,23 +460,6 @@ public:
         return a;
     }
 
-    poly nega_naive(const poly& other) const {
-        size_t N = n_coeffs();
-        poly neg_conv(N);
-        for (size_t i = 0; i < N; i++) {
-            for (size_t j = 0; j < i + 1; j++) {
-                i128 val = mod_(get_coeff(j) * other.get_coeff(i - j), FIELD_MODULUS);
-                val = mod_(neg_conv.get(i) + val, FIELD_MODULUS);
-                neg_conv.set(i, val);
-            }
-            for (size_t j = i + 1; j < N; j++) {
-                i128 val = mod_(get_coeff(j) * other.get_coeff(N + i - j), FIELD_MODULUS);
-                val = mod_(neg_conv.get(i) - val, FIELD_MODULUS);
-                neg_conv.set(i, val);
-            }
-        }
-        return neg_conv;
-    }
     poly conv_to_ntt() {
         ASSERT(isNTT == false);
         size_t n = n_coeffs();
@@ -619,7 +474,7 @@ public:
         return a;
     }
     poly conv_to_coeff() {
-        // ASSERT(isNTT == true);
+        ASSERT(isNTT == true);
         size_t n = n_coeffs();
         // NOTE constructor zero-initialises
         poly a(n);
@@ -638,16 +493,23 @@ public:
     using array1d<i128, poly>::operator*;
     poly operator*(const poly& other) const {
         ASSERT(n_coeffs() == other.n_coeffs());
-        bool using_ntt = true;
-        if (using_ntt)
-            return nega_ntt(other);
-        else
-            return nega_naive(other);
+        return nega_ntt(other);
+    }
+    poly conv_to_nega_(poly& conv) const {
+        // std::cout << conv.size() << "\n";
+        size_t n = conv.size() / 2;
+        assert(conv.get(2 * n - 1) == 0);
+        poly res(n);
+        for (size_t i = 0; i < n - 1; i++) {
+            // i128 val = mod_(conv.get(i) - conv.get(i + n), FIELD_MODULUS);
+            i128 val = mod_sub(conv.get(i), conv.get(i + n));
+            res.set(i, val);
+        }
+        res.set(n - 1, conv.get(n - 1));
+        return res;
     }
     auto conv_to_nega(size_t N) const {
-        // TIMING(int thread_num = omp_get_thread_num();)
-        TIMING(int thread_num = 0;)
-        TIMING(times_counts.calls_conv_to_nega[thread_num] += 1;)
+        TIMING(timing.calls_conv_to_nega += 1;)
         // ASSERT(n_coeffs() == 2 * N - 1);
         size_t conv_degree = n_coeffs() - 1;
         // HACK can't return *this after defining array1d move semantics
@@ -681,22 +543,22 @@ public:
     }
     i128 get_hash_sec(const poly& other) const {
         TIMING(auto start = std::chrono::high_resolution_clock::now();)
-        TIMING(times_counts.n_get_hash_sec += 1;)
+        TIMING(timing.calls_get_hash_sec += 1;)
         // HACK get around gr having hashed_a_polys of length 2n-1, but x_nega_ only length n
         // ASSERT(size() == other.size() || size() == (2 * other.size() - 1));
         i128 result = 1;
         std::array<i128, N_THREADS> partials;
-        for (size_t t = 0; t < N_THREADS; ++t) partials[t] = 1;
+        for (size_t t = 0; t < N_THREADS; t++) partials[t] = 1;
         #pragma omp parallel for num_threads(N_THREADS)
         for (size_t i = 0; i < other.size(); i++) {
             int tid = omp_get_thread_num();
             partials[tid] = group_mult_(partials[tid], pow_(get(i), other.get(i)));
         }
-        for (size_t t = 0; t < N_THREADS; ++t) {
+        for (size_t t = 0; t < N_THREADS; t++) {
             result = group_mult_(result, partials[t]);
         }
         TIMING(auto end = std::chrono::high_resolution_clock::now();)
-        TIMING(times_counts.get_hash_sec += end - start;)
+        TIMING(timing.get_hash_sec += end - start;)
         return result;
     }
 };
@@ -1142,9 +1004,10 @@ public:
         rlwe res(n_polys(), n_coeffs());
         for (size_t i = 0; i < n_rlwes(); i++) {
             for (size_t j = 0; j < n_polys(); j++) {
-                poly& p = res.get(j);
+                // poly& p = res.get(j);
                 auto val = get(i).get(j) * other.get(i);
-                p = p + val;
+                // p = p + val;
+                res.set(j, res.get(j) + val);
             }
         }
         return res;
@@ -1606,7 +1469,7 @@ public:
     static constexpr i128 v = static_cast<i128>(1) << power;
     Params() :
         N(N_),
-        iter_(3),
+        iter_(15),
         s(10000.0),
         L(10000.0),
         r(10000.0),
@@ -1687,14 +1550,14 @@ public:
     void print() {
         std::cout << "*** START Params.print ***\n";
         // print these: p, q, g, s, L, r, iter_;
-        std::cout << "N: " << print_to_string_i128(N) << "\n";
-        std::cout << "p: " << print_to_string_i128(p) << "\n";
-        std::cout << "q: " << print_to_string_i128(q) << "\n";
-        std::cout << "g: " << print_to_string_i128(g) << "\n";
-        std::cout << "s: " << print_to_string_i128(s) << "\n";
-        std::cout << "L: " << print_to_string_i128(L) << "\n";
-        std::cout << "r: " << print_to_string_i128(r) << "\n";
-        std::cout << "iter: " << print_to_string_i128(iter_) << "\n";
+        std::cout << "N: " << i128str(N) << "\n";
+        std::cout << "p: " << i128str(p) << "\n";
+        std::cout << "q: " << i128str(q) << "\n";
+        std::cout << "g: " << i128str(g) << "\n";
+        std::cout << "s: " << i128str(s) << "\n";
+        std::cout << "L: " << i128str(L) << "\n";
+        std::cout << "r: " << i128str(r) << "\n";
+        std::cout << "iter: " << i128str(iter_) << "\n";
         std::cout << "F:\n";
         F.print();
         std::cout << "G_bar:\n";

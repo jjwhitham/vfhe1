@@ -1,6 +1,7 @@
 #include "shared.h"
 #include "enc.h"
 #include "vfhe.h"
+#include "ntt.h"
 #include <ranges>
 #include <iomanip>
 
@@ -331,7 +332,54 @@ struct control_law_vars {
     std::vector<vector_double> x_cont;
 };
 
-void run_control_loop(control_law_vars& vars) {
+void print_times_and_counts(times_and_counts& timing) {
+    int iter_ = timing.iter_;
+    int n_decimals = 0;
+    std::cout << std::fixed << std::setprecision(n_decimals);
+    std::cout << "Times:\n";
+    std::cout << "Total: ";
+    std::cout << timing.total.count() << "\n";
+    std::cout << "Setup: ";
+    std::cout << timing.total.count() - timing.loop.count() << "\n";
+    std::cout << "  Per Loop: ";
+    std::cout << timing.loop.count() / iter_ << "\n";
+    std::cout << "    Controller: ";
+    std::cout << timing.controller.count() / iter_ << "\n";
+    std::cout << "      Proof: ";
+    std::cout << timing.proof.count() / iter_ << "\n";
+    std::cout << "    Plant: ";
+    std::cout << timing.plant.count() / iter_ << "\n";
+    std::cout << "      Verify: ";
+    std::cout << timing.verify.count() / iter_ << "\n";
+    std::cout << "    get_hash_sec: ";
+    std::cout << timing.get_hash_sec.count() / iter_ << "\n";
+    std::cout << "    NTT: ";
+    std::cout << timing.ntt.count() / iter_ << "\n";
+    std::cout << "    iNTT: ";
+    std::cout << timing.intt.count() / iter_ << "\n";
+    std::cout << "    NTT1: ";
+    std::cout << timing.ntt1.count() / iter_ << "\n";
+    std::cout << "    iNTT1: ";
+    std::cout << timing.intt1.count() / iter_ << "\n";
+    std::cout << "\n";
+
+    std::cout << "Number of calls (per loop):\n";
+
+    std::cout << "  NTT: ";
+    std::cout << timing.calls_ntt / iter_ << "\n";
+    std::cout << "  iNTT: ";
+    std::cout << timing.calls_intt / iter_ << "\n";
+    std::cout << "  NTT1: ";
+    std::cout << timing.calls_ntt1 / iter_ << "\n";
+    std::cout << "  iNTT1: ";
+    std::cout << timing.calls_intt1 / iter_ << "\n";
+    std::cout << "  Conv-to-nega: ";
+    std::cout << timing.calls_conv_to_nega / iter_ << "\n";
+    std::cout << "  get_hash_sec: ";
+    std::cout << timing.calls_get_hash_sec / iter_ << "\n";
+}
+
+void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     auto vec_dot_prod = [](const vector_i128& vec, const hashed_rlwe_vec& hvec) -> hashed_rlwe {
         ASSERT(vec.size() == hvec.size());
         hashed_rlwe sum(N_POLYS_IN_RLWE);
@@ -410,7 +458,6 @@ void run_control_loop(control_law_vars& vars) {
 
     size_t N = N_;
     // TODO move to Encryptor
-    vector_i128 sk = sample_secret_key(N);
     // TODO move to Params
     u32 d = Params::d;
     u32 power = Params::power;
@@ -422,16 +469,20 @@ void run_control_loop(control_law_vars& vars) {
         DEBUG1(r_1 = vector_i128({2, 4, 1, 4, 2});)
         DEBUG1(s = vector_i128({1, 3});)
         DEBUG1(N = 2;)
-        DEBUG1(sk = vector_i128({0, 0});)
     #endif
 
-    Encryptor enc(v, d, N, q, sk);
+    Encryptor enc(v, d, N, q);
+    poly sk = enc.sk;
     rgsw_mat F_ctx = enc.encrypt_rgsw_mat(F);
     rgsw_mat G_bar_ctx = enc.encrypt_rgsw_mat(G_bar);
     rgsw_mat R_bar_ctx = enc.encrypt_rgsw_mat(R_bar);
     rgsw_mat H_bar_ctx = enc.encrypt_rgsw_mat(H_bar);
     rlwe_vec x_cont_ctx = enc.encrypt_rlwe_vec(x_cont);
     rlwe_vec x_cont_ctx_convolved(x_cont_ctx);
+
+    #ifdef DEBUG1_ON
+        DEBUG1(sk = vector_i128({0, 0});)
+    #endif
 
     // TODO sample
     i128 eval_point = 42;
@@ -456,7 +507,9 @@ void run_control_loop(control_law_vars& vars) {
     Proof old_proof {};
     old_proof.g_1 = g1;
 
-    TIMING(times_counts.iter_ = iter_;)
+    TIMING(timing.iter_ = iter_;)
+    TIMING(print_times_and_counts(timing);)
+    TIMING(auto start = std::chrono::high_resolution_clock::now();)
     for (size_t k = 0; k < iter_; k++) {
         DEBUG(std::cout << "\n*** START k: " << k << ", run_control_loop ***\n";)
         TIMING(auto start_plant = std::chrono::high_resolution_clock::now();)
@@ -464,28 +517,28 @@ void run_control_loop(control_law_vars& vars) {
         /*  ### Plant: Compute output ### */
         vector_double y_out = mat_vec_mult(C, x_plant);
         vars.y.push_back(y_out);
-        DEBUG(std::cout << "y_out:\n";)
-        DEBUG(print_vector_double(y_out);)
+        // DEBUG(std::cout << "y_out:\n";)
+        // DEBUG(print_vector_double(y_out);)
         vector_double y_out_scaled = scalar_vec_mult(rr, y_out);
-        DEBUG(std::cout << "y_out_scaled:\n";)
-        DEBUG(print_vector_double(y_out_scaled);)
+        // DEBUG(std::cout << "y_out_scaled:\n";)
+        // DEBUG(print_vector_double(y_out_scaled);)
         vector_double y_out_rounded = round_vec(y_out_scaled);
-        DEBUG(std::cout << "y_out_rounded:\n";)
-        DEBUG(print_vector_double(y_out_rounded);)
+        // DEBUG(std::cout << "y_out_rounded:\n";)
+        // DEBUG(print_vector_double(y_out_rounded);)
         y_out_scaled = scalar_vec_mult(L, y_out_rounded);
-        DEBUG(std::cout << "y_out_scaled:\n";)
-        DEBUG(print_vector_double(y_out_scaled);)
+        // DEBUG(std::cout << "y_out_scaled:\n";)
+        // DEBUG(print_vector_double(y_out_scaled);)
         y_out_rounded = round_vec(y_out_scaled);
-        DEBUG(std::cout << "y_out_rounded:\n";)
-        DEBUG(print_vector_double(y_out_rounded);)
+        // DEBUG(std::cout << "y_out_rounded:\n";)
+        // DEBUG(print_vector_double(y_out_rounded);)
         vector_i128 y_out_modded = map_to_q(y_out_rounded);
-        DEBUG(std::cout << "y_out_modded:\n";)
-        DEBUG(print_vector_i128(y_out_modded);)
+        // DEBUG(std::cout << "y_out_modded:\n";)
+        // DEBUG(print_vector_i128(y_out_modded);)
         rlwe_vec y_out_ctx = enc.encrypt_rlwe_vec(y_out_modded); // P -> C
 
         #ifdef TIMING_ON
             auto end_plant = std::chrono::high_resolution_clock::now();
-            times_counts.elapsed_plant += end_plant - start_plant;
+            timing.plant += end_plant - start_plant;
             auto start_controller = std::chrono::high_resolution_clock::now();
         #endif
 
@@ -501,7 +554,7 @@ void run_control_loop(control_law_vars& vars) {
 
         #ifdef TIMING_ON
             auto end_controller = std::chrono::high_resolution_clock::now();
-            times_counts.elapsed_controller += end_controller - start_controller;
+            timing.controller += end_controller - start_controller;
             start_plant = std::chrono::high_resolution_clock::now();
         #endif
 
@@ -513,26 +566,24 @@ void run_control_loop(control_law_vars& vars) {
         // DEBUG(std::cout << "u_out_ctx:\n";)
         // DEBUG(u_out_ctx.print();)
         vector_i128 u_out_ptx = enc.decrypt_rlwe_vec(u_out_ctx);
-        DEBUG(std::cout << "u_out_ptx:\n";)
-        DEBUG(print_vector_i128(u_out_ptx);)
+        // DEBUG(std::cout << "u_out_ptx:\n";)
+        // DEBUG(print_vector_i128(u_out_ptx);)
         vector_double u_out_ptx_mapped = map_to_half_q(u_out_ptx);
-        DEBUG(std::cout << "u_out_ptx_mapped:\n";)
-        DEBUG(print_vector_double(u_out_ptx_mapped);)
-        double xyz = 1.0 / (rr * ss * ss * L);
-        DEBUG(std::cout << "\n\n\nxyz: " << xyz << "\n\n\n";)
+        // DEBUG(std::cout << "u_out_ptx_mapped:\n";)
+        // DEBUG(print_vector_double(u_out_ptx_mapped);)
         vector_double u_in = scalar_vec_mult(1.0 / (rr * ss * ss * L), u_out_ptx_mapped);
         vars.u.push_back(u_in);
-        DEBUG(std::cout << "u_in:\n";)
-        DEBUG(print_vector_double(u_in);)
+        // DEBUG(std::cout << "u_in:\n";)
+        // DEBUG(print_vector_double(u_in);)
         vector_double u_in_rounded = round_vec(scalar_vec_mult(rr, u_in));
-        DEBUG(std::cout << "u_in_rounded:\n";)
-        DEBUG(print_vector_double(u_in_rounded);)
+        // DEBUG(std::cout << "u_in_rounded:\n";)
+        // DEBUG(print_vector_double(u_in_rounded);)
         u_in_rounded = round_vec(scalar_vec_mult(L, u_in_rounded));
-        DEBUG(std::cout << "u_in_rounded:\n";)
-        DEBUG(print_vector_double(u_in_rounded);)
+        // DEBUG(std::cout << "u_in_rounded:\n";)
+        // DEBUG(print_vector_double(u_in_rounded);)
         vector_i128 u_in_rounded_modded = map_to_q(u_in_rounded);
-        DEBUG(std::cout << "u_in_rounded_modded:\n";)
-        DEBUG(print_vector_i128(u_in_rounded_modded);)
+        // DEBUG(std::cout << "u_in_rounded_modded:\n";)
+        // DEBUG(print_vector_i128(u_in_rounded_modded);)
         rlwe_vec u_reenc_ctx = enc.encrypt_rlwe_vec(u_in_rounded_modded); // XXX P->C: Plant re-encrypts u
         x_plant = mat_vec_mult(A, x_plant);
         vector_double B_u = mat_vec_mult(B, u_in);
@@ -544,14 +595,11 @@ void run_control_loop(control_law_vars& vars) {
 
         #ifdef TIMING_ON
             end_plant = std::chrono::high_resolution_clock::now();
-            times_counts.elapsed_plant += end_plant - start_plant;
+            timing.plant += end_plant - start_plant;
             start_controller = std::chrono::high_resolution_clock::now();
         #endif
 
         /* ###  Controller: Update state ### */
-        rlwe_vec x_cont_old_ctx = x_cont_ctx;
-        // DEBUG(std::cout << "x_cont_old_ctx:\n";)
-        // DEBUG(x_cont_old_ctx.print();)
         rlwe_vec F_x = F_ctx.convolve(x_cont_ctx.decompose(v, d, power));
         // DEBUG(std::cout << "F_x:\n";)
         // DEBUG(F_x.print();)
@@ -572,7 +620,12 @@ void run_control_loop(control_law_vars& vars) {
         // DEBUG(R_u.print();)
         rlwe_vec x_cont_ctx_convolved = F_x + G_y + R_u;
         x_cont_ctx_convolved.conv_to_coeff();
+        rlwe_vec x_cont_old_ctx = x_cont_ctx;
+        // DEBUG(std::cout << "x_cont_old_ctx:\n";)
+        // DEBUG(x_cont_old_ctx.print();)
         x_cont_ctx = x_cont_ctx_convolved.conv_to_nega(N);
+
+        // Decrypt and capture controller state
         vector_i128 x_cont_ptx = enc.decrypt_rlwe_vec(x_cont_ctx);
         vector_double x_cont_ptx_mapped = map_to_half_q(x_cont_ptx);
         vector_double x_cont_ptx_scaled = scalar_vec_mult(1 / (rr * ss * L), x_cont_ptx_mapped);
@@ -585,7 +638,7 @@ void run_control_loop(control_law_vars& vars) {
 
         #ifdef TIMING_ON
             end_controller = std::chrono::high_resolution_clock::now();
-            times_counts.elapsed_controller += end_controller - start_controller;
+            timing.controller += end_controller - start_controller;
             start_controller = std::chrono::high_resolution_clock::now();
             auto start_proof = std::chrono::high_resolution_clock::now();
         #endif
@@ -596,9 +649,9 @@ void run_control_loop(control_law_vars& vars) {
 
         #ifdef TIMING_ON
             auto end_proof = std::chrono::high_resolution_clock::now();
-            times_counts.elapsed_proof += end_proof - start_proof;
+            timing.proof += end_proof - start_proof;
             end_controller = std::chrono::high_resolution_clock::now();
-            times_counts.elapsed_controller += end_controller - start_controller;
+            timing.controller += end_controller - start_controller;
             start_plant = std::chrono::high_resolution_clock::now();
             auto start_verify = std::chrono::high_resolution_clock::now();
         #endif
@@ -609,13 +662,15 @@ void run_control_loop(control_law_vars& vars) {
 
         #ifdef TIMING_ON
             auto end_verify = std::chrono::high_resolution_clock::now();
-            times_counts.elapsed_verify += end_verify - start_verify;
+            timing.verify += end_verify - start_verify;
             end_plant = std::chrono::high_resolution_clock::now();
-            times_counts.elapsed_plant += end_plant - start_plant;
+            timing.plant += end_plant - start_plant;
         #endif
 
         DEBUG(std::cout << "\n\n*** END k: " << k << ", run_control_loop ***\n\n";)
     }
+    TIMING(auto end = std::chrono::high_resolution_clock::now();)
+    TIMING(timing.loop = end - start;)
 }
 void run_control_loop_unencrypted(control_law_vars& vars) {
     Params pms;
@@ -710,54 +765,6 @@ void run_control_loop_unencrypted(control_law_vars& vars) {
     }
 }
 
-void print_times_and_counts() {
-    int iter_ = times_counts.iter_;
-    int n_decimals = 0;
-    std::cout << std::fixed << std::setprecision(n_decimals);
-    std::cout << "Times:\n";
-    std::cout << "Proof (per loop): ";
-    std::cout << times_counts.elapsed_proof.count() / iter_ << "\n";
-    std::cout << "Controller (per loop): ";
-    std::cout << times_counts.elapsed_controller.count() / iter_ << "\n";
-    std::cout << "Verify (per loop): ";
-    std::cout << times_counts.elapsed_verify.count() / iter_ << "\n";
-    std::cout << "Plant (per loop): ";
-    std::cout << times_counts.elapsed_plant.count() / iter_ << "\n";
-    std::cout << "Total Elapsed time: ";
-    std::cout << times_counts.elapsed_total.count() << "\n";
-    std::cout << "Total Elapsed time (per loop): ";
-    std::cout << times_counts.elapsed_total.count() / iter_ << "\n";
-    std::cout << "get_hash_sec (per loop): ";
-    std::cout << times_counts.get_hash_sec.count() / iter_ << "\n";
-
-    std::cout << "\n";
-    double convolve = 0.0;
-    for (size_t i = 0; i < N_THREADS; i++)
-        convolve += times_counts.convolve[i].count();
-    std::cout << "NTT (per loop): ";
-    std::cout  << convolve / iter_ << "\n";
-    std::cout << "NTT (per loop, per thread): ";
-    std::cout << convolve / N_THREADS / iter_ << "\n";
-    std::cout << "Number of calls:\n";
-    int convolve_calls = 0;
-    for (size_t i = 0; i < N_THREADS; i++)
-        convolve_calls += times_counts.calls_convolve[i];
-    int nega_ntt_calls = 0;
-    for (size_t i = 0; i < N_THREADS; i++)
-        nega_ntt_calls += times_counts.calls_nega_ntt[i];
-    int conv_to_nega_calls = 0;
-    for (size_t i = 0; i < N_THREADS; i++)
-        conv_to_nega_calls += times_counts.calls_conv_to_nega[i];
-    std::cout << "  Convolve (per loop): ";
-    std::cout << convolve_calls / iter_ << "\n";
-    std::cout << "  Negacyclic (per loop): ";
-    std::cout << nega_ntt_calls / iter_ << "\n";
-    std::cout << "  Conv-to-nega (per loop): ";
-    std::cout << conv_to_nega_calls / iter_ << "\n";
-    std::cout << "  get_hash_sec (per loop): ";
-    std::cout << times_counts.n_get_hash_sec / iter_ << "\n";
-}
-
 void print_vars_diff(control_law_vars& vars, control_law_vars& vars_unenc) {
     std::cout << "##### VARS_UNENC #####\n";
     std::cout << "y:\n";
@@ -823,17 +830,17 @@ int main() {
     // omp_set_nested(1);
     TIMING(auto start = std::chrono::high_resolution_clock::now();)
 
-    run_control_loop(vars);
+    run_control_loop(vars, timing);
 
     #ifdef TIMING_ON
         auto end = std::chrono::high_resolution_clock::now();
-        times_counts.elapsed_total = end - start;
-        print_times_and_counts();
+        timing.total = end - start;
+        print_times_and_counts(timing);
     #endif
 
-    std::cout << std::fixed << std::setprecision(2);
-    run_control_loop_unencrypted(vars_unenc);
+    // std::cout << std::fixed << std::setprecision(2);
+    // run_control_loop_unencrypted(vars_unenc);
 
-    print_vars_diff(vars, vars_unenc);
+    // print_vars_diff(vars, vars_unenc);
     return 0;
 }
