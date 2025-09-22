@@ -3,26 +3,28 @@
 #include "shared.h"
 #include "vfhe.h"
 
-vector_i128 sample_discrete_gaussian(size_t N, double mu = 3.2, double sigma = 19.2) {
-    vector_i128 result(N);
+poly sample_discrete_gaussian(size_t N, double mu = 3.2, double sigma = 19.2) {
+    poly result(N);
     std::random_device rd;
     std::mt19937 gen(rd());
     std::normal_distribution<double> dist(mu, sigma);
     for (size_t i = 0; i < N; i++) {
-        i128 res = static_cast<i128>(std::round(dist(gen)));
-        result[i] = mod_(res, FIELD_MODULUS);
+        __int128_t res = static_cast<__int128_t>(std::round(dist(gen)));
+        if (res < 0)
+            res += FIELD_MOD;
+        result[i] = static_cast<i128>(res);
     }
     #ifdef DEBUG1_ON
         for (size_t i = 0; i < N; i++)
-            result.at(i) = 1;
+            result[i] = (i % (N - 1) == 0) ? 0 : 0;
     #endif
     return result;
 }
 
-vector_i128 sample_secret_key(size_t N) {
+poly sample_secret_key(size_t N) {
     // Sample a secret key for the RGSW scheme.
     // Each entry is -1, 0, or 1, with probabilities 0.25, 0.5, 0.25 respectively.
-    vector_i128 s(N);
+    poly s(N);
     std::random_device rd;
     std::mt19937 gen(rd());
     std::discrete_distribution<int> dist({0.25, 0.5, 0.25});
@@ -32,17 +34,18 @@ vector_i128 sample_secret_key(size_t N) {
         // if (val == 0) s[i] = -1;
         if (val == 0) s[i] = 1;
         else if (val == 1) s[i] = 0;
+        // else s[i] = FIELD_MODULUS - 1;
         else s[i] = 1;
     }
     #ifdef DEBUG1_ON
     for (size_t i = 0; i < N; i++)
-        s.at(i) = 1;
+        s[i] = 1;
     #endif
     return s;
 }
 // Sample a random polynomial of degree N-1 with coefficients in the range [0, q).
-vector_i128 sample_random_polynomial(size_t N, i128 q) {
-    vector_i128 poly(N);
+poly sample_random_polynomial(size_t N, i128 q) {
+    poly poly(N);
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<i128> dist(0, q - 1);
@@ -51,57 +54,44 @@ vector_i128 sample_random_polynomial(size_t N, i128 q) {
     }
     #ifdef DEBUG1_ON
         for (size_t i = 0; i < N; i++)
-            poly.at(i) = 1;
+            poly[i] = 1;
     #endif
     return poly;
 }
 
 // Sample a noise polynomial of degree N-1 with coefficients from the discrete Gaussian distribution.
-vector_i128 sample_noise_polynomial(size_t N, double mu = 3.2, double sigma = 19.2) {
-    return sample_discrete_gaussian(N, mu, sigma);
+poly sample_noise_polynomial(size_t N, double mu = 3.2, double sigma = 19.2) {
+    // return sample_discrete_gaussian(N, mu, sigma);
+    return sample_secret_key(N);
 }
 
 class Encryptor {
 private:
-    u32 v, d;
+    u128 v;
+    u128 d;
     size_t N;
     i128 q;
 
 public:
     poly sk;
-    Encryptor(u32 v_, u32 d_, size_t N_, i128 q_)
+    Encryptor(u128 v_, u128 d_, size_t N_, i128 q_)
         : v(v_), d(d_), N(N_), q(q_), sk(N) {
-            vector_i128 sk_ = sample_secret_key(N);
-            for (size_t i = 0; i < N; i++)
-                sk.set(i, sk_.at(i));
+            poly sk_ = sample_secret_key(N);
         }
     // Encrypts an RLWE ciphertext of message m
     // m: message polynomial (poly), N: degree, sk: secret key, q: modulus, dth_pows: unused here
     rlwe encrypt_rlwe(const poly& m) {
-        poly noise = poly(N);
-        auto noise_vec = sample_noise_polynomial(N);
-        for (size_t i = 0; i < N; i++)
-            // noise.set(i, noise_vec[i], true);
-            noise.set(i, noise_vec[i]);
-        // for (size_t i = 0; i < 10; i++) {
-        //     auto val = noise.get(i);
-        //     (i < 9) ? (std::cout << i128str(val) << ", ") : (std::cout << i128str(val) << "\n");
-        // }
-
-        poly a = poly(N);
-        auto a_vec = sample_random_polynomial(N, q);
-        for (size_t i = 0; i < N; i++)
-            a.set(i, a_vec[i]);
-
+        poly noise = sample_noise_polynomial(N);
+        poly a = sample_random_polynomial(N, q);
         poly ask = a * sk;
 
-        poly b(N);
-        for (size_t i = 0; i < N; i++) {
-            i128 val = m.get(i) + noise.get(i) + ask.get(i);
-            b.set(i, mod_(val, q));
-        }
+        poly b = m + noise + ask;
+        // for (size_t i = 0; i < N; i++) {
+        //     i128 val = m.get(i) + noise.get(i) + ask.get(i);
+        //     b.set(i, mod_(val, q));
+        // }
 
-        rlwe res(N_POLYS_IN_RLWE, N);
+        rlwe res(N_POLYS_IN_RLWE);
         res.set(0, b);
         res.set(1, a);
         return res;
@@ -138,53 +128,29 @@ public:
     // Encrypts an RGSW ciphertext of message M (poly)
     rgsw encrypt_rgsw(const poly& M) {
         // Compute v powers: v^0, v^1, ..., v^{d-1}
+        // assert(M.get(0) < v);
+        // if (M.get(0) >= v)
+        //     throw std::out_of_range("(encrypt_rgsw) Message out of range: " + i128str(M.get(0)));
+        // if (M.get(0) > v / 2)
+        //     std::cout << "Warning: (encrypt_rgsw) Message greater than v/2: " + i128str(M.get(0)) + "\n";
+
         vector_i128 v_powers(d);
         v_powers[0] = 1;
-        for (size_t i = 1; i < d; i++) {
+        for (size_t i = 1; i < d; i++)
             v_powers[i] = v_powers[i - 1] * v % FIELD_MODULUS;
-        }
 
         // Build G matrix: 2d x 2, each col is [v_powers, 0...], [0..., v_powers]
-        std::vector<vector_i128> G(2 * d, vector_i128(2, 0));
+        rgsw G(2 * d, N_POLYS_IN_RLWE, N);
         for (size_t i = 0; i < d; i++) {
-            G[i][0] = v_powers[i];
-            G[d + i][1] = v_powers[i];
-        }
-
-        // Encryptions of zero
-        std::vector<rlwe> encs_of_zero(2 * d);
-        poly zero_poly(N);
-        for (size_t i = 0; i < 2 * d; i++) {
-            encs_of_zero[i] = encrypt_rlwe(zero_poly);
-        }
-
-        // Compute M * G and add to RLWE encryptions
-        for (size_t i = 0; i < 2 * d; i++) {
-            // Add M[i] * G[row][j] to b poly of RLWE
-            std::cout << "rlwe[" << i << "]:";
-            for (size_t j = 0; j < N_POLYS_IN_RLWE; j++) {
-                poly val = M * G.at(i).at(j);
-                if (j == 0)
-                    std::cout << "(" << i128str(val.get(0)) << ", ";
-                else
-                    std::cout << i128str(val.get(0)) << ")";
-                rlwe& ct = encs_of_zero.at(i);
-                ct.set(j, ct.get(j) + val);
-            }
-            std::cout << "\n";
-        }
-
-        // Pack RLWE encryptions into RGSW
-        rgsw res(2 * d, N_POLYS_IN_RLWE, N);
-        for (size_t i = 0; i < 2 * d; i++) {
-            res.set(i, encs_of_zero[i]);
+            G.get_rlwe(i).get_poly(0).set(0, M.get(0) * v_powers[i]);
+            G.get_rlwe(i + d).get_poly(1).set(0, M.get(0) * v_powers[i]);
         }
 
         for (size_t i = 0; i < 2 * d; i++) {
             // Add M[i] * G[row][j] to b poly of RLWE
             std::cout << "rgsw[" << i << "]:";
             for (size_t j = 0; j < N_POLYS_IN_RLWE; j++) {
-                poly val = res.get(i).get(j);
+                poly val = G.get(i).get(j);
                 if (j == 0)
                     std::cout << "(" << i128str(val.get(0)) << ", ";
                 else
@@ -193,6 +159,13 @@ public:
             std::cout << "\n";
         }
 
+        // Encryptions of zero
+        rgsw encs_of_zero(2 * d);
+        poly zero_poly(N);
+        for (size_t i = 0; i < 2 * d; i++)
+            encs_of_zero.set(i, encrypt_rlwe(zero_poly));
+
+        rgsw res = G + encs_of_zero;
         return res;
     }
     // takes an array2d<i128> and returns an encrypted rgsw_mat

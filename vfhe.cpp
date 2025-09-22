@@ -436,7 +436,7 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     double ss = pms.s;
     double L = pms.L;
     size_t iter_ = pms.iter_;
-    DEBUG(iter_ = 100;)
+    DEBUG(iter_ = 3;)
 
     i128 from = 1;
     i128 to_inclusive = q - 1;
@@ -688,7 +688,7 @@ void run_control_loop_unencrypted(control_law_vars& vars) {
     vector_double x_plant_init = pms.x_plant_init;
     vector_double x_cont_init = pms.get_x_cont_init();
     size_t iter_ = pms.iter_;
-    DEBUG(iter_ = 100;)
+    DEBUG(iter_ = 3;)
 
     DEBUG(std::cout << "A:\n";)
     DEBUG(for (auto& x : A) print_vector_double(x);)
@@ -838,9 +838,9 @@ int main() {
         print_times_and_counts(timing);
     #endif
 
-    // std::cout << std::fixed << std::setprecision(2);
-    // run_control_loop_unencrypted(vars_unenc);
+    std::cout << std::fixed << std::setprecision(2);
+    run_control_loop_unencrypted(vars_unenc);
 
-    // print_vars_diff(vars, vars_unenc);
+    print_vars_diff(vars, vars_unenc);
     return 0;
 }

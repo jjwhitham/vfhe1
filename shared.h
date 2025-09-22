@@ -7,8 +7,9 @@
 #include <chrono>
 // #include "gmpxx.h"
 typedef __uint128_t i128;
-typedef __uint32_t u32;
-constexpr u32 N_DECOMP = 2;
+// typedef __uint32_t u32;
+typedef i128 u32;
+constexpr u32 N_DECOMP = 4;
 
 #ifdef TIMING_ON
 #  define TIMING(x) x
@@ -54,11 +55,12 @@ inline times_and_counts timing = { 0 };
 // constexpr i128 NTH_ROU = 625534531;
 // constexpr i128 TWO_ROU = 996876704;
 
-// TODO check N/q
-// N = 2^4, q > 2^4
+// constexpr i128 N_ = 8;
 // constexpr i128 GROUP_MODULUS = 103;
 // constexpr i128 FIELD_MODULUS = 17;
 // constexpr i128 GENERATOR = 64;
+// constexpr i128 NTH_ROU = 3;
+// constexpr i128 TWO_ROU = 9;
 
 // N = 2^12, q > 2^54
 constexpr i128 N_ = 4096;

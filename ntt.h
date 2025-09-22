@@ -13,7 +13,7 @@
 
 // using u128 = __uint128_t;
 using u128 = i128;
-using u32 = unsigned int;
+// using u32 = unsigned int;
 using vec_u128 = std::vector<u128>;
 
 constexpr u32 POLY_SIZE = N_;
@@ -109,6 +109,17 @@ constexpr bool is_prime_constexpr(int n) {
     return true;
 }
 /* END ATCODER */
+
+constexpr bool is_prime_constexpr(u128 n) {
+    if (n <= 1) return false;
+    if (n <= 3) return true;
+    if (n % 2 == 0 || n % 3 == 0) return false;
+    for (u128 i = 5; i * i <= n; i += 6) {
+        if (n % i == 0 || n % (i + 2) == 0)
+            return false;
+    }
+    return true;
+}
 
 constexpr bool are_q_and_N_legal(u128 q, u32 N) {
     bool both_legal = true;
@@ -228,7 +239,7 @@ void ntt_iter_(auto& x, const arr_u128& w) {
                 const auto even = x[i + j];
                 const auto w_odd = (w[i * n_chunks] * x[i + j + half]) % FIELD_MOD;
                 x[i + j] = (even + w_odd) % FIELD_MOD;
-                x[i + j + half] = mod_sub(even, w_odd);
+                x[i + j + half] = mod_sub(even, w_odd) % FIELD_MOD;
             }
         }
     }
@@ -244,11 +255,14 @@ void ntt_iter_ct_no_bo(auto& a, const arr_u128& psi) {
             size_t j1 = 2 * i * t;
             size_t j2 = j1 + t - 1;
             for (size_t j = j1; j <= j2; j++) {
+                assert(a[j] < FIELD_MOD);
+                assert(a[j + t] < FIELD_MOD);
                 auto U = a[j];
                 assert((m + i) < psi.size());
+                assert(psi[m + i] < FIELD_MOD);
                 auto V = (a[j + t] * psi[m + i]) % FIELD_MOD;
                 a[j] = (U + V) % FIELD_MOD;
-                a[j + t] = mod_sub(U, V);
+                a[j + t] = mod_sub(U, V) % FIELD_MOD;
             }
         }
     }
@@ -263,10 +277,13 @@ void intt_iter_gs_bo_no(auto& a, const arr_u128& psi) {
         for (size_t i = 0; i < h; i++) {
             size_t j2 = j1 + t - 1;
             for (size_t j = j1; j <= j2; j++) {
+                assert(a[j] < FIELD_MOD);
+                assert(a[j + t] < FIELD_MOD);
                 auto U = a[j];
                 auto V = a[j + t];
                 a[j] = (U + V) % FIELD_MOD;
                 assert((h + i) < psi.size());
+                assert(psi[h + i] < FIELD_MOD);
                 a[j + t] = (mod_sub(U, V) * psi[h + i]) % FIELD_MOD;
             }
             j1 += 2 * t;

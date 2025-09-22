@@ -9,10 +9,13 @@ void test_rlwe() {
     static constexpr i128 N = N_;
     static constexpr i128 q = FIELD_MODULUS;
     Encryptor enc(v, d, N, q);
-    i128 scale = 1000; // 1e3
-    i128 message = 42 * scale;
+    i128 scale = 1000000; // 1e3
+    i128 message = 30000;
     poly ptx(N);
-    ptx.set(0, message); // set the first coefficient to the value
+    // ptx.set(0, scale * message); // set the first coefficient to the value
+    ptx.set(0, message * scale); // set the first coefficient to the value
+    poly ptx_rgsw(N);
+    ptx_rgsw.set(0, message); // set the first coefficient to the value
     rlwe ctx = enc.encrypt_rlwe(ptx);
     poly ptx1 = enc.decrypt_rlwe(ctx);
     i128 message_decrypted = ptx1.get(0);
@@ -20,7 +23,7 @@ void test_rlwe() {
         << i128str(message_decrypted) << "\n";
 
     /* ### convolution ### */
-    rgsw rg = enc.encrypt_rgsw(ptx);
+    rgsw rg = enc.encrypt_rgsw(ptx_rgsw);
     for (size_t i = 0; i < 2 * d; i++) {
         poly p = enc.decrypt_rlwe(rg.get_rlwe(i));
         std::cout << i128str(p.get_coeff(0)) << " ";
@@ -28,14 +31,13 @@ void test_rlwe() {
     std::cout << "\n";
     rlwe prod2 = rg * ctx.decompose(v, d, power);
 
-    /* ### negacyclic convolution ### */
+    // // /* ### negacyclic convolution ### */
     // rg.conv_to_ntt();
     // rlwe prod = rg.convolve(ctx.decompose(v, d, power));
-    // std::cout << "yoohoo\n";
     // prod.conv_to_coeff();
-    // rlwe prod2 = prod.conv_to_nega(N);
+    // prod2 = prod.conv_to_nega(N);
 
-    i128 prod_dec = enc.decrypt_rlwe(prod2).get(1);
+    i128 prod_dec = enc.decrypt_rlwe(prod2).get(0);
     std::cout << "prod decrypted: "
         << i128str(prod_dec) << "\n";
 }

@@ -772,7 +772,7 @@ public:
     // creates d polynomials for each of the two polynomials in the rlwe object,
     // where the i'th coefficient has been decomposed with base v and depth d.
     // The i'th coefficient is spread across the i'th coefficients of the d polynomials.
-    rlwe_decomp decompose(const u32& v, const u32& d, const u32& power) const {
+    rlwe_decomp decompose(const u128& v, const u32& d, const u32& power) const {
         rlwe_decomp polys(2 * d, n_coeffs());
         for (size_t k = 0; k < N_POLYS_IN_RLWE; k++) {
             poly pol = get_poly(k);
@@ -1004,10 +1004,10 @@ public:
         rlwe res(n_polys(), n_coeffs());
         for (size_t i = 0; i < n_rlwes(); i++) {
             for (size_t j = 0; j < n_polys(); j++) {
-                // poly& p = res.get(j);
+                poly& p = res.get(j);
                 auto val = get(i).get(j) * other.get(i);
-                // p = p + val;
-                res.set(j, res.get(j) + val);
+                p = p + val;
+                // res.set(j, res.get(j) + val);
             }
         }
         return res;
