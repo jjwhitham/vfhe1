@@ -9,6 +9,7 @@
 #include "omp.h"
 #include "shared.h"
 #include "ntt.h"
+// #include "gmpxx.h"
 
 #ifdef DEBUG_ON
 #  define DEBUG(x) x
@@ -270,6 +271,22 @@ public:
         }
         return result;
     }
+
+    // // base case binary modular exponentiation
+    // mpz_class pow_(mpz_class base, mpz_class power) const {
+    //     // power = mod_(power, FIELD_MODULUS);
+    //     // base = mod_(base, GROUP_MODULUS);
+    //     i128 result = 1;
+    //     while (power > 0) {
+    //         bool is_power_odd = (power % 2) == 1;
+    //         if (is_power_odd)
+    //             result = (result * base) % GROUP_MODULUS;
+    //         power >>= 1;
+    //         base = (base * base) % GROUP_MODULUS;
+    //     }
+    //     return result;
+    // }
+
 
     T* begin() { return arr; }
     T* end() { return arr + size_; }
@@ -553,6 +570,8 @@ public:
         for (size_t i = 0; i < other.size(); i++) {
             int tid = omp_get_thread_num();
             partials[tid] = group_mult_(partials[tid], pow_(get(i), other.get(i)));
+            // mpz_powm(res.get_mpz_t(), res.get_mpz_t(), exp.get_mpz_t(), GROUP_MODULUS.get_mpz_t());
+            // partials[tid] = group_mult_(partials[tid], mpz_powm(get(i)., other.get(i));
         }
         for (size_t t = 0; t < N_THREADS; t++) {
             result = group_mult_(result, partials[t]);

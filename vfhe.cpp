@@ -838,9 +838,9 @@ int main() {
         print_times_and_counts(timing);
     #endif
 
-    std::cout << std::fixed << std::setprecision(2);
-    run_control_loop_unencrypted(vars_unenc);
+    // std::cout << std::fixed << std::setprecision(2);
+    // run_control_loop_unencrypted(vars_unenc);
 
-    print_vars_diff(vars, vars_unenc);
+    // print_vars_diff(vars, vars_unenc);
     return 0;
 }

@@ -146,18 +146,18 @@ public:
             G.get_rlwe(i + d).get_poly(1).set(0, M.get(0) * v_powers[i]);
         }
 
-        for (size_t i = 0; i < 2 * d; i++) {
-            // Add M[i] * G[row][j] to b poly of RLWE
-            std::cout << "rgsw[" << i << "]:";
-            for (size_t j = 0; j < N_POLYS_IN_RLWE; j++) {
-                poly val = G.get(i).get(j);
-                if (j == 0)
-                    std::cout << "(" << i128str(val.get(0)) << ", ";
-                else
-                    std::cout << i128str(val.get(0)) << ")";
-            }
-            std::cout << "\n";
-        }
+        // for (size_t i = 0; i < 2 * d; i++) {
+        //     // Add M[i] * G[row][j] to b poly of RLWE
+        //     std::cout << "rgsw[" << i << "]:";
+        //     for (size_t j = 0; j < N_POLYS_IN_RLWE; j++) {
+        //         poly val = G.get(i).get(j);
+        //         if (j == 0)
+        //             std::cout << "(" << i128str(val.get(0)) << ", ";
+        //         else
+        //             std::cout << i128str(val.get(0)) << ")";
+        //     }
+        //     std::cout << "\n";
+        // }
 
         // Encryptions of zero
         rgsw encs_of_zero(2 * d);
