@@ -2,6 +2,7 @@
 
 #include "shared.h"
 #include "vfhe.h"
+#include "gmpxx.h"
 
 poly sample_discrete_gaussian(size_t N, double mu = 3.2, double sigma = 19.2) {
     poly result(N);
@@ -49,15 +50,19 @@ poly sample_random_polynomial(size_t N, i128 q) {
     // std::random_device rd;
     // std::mt19937 gen(rd());
     // std::uniform_int_distribution<i128> dist(0, q - 1);
-    mpz_t rop;
+    mpz rop;
     gmp_randstate_t state;
-    gmp_randinit_mt(state);
-    mp_bitcnt_t n = log2_mpz(q) + 1;
+    gmp_randinit_default(state);
+    mpz seed = 42;
+    gmp_randseed(state, seed.get_mpz_t());
+    // mp_bitcnt_t n = log2_mpz(q) + 1;
     for (size_t i = 0; i < N; i++) {
         // poly[i] = dist(gen);
-        mpz_urandomb(rop, state, n);
+        // mpz_urandomb(rop, state, n);
+        mpz_urandomm(rop.get_mpz_t(), state, q.get_mpz_t());
         poly[i] = mpz(rop);
     }
+    gmp_randclear(state);
     #ifdef DEBUG1_ON
         for (size_t i = 0; i < N; i++)
             poly[i] = 1;
@@ -66,7 +71,8 @@ poly sample_random_polynomial(size_t N, i128 q) {
 }
 
 // Sample a noise polynomial of degree N-1 with coefficients from the discrete Gaussian distribution.
-poly sample_noise_polynomial(size_t N, double mu = 3.2, double sigma = 19.2) {
+// poly sample_noise_polynomial(size_t N, double mu = 3.2, double sigma = 19.2) {
+poly sample_noise_polynomial(size_t N) {
     // return sample_discrete_gaussian(N, mu, sigma);
     return sample_secret_key(N);
 }

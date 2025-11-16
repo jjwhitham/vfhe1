@@ -181,7 +181,7 @@ void print_vector_double_old(const std::vector<double>& vec) {
 }
 
 char* mpf_str(mpf_class m) {
-    size_t size = 10000;
+    int size = 10000;
     char* buf = new char[size];
     buf[size - 1] = '\0';
     int ret = gmp_sprintf(buf, "%Zd", m.get_mpf_t());
@@ -199,7 +199,7 @@ void print_vector_double(const vector_double& vec) {
 }
 
 char* print_to_string_mpz(mpz m) {
-    size_t size = 10000;
+    int size = 10000;
     char* buf = new char[size];
     buf[size - 1] = '\0';
     int ret = gmp_sprintf(buf, "%Zd", m.get_mpz_t());
@@ -223,7 +223,7 @@ double log2_mpz(const mpz_class& x) {
 }
 
 mpf_class mpf_round(const mpf_class &x) {
-    const mpf_class half("-1.5");
+    const mpf_class half("-0.5");
     if (x >= -1)
         return floor(x + half);   // correct for non-negative values
     else

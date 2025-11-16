@@ -244,8 +244,8 @@ void ntt_iter_(auto& x, const arr_u128& w) {
         for (size_t chunk = 0; chunk < n_chunks; chunk++) {
             const size_t j = len_chunk * chunk;
             for (size_t i = 0; i < half; i++) {
-                const auto even = x[i + j];
-                const auto w_odd = (w[i * n_chunks] * x[i + j + half]) % FIELD_MOD;
+                const mpz even = x[i + j];
+                const mpz w_odd = (w[i * n_chunks] * x[i + j + half]) % FIELD_MOD;
                 x[i + j] = (even + w_odd) % FIELD_MOD;
                 x[i + j + half] = mod_sub(even, w_odd) % FIELD_MOD;
             }
@@ -265,10 +265,10 @@ void ntt_iter_ct_no_bo(auto& a, const arr_u128& psi) {
             for (size_t j = j1; j <= j2; j++) {
                 // assert(a[j] < FIELD_MOD);
                 // assert(a[j + t] < FIELD_MOD);
-                auto U = a[j];
+                mpz U = a[j];
                 // assert((m + i) < psi.size());
                 // assert(psi[m + i] < FIELD_MOD);
-                auto V = (a[j + t] * psi[m + i]) % FIELD_MOD;
+                mpz V = (a[j + t] * psi[m + i]) % FIELD_MOD;
                 a[j] = (U + V) % FIELD_MOD;
                 a[j + t] = mod_sub(U, V) % FIELD_MOD;
             }
@@ -287,8 +287,8 @@ void intt_iter_gs_bo_no(auto& a, const arr_u128& psi) {
             for (size_t j = j1; j <= j2; j++) {
                 // assert(a[j] < FIELD_MOD);
                 // assert(a[j + t] < FIELD_MOD);
-                auto U = a[j];
-                auto V = a[j + t];
+                mpz U = a[j];
+                mpz V = a[j + t];
                 a[j] = (U + V) % FIELD_MOD;
                 // assert((h + i) < psi.size());
                 // assert(psi[h + i] < FIELD_MOD);
@@ -313,7 +313,7 @@ void intt_iter(auto& x, const arr_u128& rou_pows, u128 inv_x_len) {
     TIMING(timing.calls_intt += 1;)
     TIMING(auto start = std::chrono::high_resolution_clock::now();)
 
-    ntt_iter(x, rou_pows);
+    ntt_iter_(x, rou_pows);
     // scale by N^-1
     for (auto& el : x)
         el = (el * inv_x_len) % FIELD_MOD;

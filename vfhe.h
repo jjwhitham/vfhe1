@@ -799,7 +799,7 @@ public:
         for (size_t k = 0; k < N_POLYS_IN_RLWE; k++) {
             poly pol = get_poly(k);
             for (size_t i = 0; i < n_coeffs(); i++) {
-                for (size_t j = 0; j < d; j++) {
+                for (size_t j = 0; j < (size_t)d; j++) {
                     i128 decomped_coeff = (v - 1) & (pol.get_coeff(i) >> (power * j));
                     ASSERT(decomped_coeff < v);
                     polys.get_poly(d * k + j).set(i, decomped_coeff);
@@ -1494,7 +1494,7 @@ private:
 public:
     Params() :
         N(N_),
-        iter_(15),
+        iter_(3),
         s(10000.0),
         L(10000.0),
         r(10000.0),
