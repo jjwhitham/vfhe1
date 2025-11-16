@@ -9,7 +9,7 @@ poly sample_discrete_gaussian(size_t N, double mu = 3.2, double sigma = 19.2) {
     std::mt19937 gen(rd());
     std::normal_distribution<double> dist(mu, sigma);
     for (size_t i = 0; i < N; i++) {
-        __int128_t res = static_cast<__int128_t>(std::round(dist(gen)));
+        i128 res = static_cast<long int>(std::round(dist(gen)));
         if (res < 0)
             res += FIELD_MOD;
         result[i] = static_cast<i128>(res);
@@ -46,11 +46,17 @@ poly sample_secret_key(size_t N) {
 // Sample a random polynomial of degree N-1 with coefficients in the range [0, q).
 poly sample_random_polynomial(size_t N, i128 q) {
     poly poly(N);
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<i128> dist(0, q - 1);
+    // std::random_device rd;
+    // std::mt19937 gen(rd());
+    // std::uniform_int_distribution<i128> dist(0, q - 1);
+    mpz_t rop;
+    gmp_randstate_t state;
+    gmp_randinit_mt(state);
+    mp_bitcnt_t n = log2_mpz(q) + 1;
     for (size_t i = 0; i < N; i++) {
-        poly[i] = dist(gen);
+        // poly[i] = dist(gen);
+        mpz_urandomb(rop, state, n);
+        poly[i] = mpz(rop);
     }
     #ifdef DEBUG1_ON
         for (size_t i = 0; i < N; i++)
@@ -68,13 +74,13 @@ poly sample_noise_polynomial(size_t N, double mu = 3.2, double sigma = 19.2) {
 class Encryptor {
 private:
     u128 v;
-    u128 d;
+    size_t d;
     size_t N;
     i128 q;
 
 public:
     poly sk;
-    Encryptor(u128 v_, u128 d_, size_t N_, i128 q_)
+    Encryptor(u128 v_, size_t d_, size_t N_, i128 q_)
         : v(v_), d(d_), N(N_), q(q_), sk(N) {
             poly sk_ = sample_secret_key(N);
         }

@@ -9,7 +9,7 @@
 #include "omp.h"
 #include "shared.h"
 #include "ntt.h"
-// #include "gmpxx.h"
+#include "gmpxx.h"
 
 #ifdef DEBUG_ON
 #  define DEBUG(x) x
@@ -138,14 +138,14 @@ public:
         size_t N = size();
         Derived res(N);
         for (size_t i = 0; i < N; i++) {
-            auto val = get(i) * scalar;
+            T val = get(i) * scalar;
             if constexpr (std::is_same_v<T, i128>)
                 val = mod_(val, FIELD_MODULUS);
             res.set(i, val);
         }
         return res;
     }
-    i128 group_mult_(i128 a, i128 b) const {
+    mpz group_mult_(mpz a, mpz b) const {
         return mod_(a * b, GROUP_MODULUS);
     }
     Derived group_mult(const Derived& other) const {
@@ -153,7 +153,7 @@ public:
         Derived res(N);
         for (size_t i = 0; i < N; i++) {
             T val;
-            if constexpr (std::is_same_v<T, i128>) {
+            if constexpr (std::is_same_v<T, mpz>) {
                 val = group_mult_(get(i), other.get(i));
             } else {
                 val = get(i).group_mult(other.get(i));
@@ -162,6 +162,7 @@ public:
         }
         return res;
     }
+    // TODO might need to change i128 to either mpz or U (if i128 & mpz required)
     Derived group_mult(const i128& scalar) const {
         size_t N = size();
         Derived res(N);
@@ -180,7 +181,7 @@ public:
         size_t N = size();
         Derived res(N);
         for (size_t i = 0; i < N; i++) {
-            auto val = get(i) + other.get(i);
+            T val = get(i) + other.get(i);
             if constexpr (std::is_same_v<T, i128>)
                 val = mod_(val, FIELD_MODULUS);
             res.set(i, val);
@@ -207,9 +208,9 @@ public:
     Derived pow(const Derived& other) const {
         size_t N = size();
         Derived res(N);
-        if constexpr (std::is_same_v<T, i128>) {
+        if constexpr (std::is_same_v<T, mpz>) {
             for (size_t i = 0; i < N; i++) {
-                auto val = pow_(get(i), other.get(i));
+                auto val = pow_(get(i), other.get(i), GROUP_MODULUS);
                 res.set(i, val);
             }
             return res;
@@ -222,12 +223,12 @@ public:
         }
     }
     // raise scalar to self
-    Derived pow(const i128 scalar) const {
+    Derived pow(const mpz scalar) const {
         size_t N = size();
         Derived res(N);
-        if constexpr (std::is_same_v<T, i128>) {
+        if constexpr (std::is_same_v<T, mpz>) {
             for (size_t i = 0; i < N; i++) {
-                auto val = pow_(scalar, get(i));
+                auto val = pow_(scalar, get(i), GROUP_MODULUS);
                 res.set(i, val);
             }
             return res;
@@ -243,9 +244,9 @@ public:
     Derived pow() const {
         size_t N = size();
         Derived res(N);
-        if constexpr (std::is_same_v<T, i128>) {
+        if constexpr (std::is_same_v<T, mpz>) {
             for (size_t i = 0; i < N; i++) {
-                auto val = pow_(GENERATOR, get(i));
+                auto val = pow_(GENERATOR, get(i), GROUP_MODULUS);
                 res.set(i, val);
             }
             return res;
@@ -257,23 +258,8 @@ public:
             return res;
         }
     }
-    // base case binary modular exponentiation
-    i128 pow_(i128 base, i128 power) const {
-        // power = mod_(power, FIELD_MODULUS);
-        // base = mod_(base, GROUP_MODULUS);
-        i128 result = 1;
-        while (power > 0) {
-            bool is_power_odd = (power % 2) == 1;
-            if (is_power_odd)
-                result = (result * base) % GROUP_MODULUS;
-            power >>= 1;
-            base = (base * base) % GROUP_MODULUS;
-        }
-        return result;
-    }
-
     // // base case binary modular exponentiation
-    // mpz_class pow_(mpz_class base, mpz_class power) const {
+    // i128 pow_(i128 base, i128 power) const {
     //     // power = mod_(power, FIELD_MODULUS);
     //     // base = mod_(base, GROUP_MODULUS);
     //     i128 result = 1;
@@ -284,6 +270,14 @@ public:
     //         power >>= 1;
     //         base = (base * base) % GROUP_MODULUS;
     //     }
+    //     return result;
+    // }
+
+    // // base case binary modular exponentiation
+    // mpz_class pow_(mpz_class base, mpz_class power) const {
+    //     mpz result = 1;
+    //     // TODO should we just mutate base?
+    //     mpz_powm(result.get_mpz_t(), base.get_mpz_t(), power.get_mpz_t(), GROUP_MODULUS.get_mpz_t());
     //     return result;
     // }
 
@@ -371,13 +365,22 @@ public:
     size_t n_cols() const {
         return cols_;
     }
-    void print_i128() const {
+    void print_i128_old() const {
         for (size_t i = 0; i < rows_; i++) {
             std::cout << "{";
             for (size_t j = 0; j < cols_ - 1; j++) {
                 std::cout << i128str(arr[i][j]) << ", ";
             }
             std::cout << i128str(arr[i][cols_ - 1]) << "}\n";
+        }
+    }
+    void print_i128() const {
+        for (size_t i = 0; i < rows_; i++) {
+            std::cout << "{";
+            for (size_t j = 0; j < cols_ - 1; j++) {
+                std::cout << print_to_string_mpz(arr[i][j]) << ", ";
+            }
+            std::cout << print_to_string_mpz(arr[i][cols_ - 1]) << "}\n";
         }
     }
     void print_array1d() const {
@@ -443,7 +446,7 @@ public:
         poly b(2 * n);
         for (size_t i = 0; i < n; i++)
             b.set(i, other.get(i));
-        constexpr arr_u128 psi_pows = get_rou_pows(TWO_ROU);
+        arr_u128 psi_pows = get_rou_pows(TWO_ROU);
         ntt_iter(b, psi_pows);
 
         for (size_t i = 0; i < 2 * POLY_SIZE; i++) {
@@ -464,10 +467,10 @@ public:
             b.set(i, other.get(i));
         }
 
-        constexpr u128 INV_2ROU = pow_constexpr(TWO_ROU, FIELD_MOD - 2, FIELD_MOD);
-        constexpr u128 INV_N = pow_constexpr(POLY_SIZE, FIELD_MOD - 2, FIELD_MOD);
-        constexpr arr_u128 psi_pows = get_rou_pows(TWO_ROU);
-        constexpr arr_u128 psi_inv_pows = get_rou_pows(INV_2ROU);
+        u128 INV_2ROU = pow_constexpr(TWO_ROU, FIELD_MOD - 2, FIELD_MOD);
+        u128 INV_N = pow_constexpr(POLY_SIZE, FIELD_MOD - 2, FIELD_MOD);
+        arr_u128 psi_pows = get_rou_pows(TWO_ROU);
+        arr_u128 psi_inv_pows = get_rou_pows(INV_2ROU);
         ntt_iter1(a, psi_pows);
         ntt_iter1(b, psi_pows);
         for (size_t i = 0; i < POLY_SIZE; i++) {
@@ -485,7 +488,7 @@ public:
         for (size_t i = 0; i < n; i++) {
             a.set(i, get(i));
         }
-        constexpr arr_u128 psi_pows = get_rou_pows(TWO_ROU);
+        arr_u128 psi_pows = get_rou_pows(TWO_ROU);
         ntt_iter(a, psi_pows);
         a.isNTT = true;
         return a;
@@ -498,9 +501,9 @@ public:
         for (size_t i = 0; i < n; i++) {
             a.set(i, get(i));
         }
-        constexpr u128 INV_2ROU = pow_constexpr(TWO_ROU, FIELD_MOD - 2, FIELD_MOD);
-        constexpr arr_u128 psi_inv_pows = get_rou_pows(INV_2ROU);
-        constexpr u128 INV_2N = pow_constexpr(2 * POLY_SIZE, FIELD_MOD - 2, FIELD_MOD);
+        u128 INV_2ROU = pow_constexpr(TWO_ROU, FIELD_MOD - 2, FIELD_MOD);
+        arr_u128 psi_inv_pows = get_rou_pows(INV_2ROU);
+        u128 INV_2N = pow_constexpr(2 * POLY_SIZE, FIELD_MOD - 2, FIELD_MOD);
         intt_iter(a, psi_inv_pows, INV_2N);
         a.isNTT = false;
         assert(a.get(n - 1) == 0);
@@ -544,11 +547,11 @@ public:
     }
 };
 
-class hashed_a_poly : public array1d<i128, hashed_a_poly> {
+class hashed_a_poly : public array1d<mpz, hashed_a_poly> {
 private:
 public:
-    hashed_a_poly() : array1d<i128, hashed_a_poly>() {}
-    hashed_a_poly(size_t n_hashed_a_coeffs) : array1d<i128, hashed_a_poly>(n_hashed_a_coeffs) {
+    hashed_a_poly() : array1d<mpz, hashed_a_poly>() {}
+    hashed_a_poly(size_t n_hashed_a_coeffs) : array1d<mpz, hashed_a_poly>(n_hashed_a_coeffs) {
         for (size_t i = 0; i < n_hashed_a_coeffs; i++)
             set(i, 0);
     }
@@ -558,18 +561,18 @@ public:
     size_t n_hashed_a_coeffs() const {
         return size();
     }
-    i128 get_hash_sec(const poly& other) const {
+    mpz get_hash_sec(const poly& other) const {
         TIMING(auto start = std::chrono::high_resolution_clock::now();)
         TIMING(timing.calls_get_hash_sec += 1;)
         // HACK get around gr having hashed_a_polys of length 2n-1, but x_nega_ only length n
         // ASSERT(size() == other.size() || size() == (2 * other.size() - 1));
-        i128 result = 1;
-        std::array<i128, N_THREADS> partials;
+        mpz result = 1;
+        std::array<mpz, N_THREADS> partials;
         for (size_t t = 0; t < N_THREADS; t++) partials[t] = 1;
         #pragma omp parallel for num_threads(N_THREADS)
         for (size_t i = 0; i < other.size(); i++) {
             int tid = omp_get_thread_num();
-            partials[tid] = group_mult_(partials[tid], pow_(get(i), other.get(i)));
+            partials[tid] = group_mult_(partials[tid], pow_(get(i), other.get(i), GROUP_MODULUS));
             // mpz_powm(res.get_mpz_t(), res.get_mpz_t(), exp.get_mpz_t(), GROUP_MODULUS.get_mpz_t());
             // partials[tid] = group_mult_(partials[tid], mpz_powm(get(i)., other.get(i));
         }
@@ -882,7 +885,7 @@ public:
         return get_rlwe(0).get_poly(0).size();
     }
     // calls rlwe's decompose on each rlwe element and returns a rlwe_decomp_vec
-    auto decompose(i128 v, u32 d, i128 power) const {
+    auto decompose(i128 v, u32 d, u32 power) const {
         rlwe_decomp_vec decomps(size(), 2 * d, n_coeffs());
         for (size_t i = 0; i < size(); i++)
             decomps.set(i, get_rlwe(i).decompose(v, d, power));
@@ -979,7 +982,7 @@ public:
             // FIXME a bit hacky - obj.pow(scalar) is scalar^obj, do we need obj^scalar???
             hashed_rlwe& res = res_vec.get(i);
             for (size_t j = 0; j < n_hashed_polys(); j++) {
-                auto val = pow_(get(i).get(j), (other.get(i)));
+                auto val = pow_(get(i).get(j), (other.get(i)), GROUP_MODULUS);
                 res.set(j, val);
             }
         }
@@ -1391,36 +1394,31 @@ public:
 i128 random_i128(i128 from, i128 to_inclusive) {
     // random int in range [from, to_inclusive]
     // TODO docs suggest the above inclusive range. Double check
+    // HACK
+    long int from_ = mpz_get_si(from.get_mpz_t());
+    long int to_inclusive_ = mpz_get_si(to_inclusive.get_mpz_t());
     std::random_device rd;  // Non-deterministic seed
     std::mt19937 gen(rd()); // Mersenne Twister engine
-    std::uniform_int_distribution<i128> distrib(from, to_inclusive); // Range: 0 to 100
-    i128 random_number = distrib(gen);
+    std::uniform_int_distribution<unsigned long> distrib(from_, to_inclusive_); // Range: 0 to 100
+    mpz random_number = distrib(gen);
     return random_number;
 }
 
-constexpr size_t n_bits(i128 n) {
-    size_t x = 0;
-    while (n != 0) {
-        x++;
-        n >>= 1;
-    }
-    return x;
-}
-
-constexpr u32 get_decomp_power() {
+u32 get_decomp_power() {
     // v - power of 2, s.t. v^{d-1} < q < v^d
-    constexpr size_t q_bits = n_bits(FIELD_MODULUS);
-    constexpr u32 remainder = q_bits % N_DECOMP;
-    constexpr u32 power = remainder ? q_bits / N_DECOMP + 1 : q_bits / N_DECOMP;
-    static_assert(FIELD_MODULUS <= static_cast<i128>(1) << (power * N_DECOMP));
-    static_assert(FIELD_MODULUS > static_cast<i128>(1) << (power * (N_DECOMP - 1)));
+    double log2mpz = log2_mpz(FIELD_MODULUS);
+    size_t q_bits = static_cast<size_t>(log2mpz) + 1;
+    u32 remainder = q_bits % N_DECOMP;
+    u32 power = remainder ? q_bits / N_DECOMP + 1 : q_bits / N_DECOMP;
+    assert(FIELD_MODULUS <= mpz(1) << (power * N_DECOMP));
+    assert(FIELD_MODULUS > mpz(1) << (power * (N_DECOMP - 1)));
     return power;
 }
 
 struct Params {
 private:
     // ======== Controller matrices ========
-    std::vector<std::vector<double>> F_ = {
+    matrix_double F_ = {
         {2, 0, 0, 0, 0},
         {0, -1, 0, 0, 0},
         {0, 0, 1, 0, 0},
@@ -1428,7 +1426,7 @@ private:
         {0, 0, 0, 0, 0}
     };
 
-    std::vector<std::vector<double>> G = {
+    matrix_double G = {
         {0.0816, 0.0047, 1.6504, -0.0931, 0.4047},
         {-1.4165, -0.3163, -0.4329, 0.1405, 0.8263},
         {-1.4979, -0.2089, -0.6394, 0.3682, 0.7396},
@@ -1436,7 +1434,7 @@ private:
         {0.0020, 0.0931, 0.0302, -0.0035, 0.0177}
     };
 
-    std::vector<std::vector<double>> R = {
+    matrix_double R = {
         {-3.5321, 23.1563},
         {-0.5080, -2.3350},
         {2.5496, 0.9680},
@@ -1444,32 +1442,43 @@ private:
         {-0.7560, 0.7144}
     };
 
-    std::vector<std::vector<double>> H = {
+    matrix_double H = {
         {0.0399, -0.3269, -0.2171, 0.0165, -0.0655},
         {-0.0615, -0.0492, -0.0322, -0.0077, -0.0084}
     };
 
+    // FIXME needs to be mapped from negative to [0,q)
     // ======== Scale up G, R, and H to integers ========
-    array2d<i128> scalar_mat_mult(double scalar, std::vector<std::vector<double>>& mat, i128 q, size_t rows, size_t cols) {
+    array2d<i128> scalar_mat_mult(double scalar, matrix_double& mat, i128 q, size_t rows, size_t cols) {
         array2d<i128> result(rows, cols);
         for (size_t i = 0; i < rows; i++) {
             for (size_t j = 0; j < cols; j++) {
-                double rounded = std::round(scalar * mat[i][j]);
-                i128 modded = rounded < 0 ? rounded + q : rounded;
+                mpf_class rounded = scalar * mat[i][j];
+                rounded = mpf_round(rounded);
+                i128 modded;
+                if (rounded < 0)
+                    modded = q + rounded;
+                else
+                    modded = rounded;
                 result.set(i, j, modded);
             }
         }
         return result;
     }
 
+    // FIXME extract lambdas from vfhe.cpp and remove this double up
     // TODO update to array1d<i128> (add as another class?)
     vector_i128 scalar_vec_mult(double scalar, vector_double& vec, i128 q) {
         // TODO update to array1d<i128> (add as another class?)
         vector_i128 result(vec.size());
         ASSERT(result.capacity() == result.size());
         for (size_t i = 0; i < vec.size(); i++) {
-            double rounded = std::round(scalar * vec[i]);
-            i128 modded = rounded < 0 ? rounded + q : rounded;
+            mpf_class rounded = mpf_round(scalar * vec[i]);
+            i128 modded;
+            if (rounded < 0)
+                modded = rounded + q;
+            else
+                modded = rounded;
             result.at(i) = modded;
         }
         return result;
@@ -1483,9 +1492,6 @@ private:
     // }
 
 public:
-    static constexpr u32 d = N_DECOMP;
-    static constexpr u32 power = get_decomp_power();
-    static constexpr i128 v = static_cast<i128>(1) << power;
     Params() :
         N(N_),
         iter_(15),
@@ -1509,13 +1515,16 @@ public:
         // Construct F from F_
         for (size_t i = 0; i < F_.size(); i++) {
             for (size_t j = 0; j < F_.at(0).size(); j++) {
-                int val = F_.at(i).at(j);
-                i128 val1 = val < 0 ? val + FIELD_MODULUS: val;
+                mpf_class val = F_.at(i).at(j);
+                i128 val1;
+                if (val < 0)
+                    val1 = val + FIELD_MODULUS;
+                else
+                    val1 = val;
                 F.set(i, j, val1);
             }
         }
-        static_assert(d >= 1);
-
+        assert(d >= 1);
     }
     size_t N, iter_;
     double s, L, r;
@@ -1524,23 +1533,27 @@ public:
     array2d<i128> F, G_bar, R_bar, H_bar;
     // TODO update to array1d<i128> (add as another class?)
     vector_i128 x_cont_init_scaled;
+    u32 d = N_DECOMP;
+    u32 power = get_decomp_power();
+    // static constexpr i128 v = static_cast<i128>(1) << power;
+    u32 v = 1 << power;
 
     // ======== Plant matrices ========
-    std::vector<std::vector<double>> A = {
+    matrix_double A = {
         {1.0, 0.0020, 0.0663, 0.0047, 0.0076},
         {0.0, 1.0077, 2.0328, -0.5496, -0.0591},
         {0.0, 0.0478, 0.9850, -0.0205, -0.0092},
         {0.0, 0.0, 0.0, 0.3679, 0.0},
         {0.0, 0.0, 0.0, 0.0, 0.3679}
     };
-    std::vector<std::vector<double>> B = {
+    matrix_double B = {
         {0.0029, 0.0045},
         {-0.3178, -0.0323},
         {-0.0086, -0.0051},
         {0.6321, 0},
         {0, 0.6321}
     };
-    std::vector<std::vector<double>> C = {
+    matrix_double C = {
         {0, 1, 0, 0, 0},
         {0, -0.2680, 47.7600, -4.5600, 4.4500},
         {1, 0, 0, 0, 0},
@@ -1552,14 +1565,14 @@ public:
 
 
     // ======== Plant and Controller initial state ========
-    std::vector<double> x_plant_init = {
+    vector_double x_plant_init = {
         1,
         -1,
         0,
         0.7,
         2,
     };
-    std::vector<double> x_cont_init = {
+    vector_double x_cont_init = {
         -0.001,
         0.013,
         0.2,
@@ -1570,9 +1583,12 @@ public:
         std::cout << "*** START Params.print ***\n";
         // print these: p, q, g, s, L, r, iter_;
         std::cout << "N: " << i128str(N) << "\n";
-        std::cout << "p: " << i128str(p) << "\n";
-        std::cout << "q: " << i128str(q) << "\n";
-        std::cout << "g: " << i128str(g) << "\n";
+        // std::cout << "p: " << i128str(p) << "\n";
+        std::cout << "p: " << print_to_string_mpz(p) << "\n";
+        // std::cout << "q: " << i128str(q) << "\n";
+        std::cout << "q: " << print_to_string_mpz(q) << "\n";
+        // std::cout << "g: " << i128str(g) << "\n";
+        std::cout << "g: " << print_to_string_mpz(g) << "\n";
         std::cout << "s: " << i128str(s) << "\n";
         std::cout << "L: " << i128str(L) << "\n";
         std::cout << "r: " << i128str(r) << "\n";
@@ -1586,7 +1602,8 @@ public:
         std::cout << "H_bar:\n";
         H_bar.print();
         std::cout << "x_cont_init_scaled:\n";
-        print_vector_i128(x_cont_init_scaled);
+        // print_vector_i128(x_cont_init_scaled);
+        print_vector_mpz(x_cont_init_scaled);
         std::cout << "*** END Params.print ***\n\n\n";
     }
     // TODO pass in gen as a param
@@ -1603,7 +1620,7 @@ public:
     }
 
     // TODO pass in gen as a param
-    std::vector<vector_i128> sample_verification_vectors(i128 m, i128 n, i128 from, i128 to_inclusive) {
+    std::vector<vector_i128> sample_verification_vectors(__uint128_t m, __uint128_t n, i128 from, i128 to_inclusive) {
         size_t N = 3;
         std::vector<vector_i128> res(N);
         for (size_t i = 0; i < N - 1; i++) {
@@ -1620,19 +1637,19 @@ public:
         // res <- {r_0, r_1, s}
         return res;
     }
-    const std::vector<std::vector<double>>& get_F_() const {
+    const matrix_double& get_F_() const {
         return F_;
     }
-    const std::vector<std::vector<double>>& get_G() const {
+    const matrix_double& get_G() const {
         return G;
     }
-    const std::vector<std::vector<double>>& get_H() const {
+    const matrix_double& get_H() const {
         return H;
     }
-    const std::vector<std::vector<double>>& get_R() const {
+    const matrix_double& get_R() const {
         return R;
     }
-    const std::vector<double>& get_x_cont_init() const {
+    const vector_double& get_x_cont_init() const {
         return x_cont_init;
     }
 };

@@ -166,7 +166,7 @@ Proof compute_proof(
     const rlwe_vec& x_nega_,
     const rlwe_vec& x_,
     const rlwe_vec& x,
-    u32 v, u32 d, i128 power
+    u32 v, u32 d, u32 power
 ) {
     const std::vector<hashed_a_poly>& gr = ek.gr;
     const hashed_a_rgsw_vec& grFr = ek.grFr;
@@ -219,7 +219,7 @@ Proof compute_proof(
 void verify_with_lin_and_dyn_checks(
     const veri_key& vk, const Proof& proof, const Proof& old_proof, size_t k,
     const rlwe_vec& y, const hashed_rlwe_vec& u, const rlwe_vec& u_reenc,
-    u32 v, u32 d, i128 power, const vector_i128& eval_pows
+    u32 v, u32 d, u32 power, const vector_i128& eval_pows
 ) {
     // Unpack veri_key
     const vector_i128& s = vk.s;
@@ -265,7 +265,7 @@ void verify_with_lin_and_dyn_checks(
         }
         return sum;
     };
-    auto vec_dot_prod_enc = [](const hashed_rgsw_vec& rgsw_v, const rlwe_vec& rlwe_v, const vector_i128& eval_pows, u32 v, u32 d, i128 power) -> hashed_rlwe {
+    auto vec_dot_prod_enc = [](const hashed_rgsw_vec& rgsw_v, const rlwe_vec& rlwe_v, const vector_i128& eval_pows, u32 v, u32 d, u32 power) -> hashed_rlwe {
         ASSERT(rgsw_v.size() == rlwe_v.size());
         hashed_rlwe sum(N_POLYS_IN_RLWE);
         for (size_t i = 0; i < rgsw_v.size(); i++) {
@@ -289,9 +289,9 @@ void verify_with_lin_and_dyn_checks(
     // DEBUG(G_1_.print();)
     // DEBUG(std::cout << "\n";)
     for (size_t i = 0; i < 2; i++) {
-        assert(G_1.pow_(G_1.get(i), rho) == G_1_.get(i));
-        assert(G_2.pow_(G_2.get(i), alpha) == G_2_.get(i));
-        assert(G_3.pow_(G_3.get(i), gamma) == G_3_.get(i));
+        assert(pow_(G_1.get(i), rho, GROUP_MODULUS) == G_1_.get(i));
+        assert(pow_(G_2.get(i), alpha, GROUP_MODULUS) == G_2_.get(i));
+        assert(pow_(G_3.get(i), gamma, GROUP_MODULUS) == G_3_.get(i));
     }
 
     // Dynamics check
@@ -316,7 +316,7 @@ vector_double mat_vec_mult(const matrix_double& mat, const vector_double& vec) {
     ASSERT(mat[0].size() == vec.size());
     vector_double result(mat.size());
     for (size_t i = 0; i < mat.size(); i++) {
-        double sum = 0;
+        mpf_class sum = 0;
         for (size_t j = 0; j < mat[i].size(); j++) {
             sum += mat[i][j] * vec[j];
         }
@@ -388,19 +388,20 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         }
         return sum;
     };
+    // rounds half away from zero, e.g. 0.5 |-> 1 and -0.5 |-> -1
     auto round_vec = [](const vector_double& vec) -> vector_double {
         vector_double res(vec.size());
         for (size_t i = 0; i < vec.size(); i++)
-            res[i] = std::round(vec[i]);
+            res[i] = mpf_round(vec[i]);
         return res;
     };
     auto map_to_q = [](vector_double& vec) -> vector_i128 {
         vector_i128 res(vec.size());
         for (size_t i = 0; i < vec.size(); i++) {
-            double x = vec[i];
+            mpf_class x = vec[i];
             // assert(x > -1000000000.0);
             // assert(x < 1000000000.0);
-            __int64_t x1 = static_cast<__int64_t>(x);
+            mpz x1 = mpz(x);
             i128 val = x1 < 0 ? x1 + FIELD_MODULUS : x1;
             res.at(i) = val;
         }
@@ -409,7 +410,7 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     auto map_to_half_q = [](vector_i128& vec) -> vector_double {
         vector_double res;
         for (auto& x : vec) {
-            __int128_t val = x > (FIELD_MODULUS / 2) ? x - FIELD_MODULUS : x;
+            mpf_class val = x > (FIELD_MODULUS / 2) ? x - FIELD_MODULUS : x;
             // assert(val > -1000000000);
             // assert(val < 1000000000);
             res.push_back(val);
@@ -459,9 +460,9 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     size_t N = N_;
     // TODO move to Encryptor
     // TODO move to Params
-    u32 d = Params::d;
-    u32 power = Params::power;
-    i128 v = Params::v;
+    u32 d = pms.d;
+    u32 power = pms.power;
+    u32 v = pms.v;
 
     #ifdef DEBUG1_ON
         DEBUG1(knowledge_exps = vector_i128({1, 1, 3, 3, 2, 3});)

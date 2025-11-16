@@ -16,11 +16,11 @@ using u128 = i128;
 // using u32 = unsigned int;
 using vec_u128 = std::vector<u128>;
 
-constexpr u32 POLY_SIZE = N_;
-constexpr u128 FIELD_MOD = FIELD_MODULUS;
+constexpr size_t POLY_SIZE = N_;
+u128 FIELD_MOD = FIELD_MODULUS;
 // constexpr u128 NTH_ROU = 2;
 // constexpr u128 TWO_ROU = 3;
-constexpr u128 GROUP_MOD = GROUP_MODULUS;
+u128 GROUP_MOD = GROUP_MODULUS;
 // p = k * q + 1
 // constexpr u128 K = 6;
 // constexpr u128 GENERATOR = 64;
@@ -30,32 +30,40 @@ using arr_u128 = std::array<u128, POLY_SIZE>;
 using span_u128 = std::span<u128>;
 
 u128 mod_sub(u128 x, u128 y) {
-    return (x < y) ? ((x + FIELD_MOD) - y) : (x - y);
+    u128 res;
+    if (x < y) {
+        res = (x + FIELD_MOD) - y;
+    } else {
+        res = x - y;
+    }
+    return res;
 }
 
-u128 pow_(u128 base, u128 power, u128 mod) {
-    u128 result = 1;
-    while (power > 0) {
-        bool power_is_odd = (power & 1);
-        if (power_is_odd)
-            result = (result * base) % mod;
-        base = (base * base) % mod;
-        power >>= 1;
-    }
-    return result;
+// u128 pow_(u128 base, u128 power, u128 mod) {
+//     u128 result = 1;
+//     while (power > 0) {
+//         bool power_is_odd = ((power & 1) != 0);
+//         if (power_is_odd)
+//             result = (result * base) % mod;
+//         base = (base * base) % mod;
+//         power >>= 1;
+//     }
+//     return result;
+// }
+
+u128 pow_constexpr(u128 base, u128 power, u128 mod) {
+    // u128 result = 1;
+    // while (power > 0) {
+    //     bool power_is_odd = ((power & 1) != 0);
+    //     if (power_is_odd)
+    //         result = (result * base) % mod;
+    //     base = (base * base) % mod;
+    //     power >>= 1;
+    // }
+    // return result;
+    return pow_(base, power, mod);
 }
 
-constexpr u128 pow_constexpr(u128 base, u128 power, u128 mod) {
-    u128 result = 1;
-    while (power > 0) {
-        bool power_is_odd = (power & 1);
-        if (power_is_odd)
-            result = (result * base) % mod;
-        base = (base * base) % mod;
-        power >>= 1;
-    }
-    return result;
-}
 
 /* START ATCODER */
 /* Code reproduced from atcoder (CC0 1.0 licence)
@@ -63,7 +71,7 @@ https://github.com/atcoder/ac-library/tree/master?tab=readme-ov-file */
 
 // @param m `1 <= m`
 // @return x mod m
-constexpr long long safe_mod(long long x, long long m) {
+long long safe_mod(long long x, long long m) {
     x %= m;
     if (x < 0) x += m;
     return x;
@@ -72,7 +80,7 @@ constexpr long long safe_mod(long long x, long long m) {
 // @param n `0 <= n`
 // @param m `1 <= m`
 // @return `(x ** n) % m`
-constexpr long long pow_mod_constexpr(long long x, long long n, int m) {
+long long pow_mod_constexpr(long long x, long long n, int m) {
     if (m == 1) return 0;
     unsigned int _m = (unsigned int)(m);
     unsigned long long r = 1;
@@ -88,13 +96,13 @@ constexpr long long pow_mod_constexpr(long long x, long long n, int m) {
 // M. Forisek and J. Jancina,
 // Fast Primality Testing for Integers That Fit into a Machine Word
 // @param n `0 <= n`
-constexpr bool is_prime_constexpr(int n) {
+bool is_prime_constexpr(int n) {
     if (n <= 1) return false;
     if (n == 2 || n == 7 || n == 61) return true;
     if (n % 2 == 0) return false;
     long long d = n - 1;
     while (d % 2 == 0) d /= 2;
-    constexpr long long bases[3] = {2, 7, 61};
+    long long bases[3] = {2, 7, 61};
     for (long long a : bases) {
         long long t = d;
         long long y = pow_mod_constexpr(a, t, n);
@@ -110,7 +118,7 @@ constexpr bool is_prime_constexpr(int n) {
 }
 /* END ATCODER */
 
-constexpr bool is_prime_constexpr(u128 n) {
+bool is_prime_constexpr(u128 n) {
     if (n <= 1) return false;
     if (n <= 3) return true;
     if (n % 2 == 0 || n % 3 == 0) return false;
@@ -121,7 +129,7 @@ constexpr bool is_prime_constexpr(u128 n) {
     return true;
 }
 
-constexpr bool are_q_and_N_legal(u128 q, u32 N) {
+bool are_q_and_N_legal(u128 q, __uint32_t N) {
     bool both_legal = true;
     // DONE check q is prime
     both_legal = both_legal && is_prime_constexpr(q);
@@ -136,7 +144,7 @@ constexpr bool are_q_and_N_legal(u128 q, u32 N) {
     return both_legal;
 }
 
-constexpr bool is_w_legal(u128 w, u32 n=POLY_SIZE) {
+bool is_w_legal(u128 w, u128 n=POLY_SIZE) {
     // w is an nth ROU: w^n == 1
     bool w_pow_n_is_one = pow_constexpr(w, n, FIELD_MOD) == 1;
     if (!w_pow_n_is_one)
@@ -149,14 +157,14 @@ constexpr bool is_w_legal(u128 w, u32 n=POLY_SIZE) {
     return true;
 }
 
-constexpr bool is_psi_legal(u128 psi) {
+bool is_psi_legal(u128 psi) {
     // psi is a 2n-th ROU: psi^2n == 1
     // psi is a primitive 2n-th ROU: psi^i != 1, for all i = [1, 2n - 1]
-    u32 TWO_N = 2 * POLY_SIZE;
+    u128 TWO_N = 2 * POLY_SIZE;
     return is_w_legal(psi, TWO_N);
 }
 
-constexpr arr_u128 get_rou_pows(u128 rou) {
+arr_u128 get_rou_pows(u128 rou) {
     arr_u128 w_pows{};
     w_pows[0] = 1;
     for (size_t i = 1; i < POLY_SIZE; i++) {
@@ -165,7 +173,7 @@ constexpr arr_u128 get_rou_pows(u128 rou) {
     return w_pows;
 }
 
-constexpr bool is_w_pows_legal(const arr_u128& w_pows, u32 order=POLY_SIZE) {
+bool is_w_pows_legal(const arr_u128& w_pows, u128 order=POLY_SIZE) {
     if (w_pows[0] != 1) return false;
     for (size_t i = 0; i < POLY_SIZE; i++) {
         if (pow_constexpr(w_pows[i], order, FIELD_MOD) != 1)
@@ -174,7 +182,7 @@ constexpr bool is_w_pows_legal(const arr_u128& w_pows, u32 order=POLY_SIZE) {
     return true;
 }
 
-constexpr bool is_psi_pows_legal(const arr_u128& psi_pows) {
+bool is_psi_pows_legal(const arr_u128& psi_pows) {
     return is_w_pows_legal(psi_pows, 2 * POLY_SIZE);
 }
 
@@ -226,7 +234,7 @@ void ntt_recursive_(span_u128 x, u128 nth_root_unity) {
 
 void ntt_iter_(auto& x, const arr_u128& w) {
     // const size_t n = x.size();
-    constexpr size_t n = 2 * POLY_SIZE;
+    size_t n = 2 * POLY_SIZE;
     // TODO alg that does no->bo fwd and bo->no rev could remove this step
     bit_reverse(x);
 
@@ -247,7 +255,7 @@ void ntt_iter_(auto& x, const arr_u128& w) {
 
 void ntt_iter_ct_no_bo(auto& a, const arr_u128& psi) {
     // constexpr size_t n = 2 * POLY_SIZE;
-    constexpr size_t n = POLY_SIZE;
+    size_t n = POLY_SIZE;
     size_t t = n;
     for (size_t m = 1; m < n; m = 2 * m) {
         t = t / 2;
@@ -255,11 +263,11 @@ void ntt_iter_ct_no_bo(auto& a, const arr_u128& psi) {
             size_t j1 = 2 * i * t;
             size_t j2 = j1 + t - 1;
             for (size_t j = j1; j <= j2; j++) {
-                assert(a[j] < FIELD_MOD);
-                assert(a[j + t] < FIELD_MOD);
+                // assert(a[j] < FIELD_MOD);
+                // assert(a[j + t] < FIELD_MOD);
                 auto U = a[j];
-                assert((m + i) < psi.size());
-                assert(psi[m + i] < FIELD_MOD);
+                // assert((m + i) < psi.size());
+                // assert(psi[m + i] < FIELD_MOD);
                 auto V = (a[j + t] * psi[m + i]) % FIELD_MOD;
                 a[j] = (U + V) % FIELD_MOD;
                 a[j + t] = mod_sub(U, V) % FIELD_MOD;
@@ -269,7 +277,7 @@ void ntt_iter_ct_no_bo(auto& a, const arr_u128& psi) {
 }
 
 void intt_iter_gs_bo_no(auto& a, const arr_u128& psi) {
-    constexpr size_t n = POLY_SIZE;
+    size_t n = POLY_SIZE;
     size_t t = 1;
     for (size_t m = n; m > 1; m = m / 2) {
         size_t j1 = 0;
@@ -277,13 +285,13 @@ void intt_iter_gs_bo_no(auto& a, const arr_u128& psi) {
         for (size_t i = 0; i < h; i++) {
             size_t j2 = j1 + t - 1;
             for (size_t j = j1; j <= j2; j++) {
-                assert(a[j] < FIELD_MOD);
-                assert(a[j + t] < FIELD_MOD);
+                // assert(a[j] < FIELD_MOD);
+                // assert(a[j + t] < FIELD_MOD);
                 auto U = a[j];
                 auto V = a[j + t];
                 a[j] = (U + V) % FIELD_MOD;
-                assert((h + i) < psi.size());
-                assert(psi[h + i] < FIELD_MOD);
+                // assert((h + i) < psi.size());
+                // assert(psi[h + i] < FIELD_MOD);
                 a[j + t] = (mod_sub(U, V) * psi[h + i]) % FIELD_MOD;
             }
             j1 += 2 * t;
