@@ -515,6 +515,7 @@ public:
         ASSERT(n_coeffs() == other.n_coeffs());
         return nega_ntt(other);
     }
+    // FIXME - remove dead code
     poly conv_to_nega_(poly& conv) const {
         // std::cout << conv.size() << "\n";
         size_t n = conv.size() / 2;

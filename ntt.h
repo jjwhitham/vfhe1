@@ -29,7 +29,7 @@ using arr2n_u128 = std::array<u128, 2 * POLY_SIZE>;
 using arr_u128 = std::array<u128, POLY_SIZE>;
 using span_u128 = std::span<u128>;
 
-u128 mod_sub(u128 x, u128 y) {
+u128 mod_sub(const u128& x, const u128& y) {
     u128 res;
     if (x < y) {
         res = (x + FIELD_MOD) - y;
@@ -237,17 +237,19 @@ void ntt_iter_(auto& x, const arr_u128& w) {
     size_t n = 2 * POLY_SIZE;
     // TODO alg that does no->bo fwd and bo->no rev could remove this step
     bit_reverse(x);
-
+    // NOTE These are just to ensure GMP only allocates once
+    mpz w_odd = x[1];
     for (size_t half = 1; half < n; half *= 2) {
         const size_t len_chunk = 2 * half;
         const size_t n_chunks = n / len_chunk;
         for (size_t chunk = 0; chunk < n_chunks; chunk++) {
             const size_t j = len_chunk * chunk;
             for (size_t i = 0; i < half; i++) {
-                const mpz even = x[i + j];
-                const mpz w_odd = (w[i * n_chunks] * x[i + j + half]) % FIELD_MOD;
-                x[i + j] = (even + w_odd) % FIELD_MOD;
-                x[i + j + half] = mod_sub(even, w_odd) % FIELD_MOD;
+                const mpz& even = x[i + j];
+                w_odd = (w[i * n_chunks] * x[i + j + half]) % FIELD_MOD;
+                // x[i + j + half] = mod_sub(even, w_odd);
+                x[i + j + half] = (even - w_odd);
+                x[i + j] = (even + w_odd);
             }
         }
     }
@@ -257,6 +259,7 @@ void ntt_iter_ct_no_bo(auto& a, const arr_u128& psi) {
     // constexpr size_t n = 2 * POLY_SIZE;
     size_t n = POLY_SIZE;
     size_t t = n;
+    mpz V = a[0];
     for (size_t m = 1; m < n; m = 2 * m) {
         t = t / 2;
         for (size_t i = 0; i < m; i++) {
@@ -265,12 +268,12 @@ void ntt_iter_ct_no_bo(auto& a, const arr_u128& psi) {
             for (size_t j = j1; j <= j2; j++) {
                 // assert(a[j] < FIELD_MOD);
                 // assert(a[j + t] < FIELD_MOD);
-                mpz U = a[j];
+                mpz& U = a[j];
                 // assert((m + i) < psi.size());
                 // assert(psi[m + i] < FIELD_MOD);
-                mpz V = (a[j + t] * psi[m + i]) % FIELD_MOD;
-                a[j] = (U + V) % FIELD_MOD;
-                a[j + t] = mod_sub(U, V) % FIELD_MOD;
+                V = (a[j + t] * psi[m + i]) % FIELD_MOD;
+                a[j + t] = U - V;
+                a[j] = U + V;
             }
         }
     }
@@ -279,6 +282,7 @@ void ntt_iter_ct_no_bo(auto& a, const arr_u128& psi) {
 void intt_iter_gs_bo_no(auto& a, const arr_u128& psi) {
     size_t n = POLY_SIZE;
     size_t t = 1;
+    mpz U = a[0];
     for (size_t m = n; m > 1; m = m / 2) {
         size_t j1 = 0;
         size_t h = m / 2;
@@ -287,12 +291,13 @@ void intt_iter_gs_bo_no(auto& a, const arr_u128& psi) {
             for (size_t j = j1; j <= j2; j++) {
                 // assert(a[j] < FIELD_MOD);
                 // assert(a[j + t] < FIELD_MOD);
-                mpz U = a[j];
-                mpz V = a[j + t];
-                a[j] = (U + V) % FIELD_MOD;
+                U = a[j];
+                // mpz V = a[j + t];
+                a[j] = (a[j] + a[j + t]);
                 // assert((h + i) < psi.size());
                 // assert(psi[h + i] < FIELD_MOD);
-                a[j + t] = (mod_sub(U, V) * psi[h + i]) % FIELD_MOD;
+                // a[j + t] = (mod_sub(U, a[j + t]) * psi[h + i]) % FIELD_MOD;
+                a[j + t] = ((U - a[j + t]) * psi[h + i]) % FIELD_MOD;
             }
             j1 += 2 * t;
         }
@@ -305,6 +310,9 @@ void ntt_iter(auto& x, const arr_u128& rou_pows) {
     TIMING(auto start = std::chrono::high_resolution_clock::now();)
 
     ntt_iter_(x, rou_pows);
+    // NOTE mod each value after NTT, due to lazy modding
+    for (auto& el : x)
+        el = el % FIELD_MOD;
 
     TIMING(auto end = std::chrono::high_resolution_clock::now();)
     TIMING(timing.ntt += end - start;)
@@ -327,6 +335,9 @@ void ntt_iter1(auto& x, const arr_u128& rou_pows) {
     TIMING(auto start = std::chrono::high_resolution_clock::now();)
 
     ntt_iter_ct_no_bo(x, rou_pows);
+    // NOTE mod each value after NTT, due to lazy modding
+    for (auto& el : x)
+        el = el % FIELD_MOD;
 
     TIMING(auto end = std::chrono::high_resolution_clock::now();)
     TIMING(timing.ntt1 += end - start;)
