@@ -336,30 +336,30 @@ void print_times_and_counts(times_and_counts& timing) {
     int iter_ = timing.iter_;
     int n_decimals = 0;
     std::cout << std::fixed << std::setprecision(n_decimals);
-    std::cout << "Times:\n";
+    std::cout << "\nTimes:\n";
     std::cout << "Total: ";
     std::cout << timing.total.count() << "\n";
     std::cout << "Setup: ";
     std::cout << timing.total.count() - timing.loop.count() << "\n";
-    std::cout << "  Per Loop: ";
+    std::cout << "Per Loop: ";
     std::cout << timing.loop.count() / iter_ << "\n";
-    std::cout << "    Controller: ";
+    std::cout << "  Controller: ";
     std::cout << timing.controller.count() / iter_ << "\n";
-    std::cout << "      Proof: ";
+    std::cout << "    Proof: ";
     std::cout << timing.proof.count() / iter_ << "\n";
-    std::cout << "    Plant: ";
+    std::cout << "  Plant: ";
     std::cout << timing.plant.count() / iter_ << "\n";
-    std::cout << "      Verify: ";
+    std::cout << "    Verify: ";
     std::cout << timing.verify.count() / iter_ << "\n";
-    std::cout << "    get_hash_sec: ";
+    std::cout << "  get_hash_sec: ";
     std::cout << timing.get_hash_sec.count() / iter_ << "\n";
-    std::cout << "    NTT: ";
+    std::cout << "  NTT: ";
     std::cout << timing.ntt.count() / iter_ << "\n";
-    std::cout << "    iNTT: ";
+    std::cout << "  iNTT: ";
     std::cout << timing.intt.count() / iter_ << "\n";
-    std::cout << "    NTT1: ";
+    std::cout << "  NTT1: ";
     std::cout << timing.ntt1.count() / iter_ << "\n";
-    std::cout << "    iNTT1: ";
+    std::cout << "  iNTT1: ";
     std::cout << timing.intt1.count() / iter_ << "\n";
     std::cout << "\n";
 
@@ -376,7 +376,7 @@ void print_times_and_counts(times_and_counts& timing) {
     std::cout << "  Conv-to-nega: ";
     std::cout << timing.calls_conv_to_nega / iter_ << "\n";
     std::cout << "  get_hash_sec: ";
-    std::cout << timing.calls_get_hash_sec / iter_ << "\n";
+    std::cout << timing.calls_get_hash_sec / iter_ << "\n\n";
 }
 
 void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
@@ -508,8 +508,10 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     Proof old_proof {};
     old_proof.g_1 = g1;
 
-    TIMING(timing.iter_ = iter_;)
+    TIMING(timing.iter_ = 1;)
     TIMING(print_times_and_counts(timing);)
+    TIMING(timing = {};)
+    TIMING(timing.iter_ = iter_;)
     TIMING(auto start = std::chrono::high_resolution_clock::now();)
     for (size_t k = 0; k < iter_; k++) {
         DEBUG(std::cout << "\n*** START k: " << k << ", run_control_loop ***\n";)
