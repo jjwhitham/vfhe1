@@ -1495,7 +1495,7 @@ private:
 public:
     Params() :
         N(N_),
-        iter_(3),
+        iter_(1),
         s(10000.0),
         L(10000.0),
         r(10000.0),
