@@ -3,8 +3,38 @@
 
 #include <NTL/ZZ_pX.h>
 #include <NTL/ZZ.h>
+#include <assert.h>
+#include <iostream>
+#include <chrono>
+#include <NTL/BasicThreadPool.h>
+#include <thread>
 
 using namespace NTL;
+
+void conv_to_nega() {
+
+}
+
+void test_basic_arithmetic() {
+    // add
+    // sub
+    // mul (nega)
+}
+
+void test_optimised_nega() {
+    // apply all optimisations to negacyclic NTT
+
+    // put x into NTT form
+    // for each b in b_vec -> res += NTT(b) * x_NTT
+    // iNTT(res)
+}
+
+void test_serialisation() {
+    // to and from string
+    // to and from mpz_t
+
+    // anything else?
+}
 
 void test_features() {
     // set modulus p
@@ -114,17 +144,102 @@ void test_ntt_peformance() {
         'multiply degree-1000 int poly with 1000-bit coeffs: 0.00293567'
     */
     // set p to be BN254 group order
-    // assert that p is NTT friendly
-    // create 1000x random polynomials with Zp coeff vec of length 4096
+    const char* q_str = "\
+21888242871839275222246405745257275088548364400416034343698204186575808495617";
+    // const char* q_str = "114689";
+    ZZ q;
+    q = conv<ZZ>(q_str);
+    ZZ_p::init(q);
+    // assert that q is NTT friendly
+    size_t N = 8192;
+    assert(q % (2 * N) == 1);
+    // create a vec_ZZ_pX of size 280 random polynomials (each poly has 8192 elements)
+    size_t num_polys = 280;
+    Vec<ZZ_pX> polys;
+    polys.SetLength(num_polys);
+    for (size_t i = 0; i < num_polys; i++) {
+        polys[i].SetLength(N);
+        for (size_t j = 0; j < N; j++) {
+            polys[i][j] = random_ZZ_p();
+        }
+    }
 
-    // TIMING
-    // for 1000x iterations, perform NTT on poly
-    // TIMING
-
+    // For 280x iterations, multiply i'th poly with N - 1 - i'th poly
+    ZZ_pX result;
+    result.SetLength(N);
+    auto start = std::chrono::high_resolution_clock::now();
+    for (size_t i = 0; i < num_polys; i++) {
+        // use num_polys here (was previously using N which caused out-of-range access)
+        result = result + polys[i] * polys[num_polys - 1 - i];
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    auto elapsed = std::chrono::duration<double>(end - start).count();
+    std::cout << num_polys << "x poly mults with N=" << N << " took: " << elapsed << "(s) (" << num_polys / elapsed << "ops/sec)\n";
 
     // TIMING
     // for 1000x iterations, multiply a random pair of polys
     // TIMING
+}
+
+// Multithreaded version using NTL BasicThreadPool (follows ThreadTest.cpp style)
+// void test_ntt_peformance_mt(long num_threads = 0) {
+void test_ntt_peformance_mt() {
+    const char* q_str = "\
+21888242871839275222246405745257275088548364400416034343698204186575808495617";
+    ZZ q;
+    q = conv<ZZ>(q_str);
+    ZZ_p::init(q);
+
+    size_t N = 8192;
+    assert(q % (2 * N) == 1);
+
+    long num_polys = 10000;
+    Vec<ZZ_pX> polys;
+    polys.SetLength(num_polys);
+    for (long i = 0; i < num_polys; i++) {
+        polys[i].SetLength(N);
+        for (long j = 0; j < (long)N; j++) {
+            polys[i][j] = random_ZZ_p();
+        }
+    }
+
+    long num_threads = AvailableThreads();
+    std::cout << "num_threads: " << num_threads << "\n";
+    // BasicThreadPool pool(num_threads);
+
+    // Vec<ZZ_pX> thread_results;
+    // thread_results.SetLength(num_threads);
+
+
+    // pool.exec_index(num_threads,
+    //    [&](long i) {
+    //     fprintf(stderr, "starting %ld: %s\n", i, CurrentThreadID().c_str());
+    //     //    ZZ_pX local;
+    //     //    local.SetLength(N);
+    //     // //    for (long i = first; i < last; ++i) {
+    //     //        // independent per-iteration work
+    //     //     local = polys[i] * polys[num_polys - 1 - i];
+
+    //     //        mul(thread_results[CurrentThreadID().]) polys[i] * polys[i]; //polys[num_polys - 1 - i];
+    //    });
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    ZZ_pContext context;
+    context.save();
+    NTL_EXEC_RANGE(num_polys, first, last)
+        context.restore();
+        ZZ_pX thread_result;
+        thread_result.SetLength(N);
+        for (long i = first; i < last; i++)
+            thread_result = polys[i] * polys[last - 1 - i];
+            // mul(thread_result, polys[i], polys[last - 1 - i]);
+    NTL_EXEC_RANGE_END
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto elapsed = std::chrono::duration<double>(end - start).count();
+    std::cout << "(mt) " << num_polys << "x poly mults with N=" << N << " took: " << elapsed
+              << "(s) (" << num_polys / elapsed << "ops/sec) using " << num_threads << " threads\n";
 }
 
 void test_ntt_features() {
@@ -240,6 +355,10 @@ void test() {
 }
 
 int main() {
-    test_mult_conv();
+    // test_mult_conv();
+    // test_ntt_peformance();
+    long nt = 16;
+    SetNumThreads(nt);
+    test_ntt_peformance_mt();
     return 0;
 }

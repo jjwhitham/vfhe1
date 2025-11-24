@@ -1,8 +1,7 @@
 // test_mcl.cpp
 // Benchmark G1/G2 exponentiation and pairing using mcl
-// #include "/home/jw/Projects/mcl/include/mcl/bls12_381.hpp"
-#include <mcl/bls12_381.hpp>
-#include <gmpxx.h>
+// #include <gmpxx.h>
+#include <mcl/bn.hpp>
 #include <chrono>
 #include <iostream>
 #include <vector>
@@ -21,23 +20,19 @@ int main() {
   G2 Q;
   Fr s;
 
-  // set generators randomly (for benchmark purposes)
-  P.rand();
-  Q.rand();
+  // set generators deterministically from strings (portable)
+  hashAndMapToG1(P, std::string("P"));
+  hashAndMapToG2(Q, std::string("Q"));
 
   // Pre-generate scalars
   const size_t N1 = 1000;
   const size_t N2 = 1000;
-  const size_t NP = 100;
+  const size_t NP = 1120;
 
   std::vector<Fr> scalars1; scalars1.reserve(N1);
   std::vector<Fr> scalars2; scalars2.reserve(N2);
 
-  gmp_randstate_t state;
-  gmp_randinit_default(state);
-  gmp_randseed_ui(state, (unsigned long)time(nullptr));
-
-  // get group order as big integer (Fr::getOrder not available portably), use random Fr::setByCSPRNG
+  // Pre-generate random scalars using mcl's Fr::setByCSPRNG
   for (size_t i = 0; i < N1; ++i) {
     Fr t; t.setByCSPRNG();
     scalars1.push_back(t);
@@ -52,7 +47,7 @@ int main() {
   auto t0 = std::chrono::high_resolution_clock::now();
   for (size_t i = 0; i < N1; ++i) {
     // out1 = scalars1[i] * P
-    mul(out1, P, scalars1[i]);
+    G1::mul(out1, P, scalars1[i]);
   }
   auto t1 = std::chrono::high_resolution_clock::now();
   double secs_g1 = std::chrono::duration<double>(t1 - t0).count();
@@ -63,7 +58,7 @@ int main() {
   G2 out2;
   t0 = std::chrono::high_resolution_clock::now();
   for (size_t i = 0; i < N2; ++i) {
-    mul(out2, Q, scalars2[i]);
+    G2::mul(out2, Q, scalars2[i]);
   }
   t1 = std::chrono::high_resolution_clock::now();
   double secs_g2 = std::chrono::duration<double>(t1 - t0).count();
@@ -78,8 +73,8 @@ int main() {
   for (size_t i = 0; i < NP; ++i) {
     auto p1 = std::make_unique<G1>();
     auto p2 = std::make_unique<G2>();
-    mul(*p1, P, scalars1[i % scalars1.size()]);
-    mul(*p2, Q, scalars2[i % scalars2.size()]);
+    G1::mul(*p1, P, scalars1[i % scalars1.size()]);
+    G2::mul(*p2, Q, scalars2[i % scalars2.size()]);
     g1_list.push_back(std::move(p1));
     g2_list.push_back(std::move(p2));
   }
