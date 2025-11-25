@@ -21,12 +21,133 @@ void test_basic_arithmetic() {
     // mul (nega)
 }
 
-void test_optimised_nega() {
+void test_optimised_conv() {
     // apply all optimisations to negacyclic NTT
 
     // put x into NTT form
     // for each b in b_vec -> res += NTT(b) * x_NTT
     // iNTT(res)
+    const char* q_str = "\
+21888242871839275222246405745257275088548364400416034343698204186575808495617";
+    ZZ q;
+    q = conv<ZZ>(q_str);
+    ZZ_p::init(q);
+
+    size_t N = 8192;
+    assert(q % (2 * N) == 1);
+
+    // long num_polys = 10000;
+    long num_polys = 280;
+    Vec<ZZ_pX> polys1;
+    Vec<ZZ_pX> polys2;
+    polys1.SetLength(num_polys);
+    polys2.SetLength(num_polys);
+    for (long i = 0; i < num_polys; i++) {
+        polys1[i].SetLength(N);
+        polys2[i].SetLength(N);
+        for (long j = 0; j < (long)N; j++) {
+            polys1[i][j] = random_ZZ_p();
+            polys2[i][j] = random_ZZ_p();
+        }
+    }
+
+    long num_threads = AvailableThreads();
+    std::cout << "num_threads: " << num_threads << "\n";
+
+    // Vec<ZZ_pX> thread_results;
+    // thread_results.SetLength(num_threads);
+
+    // NTT of all poly1s
+    long k = 14;
+    Vec<FFTRep> polys1_ntt;
+    std::cout << "got to here1\n";
+    polys1_ntt.SetLength(num_polys);
+    std::cout << "got to here2\n";
+    for (long i = 0; i < num_polys; i++) {
+        std::cout << "got to here3\n";
+        FFTRep x(INIT_SIZE, k);
+        polys1_ntt[i] = x;
+        std::cout << "got to here4\n";
+    }
+
+    ZZ_pContext context;
+    context.save();
+    NTL_EXEC_RANGE(num_polys, first, last)
+        context.restore();
+        for (long i = first; i < last; i++) {
+            ToFFTRep(polys1_ntt[i], polys1[i], k);
+        }
+    NTL_EXEC_RANGE_END
+
+    // mul + accum of poly1_ntt * NTT(poly2)
+    auto start = std::chrono::high_resolution_clock::now();
+
+    NTL_EXEC_RANGE(num_polys, first, last)
+        context.restore();
+        ZZ_pX accum, tmp;
+        accum.SetLength(2 * N);
+        tmp.SetLength(2 * N);
+        for (long i = first; i < last; i++) {
+            FFTRep polys2_ntt(INIT_SIZE, k);
+            ToFFTRep(polys2_ntt, polys2[i], k);
+            mul(polys1_ntt[i], polys1_ntt[i], polys2_ntt);
+            accum += tmp;
+        }
+    NTL_EXEC_RANGE_END
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto elapsed = std::chrono::duration<double>(end - start).count();
+    std::cout << "(mt) " << num_polys << "x poly mults with N=" << N << " took: " << elapsed
+              << "(s) (" << num_polys / elapsed << "ops/sec) using " << num_threads << " threads\n";
+
+    ZZ_pX h;
+    h.SetLength(2 * N);
+    FromFFTRep(h, polys1_ntt[0], 0, 2 * N - 1);
+    // // non-destructive versions of the above
+    // void NDFromFFTRep(ZZ_pX& x, const FFTRep& y, long lo, long hi, FFTRep& temp);
+    // void NDFromFFTRep(ZZ_pX& x, const FFTRep& y, long lo, long hi);
+}
+
+void test_optimised_conv1() {
+    // apply all optimisations to negacyclic NTT
+
+    // put x into NTT form
+    // for each b in b_vec -> res += NTT(b) * x_NTT
+    // iNTT(res)
+    const char* q_str = "\
+21888242871839275222246405745257275088548364400416034343698204186575808495617";
+    ZZ q;
+    q = conv<ZZ>(q_str);
+    ZZ_p::init(q);
+
+    const long n = 4;
+
+    // ZZ_pX poly_mod; // TODO assign const/lead coeffs
+    // poly_mod.SetLength(2 * n + 1);
+    // // define as per X^N - 1, i.e. cyclic conv (use X^N truncate instead?)
+    // poly_mod[0] = -1;
+    // poly_mod[2 * n] = 1;
+    // ZZ_pXModulus M(poly_mod);
+    // ZZ_pXMultiplier G(g, M);
+
+    ZZ_pX f, g;
+    f.SetLength(n);
+    g.SetLength(n);
+
+    ZZ_pX h;
+    h.SetLength(2 * n);
+
+    long k = 3;
+    FFTRep f_fft(INIT_SIZE, k);
+    ToFFTRep(f_fft, f, k); // k == 3, i.e. 2 * N == 2^k == 2^3
+
+    // TIMING
+    FFTRep g_fft(INIT_SIZE, k);
+    ToFFTRep(g_fft, g, k); // k == 3, i.e. 2 * N == 2^k == 2^3
+    mul(f_fft, f_fft, g_fft);
+    // accumulate
+    FromFFTRep(h, f_fft, 0, 2 * n - 1);
+    // TIMING
 }
 
 void test_serialisation() {
@@ -79,26 +200,34 @@ void test_mult_conv() {
 
     ZZ_pXModulus M(poly_mod);
     ZZ_pXMultiplier G(g, M);
+    std::cout << "G = { ";
+    for (size_t i = 0; i < (size_t)n; i++)
+        std::cout << G.val()[i] << " ";
+    std::cout << "}\n";
+
     ZZ_pX h;
     h.SetLength(2 * n);
 
     long k = 3;
-    FFTRep f_fft(INIT_SIZE, 2 * n);
+    FFTRep f_fft(INIT_SIZE, k);
     ToFFTRep(f_fft, f, k); // k == 3, i.e. 2 * N == 2^k == 2^3
-    FFTRep g_fft(INIT_SIZE, 2 * n);
+    FFTRep g_fft(INIT_SIZE, k);
     ToFFTRep(g_fft, g, k); // k == 3, i.e. 2 * N == 2^k == 2^3
-    // FFTRep out_fft(INIT_SIZE, 2 * n);
+    // FFTRep out_fft(INIT_SIZE, k);
     // ToFFTRep(out_fft, g, k); // k == 3, i.e. 2 * N == 2^k == 2^3
     mul(f_fft, f_fft, g_fft);
     FromFFTRep(h, f_fft, 0, 2 * n - 1);
     // MulMod(h, f, G, M);
-    // ZZ_pX h = f * g;
+    ZZ_pX h1;
+    h1.SetLength(n);
+    h1 = f * g;
+    std::cout << "x * y = { ";
+    for (size_t i = 0; i < (size_t)2 * n; i++)
+        std::cout << h1[i] << " ";
+    std::cout << "}\n";
 
     // Optional: reduce size
     // h.normalize();
-
-    // degree should be 2(n - 1) == 6
-    std::cout << "deg(h) = " << deg(h) << "\n";
 
     // print
     // std::cout << "x = { ";
@@ -116,10 +245,8 @@ void test_mult_conv() {
         std::cout << h[i] << " ";
     std::cout << "}\n";
 
-    std::cout << "G = { ";
-    for (size_t i = 0; i < (size_t)n; i++)
-        std::cout << G.val()[i] << " ";
-    std::cout << "}\n";
+    // degree should be 2(n - 1) == 6
+    std::cout << "deg(h) = " << deg(h) << "\n";
 }
 
 void test_mult_nega() {
@@ -181,9 +308,8 @@ void test_ntt_peformance() {
     // TIMING
 }
 
-// Multithreaded version using NTL BasicThreadPool (follows ThreadTest.cpp style)
-// void test_ntt_peformance_mt(long num_threads = 0) {
 void test_ntt_peformance_mt() {
+    // https://libntl.org/doc/tour-ex7.html
     const char* q_str = "\
 21888242871839275222246405745257275088548364400416034343698204186575808495617";
     ZZ q;
@@ -194,46 +320,42 @@ void test_ntt_peformance_mt() {
     assert(q % (2 * N) == 1);
 
     long num_polys = 10000;
-    Vec<ZZ_pX> polys;
-    polys.SetLength(num_polys);
+    Vec<ZZ_pX> polys1;
+    Vec<ZZ_pX> polys2;
+    polys1.SetLength(num_polys);
+    polys2.SetLength(num_polys);
     for (long i = 0; i < num_polys; i++) {
-        polys[i].SetLength(N);
+        polys1[i].SetLength(N);
+        polys2[i].SetLength(N);
         for (long j = 0; j < (long)N; j++) {
-            polys[i][j] = random_ZZ_p();
+            polys1[i][j] = random_ZZ_p();
+            polys2[i][j] = random_ZZ_p();
         }
     }
 
     long num_threads = AvailableThreads();
     std::cout << "num_threads: " << num_threads << "\n";
-    // BasicThreadPool pool(num_threads);
 
     // Vec<ZZ_pX> thread_results;
     // thread_results.SetLength(num_threads);
-
-
-    // pool.exec_index(num_threads,
-    //    [&](long i) {
-    //     fprintf(stderr, "starting %ld: %s\n", i, CurrentThreadID().c_str());
-    //     //    ZZ_pX local;
-    //     //    local.SetLength(N);
-    //     // //    for (long i = first; i < last; ++i) {
-    //     //        // independent per-iteration work
-    //     //     local = polys[i] * polys[num_polys - 1 - i];
-
-    //     //        mul(thread_results[CurrentThreadID().]) polys[i] * polys[i]; //polys[num_polys - 1 - i];
-    //    });
 
     auto start = std::chrono::high_resolution_clock::now();
 
     ZZ_pContext context;
     context.save();
     NTL_EXEC_RANGE(num_polys, first, last)
+        fprintf(stderr, "tid %s\n", CurrentThreadID().c_str());
         context.restore();
-        ZZ_pX thread_result;
-        thread_result.SetLength(N);
-        for (long i = first; i < last; i++)
-            thread_result = polys[i] * polys[last - 1 - i];
-            // mul(thread_result, polys[i], polys[last - 1 - i]);
+        ZZ_pX accum, tmp;
+        accum.SetLength(N);
+        tmp.SetLength(N);
+        for (long i = first; i < last; i++) {
+            mul(tmp, polys1[i], polys2[i]);
+            add(accum, accum, tmp);
+            accum += tmp;
+        }
+            // thread_result += polys[i] * polys[i];
+            // thread_result += polys[i] * polys[last - 1 - i];
     NTL_EXEC_RANGE_END
 
     auto end = std::chrono::high_resolution_clock::now();
@@ -306,52 +428,6 @@ void test_ntt_features() {
 
 
 void test_parallel() {
-    // https://libntl.org/doc/tour-ex7.html
-}
-
-void test() {
-    // -------------------------------------------------------------
-    // 1. Set the 256-bit prime modulus q
-    // -------------------------------------------------------------
-    // Example 256-bit prime (you may replace this with your own)
-    const char* q_str =
-        "115792089237316195423570985008687907853269984665640564039457"
-        "584007908834671";   // = 2^256 - 189 (just an example)
-
-    ZZ q;
-    q = conv<ZZ>(q_str);
-
-    ZZ_p::init(q);   // GF(q)
-
-    // -------------------------------------------------------------
-    // 2. Construct two polynomials f(x) and g(x)
-    //    Degree <= 4096
-    // -------------------------------------------------------------
-    const long n = 4096;
-
-    ZZ_pX f, g;
-
-    f.SetLength(n + 1);
-    g.SetLength(n + 1);
-
-    // Fill with random coefficients mod q
-    for (long i = 0; i <= n; i++) {
-        f[i] = random_ZZ_p();
-        g[i] = random_ZZ_p();
-    }
-
-    // -------------------------------------------------------------
-    // 3. Multiply h = f * g   (mod q)
-    // -------------------------------------------------------------
-    ZZ_pX h = f * g;
-
-    // Optional: reduce size
-    h.normalize();
-
-    // -------------------------------------------------------------
-    // 4. Output degree of result
-    // -------------------------------------------------------------
-    std::cout << "deg(h) = " << deg(h) << "\n";  // should be 8192
 }
 
 int main() {
@@ -359,6 +435,7 @@ int main() {
     // test_ntt_peformance();
     long nt = 16;
     SetNumThreads(nt);
-    test_ntt_peformance_mt();
+    // test_ntt_peformance_mt();
+    test_optimised_conv();
     return 0;
 }

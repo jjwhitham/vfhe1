@@ -10,7 +10,10 @@ vector_i128 eval_poly_pows(size_t n, i128 base, i128 q) {
     vector_i128 res(n);
     res.at(0) = 1; // base^0 = 1
     for (size_t i = 1; i < n; i++) {
-        res.at(i) = mod_(res.at(i - 1) * base, q);
+        // i128 x = res.at(i - 1) * base;
+        // res.at(i) = mod_(x, q);
+        res.at(i) = res.at(i - 1) * base;
+        res.at(i) = mod_(res.at(i), q);
     }
     return res;
 }

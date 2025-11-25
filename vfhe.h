@@ -96,6 +96,12 @@ public:
         CHECK(check_value_bounds(val);)
         arr[n] = val;
     }
+    void set(int n, const T&& val) {
+        CHECK(check_index_bounds(n);)
+        // if (!disable_value_check)
+        CHECK(check_value_bounds(val);)
+        arr[n] = val;
+    }
     size_t size() const {
         return size_;
     }
@@ -145,8 +151,9 @@ public:
         }
         return res;
     }
-    mpz group_mult_(mpz a, mpz b) const {
-        return mod_(a * b, GROUP_MODULUS);
+    mpz group_mult_(mpz& a, const mpz& b) const {
+        mpz res = a * b;
+        return mod_(res, GROUP_MODULUS);
     }
     Derived group_mult(const Derived& other) const {
         size_t N = size();
@@ -421,15 +428,16 @@ public:
     size_t n_coeffs() const {
         return size();
     }
-    auto get_hash(vector_i128 eval_pows) const {
+    auto get_hash(vector_i128& eval_pows) const {
         i128 hash = 0;
         for (size_t i = 0; i < size(); i++) {
-            hash = mod_(hash + get(i) * eval_pows.at(i), FIELD_MODULUS);
+            hash += get(i) * eval_pows.at(i);
+            hash = mod_(hash, FIELD_MODULUS);
         }
         return hash;
     }
     // See inline definition below class hashed_a_poly (avoids circular definitions)
-    auto get_hash_a(vector_i128 eval_pows) const;
+    auto get_hash_a(vector_i128& eval_pows) const;
 
 
     poly convolve(const poly& other) const {
@@ -586,7 +594,7 @@ public:
     }
 };
 
-inline auto poly::get_hash_a(vector_i128 eval_pows) const {
+inline auto poly::get_hash_a(vector_i128& eval_pows) const {
     auto hash = get_hash(eval_pows);
     auto N = size();
     hashed_a_poly ha_poly(N);
@@ -798,7 +806,7 @@ public:
     rlwe_decomp decompose(const u128& v, const u32& d, const u32& power) const {
         rlwe_decomp polys(2 * d, n_coeffs());
         for (size_t k = 0; k < N_POLYS_IN_RLWE; k++) {
-            poly pol = get_poly(k);
+            const poly& pol = get_poly(k);
             for (size_t i = 0; i < n_coeffs(); i++) {
                 for (size_t j = 0; j < (size_t)d; j++) {
                     i128 decomped_coeff = (v - 1) & (pol.get_coeff(i) >> (power * j));

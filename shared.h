@@ -66,7 +66,6 @@ inline times_and_counts timing = { 0 };
 // constexpr i128 NTH_ROU = 3;
 // constexpr i128 TWO_ROU = 9;
 
-/*
 // N = 2^12, q > 2^54
 // constexpr i128 GROUP_MODULUS = 540431955285196831;
 // constexpr i128 GENERATOR = 1073741824;
@@ -83,7 +82,6 @@ mpz GENERATOR("4516690346444892428005324399985509466774242146852912703800039069\
 0752019004410401310119718077614657859287173286718671972587346128683743555111219\
 5974661753294711265189310135666066227878669003666163196105068185398215987576405\
 0554114");
-*/
 
 
 
@@ -98,6 +96,7 @@ mpz GENERATOR("4516690346444892428005324399985509466774242146852912703800039069\
 // root_2nth = 197302210312744933010843010704445784068657690384188106020011018676818793232
 // root_2nth_inv = 10150407646632095964976043332470470774111901718625076075560248572110916115913
 
+/*
 mpz NTH_ROU("4158865282786404163413953114870269622875596290766033564087307867933865333818");
 mpz TWO_ROU("197302210312744933010843010704445784068657690384188106020011018676818793232");
 
@@ -134,6 +133,7 @@ mpz GENERATOR("\
 6453130282300846536976331644195024544774299899725909135609327743190688220130870\
 3759347411984397224575118527345082058198658774438895353\
 ");
+*/
 
 
 
@@ -160,30 +160,13 @@ using vector_double = std::vector<mpf_class>;
 using vector_i128 = std::vector<i128>;
 
 // FIXME make types __uint128 so that regular modding works
-mpz mod_(const mpz& val, const mpz& q) {
-    mpz ret(val);
-    ret %= q;
-    if (ret < 0) {
-        ret += q;
-    }
-    return ret;
-}
-
-// mpz_class mod_(mpz_class val, mpz_class q) {
-//     val %= q;
-//     if (val < 0) {
-//         val += q;
-//     }
-//     return val;
-// }
-
-
-vector_i128 mod_(const vector_i128& vals, i128 q) {
-    vector_i128 res(vals.size());
-    for (size_t i = 0; i < vals.size(); i++) {
-        res[i] = mod_(vals[i], q);
-    }
-    return res;
+mpz& mod_(mpz& val, const mpz& q) {
+    // mpz ret(val);
+    val %= q;
+    // if (val < 0) {
+    //     val += q;
+    // }
+    return val;
 }
 
 std::string i128str(__uint128_t n) {
@@ -204,10 +187,12 @@ std::string i128str(__uint128_t n) {
     std::reverse(buf.begin(), buf.end());
     return buf;
 }
-vector_i128 scalar_vec_mult(i128 scalar, const vector_i128& vec, i128 q) {
+vector_i128 scalar_vec_mult(const i128& scalar, const vector_i128& vec, const i128& q) {
     vector_i128 result(vec.size());
     for (size_t i = 0; i < vec.size(); i++) {
-        result[i] = mod_(scalar * vec[i], q);
+        // copy vec
+        result[i] = scalar * i128(vec[i]);
+        result[i] = mod_(result[i], q);
     }
     return result;
 };

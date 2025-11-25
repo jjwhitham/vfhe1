@@ -204,7 +204,8 @@ public:
         for (size_t i = 0; i < d; i++) {
             v_powers[i] = 1;
             for (size_t j = 0; j < i; j++) {
-                v_powers[i] = mod_(v_powers[i] * v, q);
+                v_powers[i] *= v;
+                v_powers[i] = mod_(v_powers[i], q);
             }
         }
 
@@ -222,7 +223,8 @@ public:
             for (size_t row = 0; row < 2; ++row) {
                 poly p(N);
                 for (size_t i = 0; i < N; i++) {
-                    i128 val = mod_(M.get(i) * G[row][j], q);
+                    i128 val = G[row][j] * M.get(i);
+                    val = mod_(val, q);
                     p.set(i, val);
                 }
                 ct.set(row, p);
