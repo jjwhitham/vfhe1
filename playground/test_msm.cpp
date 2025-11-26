@@ -2,10 +2,8 @@
 // P = [P_0, ..., P_{N-1}] by set of vecs a = {a_i}_{i=0}^{i=m},
 // where a_i = [a_{i,0}, ..., a_{i,N-1}]
 
-// #include <gmpxx.h>
-// typedef mpz_class mpz;
-// using mpz = mpz_class;
-#include <mcl/bn.hpp>
+// #include <mcl/bn.hpp>
+#include "/home/jw/Projects/mcl/include/mcl/bn.hpp"
 #include <iostream>
 #include <string>
 #include <chrono>
@@ -26,7 +24,7 @@ int main(int argc, char **argv) {
 	if (argc > 2) M = std::stoul(argv[2]);
 
 	// Initialize curve / pairing (sets params for G1/G2/Fr)
-	initPairing();
+	initPairing(BN_SNARK1);
     std::cout << "|Fp| = " << mcl::Fp::getBitSize() << "\n";
     std::cout << "|Fr| = " << mcl::Fr::getBitSize() << "\n";
 	// Prepare base points P
@@ -70,7 +68,6 @@ int main(int argc, char **argv) {
 		scalars.back().reserve(N);
 		for (size_t j = 0; j < N; ++j) {
 			Fr s; s.setByCSPRNG();
-			std::cout << s.getStr(16) << "\n";
 			scalars.back().push_back(s);
 		}
 	}
