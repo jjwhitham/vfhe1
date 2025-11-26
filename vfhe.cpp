@@ -6,11 +6,11 @@
 #include <iomanip>
 
 
-vector_i128 eval_poly_pows(size_t n, i128 base, i128 q) {
-    vector_i128 res(n);
+vector_bigz eval_poly_pows(size_t n, bigz base, bigz q) {
+    vector_bigz res(n);
     res.at(0) = 1; // base^0 = 1
     for (size_t i = 1; i < n; i++) {
-        // i128 x = res.at(i - 1) * base;
+        // bigz x = res.at(i - 1) * base;
         // res.at(i) = mod_(x, q);
         res.at(i) = res.at(i - 1) * base;
         res.at(i) = mod_(res.at(i), q);
@@ -20,12 +20,12 @@ vector_i128 eval_poly_pows(size_t n, i128 base, i128 q) {
 
 std::tuple<std::tuple<eval_key, eval_key>, veri_key> compute_eval_and_veri_keys(
     const rgsw_mat& F_ctx, const rgsw_mat& G_bar_ctx, const rgsw_mat& R_bar_ctx, const rgsw_mat& H_bar_ctx,
-    const vector_i128& r_0, const vector_i128& r_1, const vector_i128& s,
-    i128 rho_0, i128 rho_1, i128 alpha_0, i128 alpha_1, i128 gamma_0, i128 gamma_1,
-    u32 d, i128 q, size_t N, const vector_i128& eval_pows, const Encryptor& enc
+    const vector_bigz& r_0, const vector_bigz& r_1, const vector_bigz& s,
+    bigz rho_0, bigz rho_1, bigz alpha_0, bigz alpha_1, bigz gamma_0, bigz gamma_1,
+    u32 d, bigz q, size_t N, const vector_bigz& eval_pows, const Encryptor& enc
 ) {
     // Converts a vector of i128s v to a vector of g^v[i] mod p
-    auto convert_vec_to_cyclic_a = [&](const vector_i128& v, const vector_i128& eval_pows) -> std::vector<hashed_a_poly> {
+    auto convert_vec_to_cyclic_a = [&](const vector_bigz& v, const vector_bigz& eval_pows) -> std::vector<hashed_a_poly> {
         std::vector<hashed_a_poly> res(v.size());
         // HACK ? halving eval_pows size
         size_t N = eval_pows.size() / 2;
@@ -46,8 +46,8 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key> compute_eval_and_veri_keys(
     std::vector<hashed_a_poly> gr_rho_0 = convert_vec_to_cyclic_a(scalar_vec_mult(rho_0, r_0, q), eval_pows); // Example for first element
     std::vector<hashed_a_poly> gr_rho_1 = convert_vec_to_cyclic_a(scalar_vec_mult(rho_1, r_1, q), eval_pows);
 
-    // Anonymous function for vector-matrix multiplication: vector_i128 * rgsw_mat
-    auto vec_mat_mult = [](const vector_i128& vec, const rgsw_mat& mat) -> rgsw_vec {
+    // Anonymous function for vector-matrix multiplication: vector_bigz * rgsw_mat
+    auto vec_mat_mult = [](const vector_bigz& vec, const rgsw_mat& mat) -> rgsw_vec {
         size_t rows = mat.n_rows();
         size_t cols = mat.n_cols();
         ASSERT(vec.size() == rows);
@@ -163,7 +163,7 @@ auto scalar_vec_mult (double scalar, const vector_T& vec) {
     return result;
 };
 
-// Computes proof values and returns a tuple of 2-tuples of i128
+// Computes proof values and returns a tuple of 2-tuples of bigz
 Proof compute_proof(
     const eval_key& ek,
     const rlwe_vec& x_nega_,
@@ -222,20 +222,20 @@ Proof compute_proof(
 void verify_with_lin_and_dyn_checks(
     const veri_key& vk, const Proof& proof, const Proof& old_proof, size_t k,
     const rlwe_vec& y, const hashed_rlwe_vec& u, const rlwe_vec& u_reenc,
-    u32 v, u32 d, u32 power, const vector_i128& eval_pows
+    u32 v, u32 d, u32 power, const vector_bigz& eval_pows
 ) {
     // Unpack veri_key
-    const vector_i128& s = vk.s;
+    const vector_bigz& s = vk.s;
     const hashed_rgsw_vec& rG_0 = vk.rG_0;
     const hashed_rgsw_vec& rG_1 = vk.rG_1;
     const hashed_rgsw_vec& rR_0 = vk.rR_0;
     const hashed_rgsw_vec& rR_1 = vk.rR_1;
-    i128 rho_0 = vk.rho_0;
-    i128 rho_1 = vk.rho_1;
-    i128 alpha_0 = vk.alpha_0;
-    i128 alpha_1 = vk.alpha_1;
-    i128 gamma_0 = vk.gamma_0;
-    i128 gamma_1 = vk.gamma_1;
+    bigz rho_0 = vk.rho_0;
+    bigz rho_1 = vk.rho_1;
+    bigz alpha_0 = vk.alpha_0;
+    bigz alpha_1 = vk.alpha_1;
+    bigz gamma_0 = vk.gamma_0;
+    bigz gamma_1 = vk.gamma_1;
 
     // Unpack proofs
     const hashed_rlwe& g_1 = old_proof.g_1;
@@ -247,7 +247,7 @@ void verify_with_lin_and_dyn_checks(
     const hashed_rlwe& G_3_ = proof.gsHr_gamma_x;
 
     // Select parameters based on k
-    i128 rho, alpha, gamma;
+    bigz rho, alpha, gamma;
     const hashed_rgsw_vec &rG = (k % 2 == 0) ? rG_0 : rG_1;
     const hashed_rgsw_vec &rR = (k % 2 == 0) ? rR_0 : rR_1;
     if (k % 2 == 0) {
@@ -260,7 +260,7 @@ void verify_with_lin_and_dyn_checks(
         gamma = gamma_0;
     }
 
-    auto vec_dot_prod = [](const vector_i128& vec, const hashed_rlwe_vec& hvec) -> hashed_rlwe {
+    auto vec_dot_prod = [](const vector_bigz& vec, const hashed_rlwe_vec& hvec) -> hashed_rlwe {
         ASSERT(vec.size() == hvec.size());
         hashed_rlwe sum(N_POLYS_IN_RLWE);
         for (size_t i = 0; i < vec.size(); i++) {
@@ -268,7 +268,7 @@ void verify_with_lin_and_dyn_checks(
         }
         return sum;
     };
-    auto vec_dot_prod_enc = [](const hashed_rgsw_vec& rgsw_v, const rlwe_vec& rlwe_v, const vector_i128& eval_pows, u32 v, u32 d, u32 power) -> hashed_rlwe {
+    auto vec_dot_prod_enc = [](const hashed_rgsw_vec& rgsw_v, const rlwe_vec& rlwe_v, const vector_bigz& eval_pows, u32 v, u32 d, u32 power) -> hashed_rlwe {
         ASSERT(rgsw_v.size() == rlwe_v.size());
         hashed_rlwe sum(N_POLYS_IN_RLWE);
         for (size_t i = 0; i < rgsw_v.size(); i++) {
@@ -283,8 +283,8 @@ void verify_with_lin_and_dyn_checks(
 
     // Linearity checks
     // hashed_rlwe G_1_rho = cyclic_exp_enc(G_1, rho, q, p);
-    // TODO better interface self^other, with other as i128,
-    // or better interface for i128^i128 (static member func?)
+    // TODO better interface self^other, with other as bigz,
+    // or better interface for bigz^bigz (static member func?)
     // DEBUG(std::cout << "G_1: ";)
     // DEBUG(G_1.print();)
     // DEBUG(std::cout << "\n";)
@@ -383,7 +383,7 @@ void print_times_and_counts(times_and_counts& timing) {
 }
 
 void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
-    auto vec_dot_prod = [](const vector_i128& vec, const hashed_rlwe_vec& hvec) -> hashed_rlwe {
+    auto vec_dot_prod = [](const vector_bigz& vec, const hashed_rlwe_vec& hvec) -> hashed_rlwe {
         ASSERT(vec.size() == hvec.size());
         hashed_rlwe sum(N_POLYS_IN_RLWE);
         for (size_t i = 0; i < vec.size(); i++) {
@@ -398,19 +398,19 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
             res[i] = mpf_round(vec[i]);
         return res;
     };
-    auto map_to_q = [](vector_double& vec) -> vector_i128 {
-        vector_i128 res(vec.size());
+    auto map_to_q = [](vector_double& vec) -> vector_bigz {
+        vector_bigz res(vec.size());
         for (size_t i = 0; i < vec.size(); i++) {
             mpf_class x = vec[i];
             // assert(x > -1000000000.0);
             // assert(x < 1000000000.0);
-            mpz x1 = mpz(x);
-            i128 val = x1 < 0 ? x1 + FIELD_MODULUS : x1;
+            bigz x1 = bigz(x);
+            bigz val = x1 < 0 ? x1 + FIELD_MODULUS : x1;
             res.at(i) = val;
         }
         return res;
     };
-    auto map_to_half_q = [](vector_i128& vec) -> vector_double {
+    auto map_to_half_q = [](vector_bigz& vec) -> vector_double {
         vector_double res;
         for (auto& x : vec) {
             mpf_class val = x > (FIELD_MODULUS / 2) ? x - FIELD_MODULUS : x;
@@ -424,9 +424,9 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
 
     Params pms;
     DEBUG(std::cout << "*** START run_control_loop ***\n";)
-    using matrix_i128 = array2d<i128>;
+    using matrix_i128 = array2d<bigz>;
 
-    i128 q = pms.q;
+    bigz q = pms.q;
     matrix_double A = pms.A;
     matrix_double B = pms.B;
     matrix_double C = pms.C;
@@ -435,30 +435,30 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     matrix_i128 H_bar = pms.H_bar;
     matrix_i128 R_bar = pms.R_bar;
     vector_double x_plant = pms.x_plant_init;
-    vector_i128 x_cont = pms.x_cont_init_scaled;
+    vector_bigz x_cont = pms.x_cont_init_scaled;
     double rr = pms.r;
     double ss = pms.s;
     double L = pms.L;
     size_t iter_ = pms.iter_;
     DEBUG(iter_ = 3;)
 
-    i128 from = 1;
-    i128 to_inclusive = q - 1;
+    bigz from = 1;
+    bigz to_inclusive = q - 1;
     // TODO Params should sample
     auto knowledge_exps = pms.sample_knowledge_exponents(from, to_inclusive);
-    i128 alpha_0 = knowledge_exps.at(0);
-    i128 alpha_1 = knowledge_exps.at(1);
-    i128 gamma_0 = knowledge_exps.at(2);
-    i128 gamma_1 = knowledge_exps.at(3);
-    i128 rho_0 = knowledge_exps.at(4);
-    i128 rho_1 = knowledge_exps.at(5);
+    bigz alpha_0 = knowledge_exps.at(0);
+    bigz alpha_1 = knowledge_exps.at(1);
+    bigz gamma_0 = knowledge_exps.at(2);
+    bigz gamma_1 = knowledge_exps.at(3);
+    bigz rho_0 = knowledge_exps.at(4);
+    bigz rho_1 = knowledge_exps.at(5);
     size_t m = H_bar.n_rows();
     size_t n = F.n_rows();
     // TODO Params should sample
     auto verification_vectors = pms.sample_verification_vectors(m, n, from, to_inclusive);
-    vector_i128 r_0 = verification_vectors.at(0);
-    vector_i128 r_1 = verification_vectors.at(1);
-    vector_i128 s = verification_vectors.at(2);
+    vector_bigz r_0 = verification_vectors.at(0);
+    vector_bigz r_1 = verification_vectors.at(1);
+    vector_bigz s = verification_vectors.at(2);
 
     size_t N = N_;
     // TODO move to Encryptor
@@ -468,10 +468,10 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     u32 v = pms.v;
 
     #ifdef DEBUG1_ON
-        DEBUG1(knowledge_exps = vector_i128({1, 1, 3, 3, 2, 3});)
-        DEBUG1(r_0 = vector_i128({1, 2, 4, 3, 1});)
-        DEBUG1(r_1 = vector_i128({2, 4, 1, 4, 2});)
-        DEBUG1(s = vector_i128({1, 3});)
+        DEBUG1(knowledge_exps = vector_bigz({1, 1, 3, 3, 2, 3});)
+        DEBUG1(r_0 = vector_bigz({1, 2, 4, 3, 1});)
+        DEBUG1(r_1 = vector_bigz({2, 4, 1, 4, 2});)
+        DEBUG1(s = vector_bigz({1, 3});)
         DEBUG1(N = 2;)
     #endif
 
@@ -485,12 +485,12 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     rlwe_vec x_cont_ctx_convolved(x_cont_ctx);
 
     #ifdef DEBUG1_ON
-        DEBUG1(sk = vector_i128({0, 0});)
+        DEBUG1(sk = vector_bigz({0, 0});)
     #endif
 
     // TODO sample
-    i128 eval_point = 42;
-    vector_i128 eval_pows = eval_poly_pows(2 * N, eval_point, q);
+    bigz eval_point = 42;
+    vector_bigz eval_pows = eval_poly_pows(2 * N, eval_point, q);
     auto keys = compute_eval_and_veri_keys(
         F_ctx, G_bar_ctx, R_bar_ctx, H_bar_ctx,
         r_0, r_1, s, rho_0, rho_1, alpha_0, alpha_1, gamma_0, gamma_1,
@@ -537,7 +537,7 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         y_out_rounded = round_vec(y_out_scaled);
         // DEBUG(std::cout << "y_out_rounded:\n";)
         // DEBUG(print_vector_double(y_out_rounded);)
-        vector_i128 y_out_modded = map_to_q(y_out_rounded);
+        vector_bigz y_out_modded = map_to_q(y_out_rounded);
         // DEBUG(std::cout << "y_out_modded:\n";)
         // DEBUG(print_vector_i128(y_out_modded);)
         rlwe_vec y_out_ctx = enc.encrypt_rlwe_vec(y_out_modded); // P -> C
@@ -571,7 +571,7 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         rlwe_vec u_out_ctx = u_out_ctx_convolved.conv_to_nega(N);
         // DEBUG(std::cout << "u_out_ctx:\n";)
         // DEBUG(u_out_ctx.print();)
-        vector_i128 u_out_ptx = enc.decrypt_rlwe_vec(u_out_ctx);
+        vector_bigz u_out_ptx = enc.decrypt_rlwe_vec(u_out_ctx);
         // DEBUG(std::cout << "u_out_ptx:\n";)
         // DEBUG(print_vector_i128(u_out_ptx);)
         vector_double u_out_ptx_mapped = map_to_half_q(u_out_ptx);
@@ -587,7 +587,7 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         u_in_rounded = round_vec(scalar_vec_mult(L, u_in_rounded));
         // DEBUG(std::cout << "u_in_rounded:\n";)
         // DEBUG(print_vector_double(u_in_rounded);)
-        vector_i128 u_in_rounded_modded = map_to_q(u_in_rounded);
+        vector_bigz u_in_rounded_modded = map_to_q(u_in_rounded);
         // DEBUG(std::cout << "u_in_rounded_modded:\n";)
         // DEBUG(print_vector_i128(u_in_rounded_modded);)
         rlwe_vec u_reenc_ctx = enc.encrypt_rlwe_vec(u_in_rounded_modded); // XXX P->C: Plant re-encrypts u
@@ -632,7 +632,7 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         x_cont_ctx = x_cont_ctx_convolved.conv_to_nega(N);
 
         // Decrypt and capture controller state
-        vector_i128 x_cont_ptx = enc.decrypt_rlwe_vec(x_cont_ctx);
+        vector_bigz x_cont_ptx = enc.decrypt_rlwe_vec(x_cont_ctx);
         vector_double x_cont_ptx_mapped = map_to_half_q(x_cont_ptx);
         vector_double x_cont_ptx_scaled = scalar_vec_mult(1 / (rr * ss * L), x_cont_ptx_mapped);
         vars.x_cont.push_back(x_cont_ptx_scaled);
@@ -682,7 +682,7 @@ void run_control_loop_unencrypted(control_law_vars& vars) {
     Params pms;
     // DEBUG(pms.print();)
     DEBUG(std::cout << "*** START run_control_loop_unencrypted ***\n";)
-    // using matrix_i128 = array2d<i128>;
+    // using matrix_i128 = array2d<bigz>;
 
     matrix_double A = pms.A;
     matrix_double B = pms.B;

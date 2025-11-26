@@ -1,6 +1,3 @@
-// TODO replace vectori128 by an array1d i128 subclass which:
-    // TODO implements scalar mult (should be covered by base class anyway...)
-// TODO use unsigned ints so that mod runs quicker
 #pragma once
 
 #include <iostream>
@@ -78,9 +75,9 @@ public:
         return arr[n];
     }
     void check_value_bounds(const T& val) const {
-        if constexpr (std::is_same_v<T, i128>) {
-            i128 min_val = 0;
-            i128 max_val = GROUP_MODULUS - 1;
+        if constexpr (std::is_same_v<T, bigz>) {
+            bigz min_val = 0;
+            bigz max_val = GROUP_MODULUS - 1;
             if (val < min_val || val > max_val) {
             // if (val > max_val) {
                 throw std::out_of_range(
@@ -134,25 +131,25 @@ public:
         Derived res(N);
         for (size_t i = 0; i < N; i++) {
             auto val = (get(i) * other.get(i));
-            if constexpr (std::is_same_v<T, i128>)
+            if constexpr (std::is_same_v<T, bigz>)
                 val = mod_(val, FIELD_MODULUS);
             res.set(i, val);
         }
         return res;
     }
-    Derived operator*(const i128& scalar) const {
+    Derived operator*(const bigz& scalar) const {
         size_t N = size();
         Derived res(N);
         for (size_t i = 0; i < N; i++) {
             T val = get(i) * scalar;
-            if constexpr (std::is_same_v<T, i128>)
+            if constexpr (std::is_same_v<T, bigz>)
                 val = mod_(val, FIELD_MODULUS);
             res.set(i, val);
         }
         return res;
     }
-    mpz group_mult_(mpz& a, const mpz& b) const {
-        mpz res = a * b;
+    bigz group_mult_(bigz& a, const bigz& b) const {
+        bigz res = a * b;
         return mod_(res, GROUP_MODULUS);
     }
     Derived group_mult(const Derived& other) const {
@@ -160,7 +157,7 @@ public:
         Derived res(N);
         for (size_t i = 0; i < N; i++) {
             T val;
-            if constexpr (std::is_same_v<T, mpz>) {
+            if constexpr (std::is_same_v<T, bigz>) {
                 val = group_mult_(get(i), other.get(i));
             } else {
                 val = get(i).group_mult(other.get(i));
@@ -169,13 +166,13 @@ public:
         }
         return res;
     }
-    // TODO might need to change i128 to either mpz or U (if i128 & mpz required)
-    Derived group_mult(const i128& scalar) const {
+    // TODO might need to change bigz to either bigz or U (if bigz & bigz required)
+    Derived group_mult(const bigz& scalar) const {
         size_t N = size();
         Derived res(N);
         for (size_t i = 0; i < N; i++) {
             T val;
-            if constexpr (std::is_same_v<T, i128>) {
+            if constexpr (std::is_same_v<T, bigz>) {
                 val = group_mult_(get(i) * scalar, GROUP_MODULUS);
             } else {
                 val = get(i).group_mult(scalar);
@@ -189,7 +186,7 @@ public:
         Derived res(N);
         for (size_t i = 0; i < N; i++) {
             T val = get(i) + other.get(i);
-            if constexpr (std::is_same_v<T, i128>)
+            if constexpr (std::is_same_v<T, bigz>)
                 val = mod_(val, FIELD_MODULUS);
             res.set(i, val);
         }
@@ -201,11 +198,11 @@ public:
         Derived neg_other(N);
         for (size_t i = 0; i < N; i++) {
             T val;
-            if constexpr (std::is_same_v<T, i128>)
+            if constexpr (std::is_same_v<T, bigz>)
                 val = mod_sub(get(i), other.get(i));
             else
                 val = get(i) - other.get(i);
-            // constexpr bool is128 = (std::is_same_v<T, i128>);
+            // constexpr bool is128 = (std::is_same_v<T, bigz>);
             // T val = is128 ? mod_sub(get(i), other.get(i)) : get(i) - other.get(i);
             neg_other.set(i, val);
         }
@@ -215,7 +212,7 @@ public:
     Derived pow(const Derived& other) const {
         size_t N = size();
         Derived res(N);
-        if constexpr (std::is_same_v<T, mpz>) {
+        if constexpr (std::is_same_v<T, bigz>) {
             for (size_t i = 0; i < N; i++) {
                 auto val = pow_(get(i), other.get(i), GROUP_MODULUS);
                 res.set(i, val);
@@ -230,10 +227,10 @@ public:
         }
     }
     // raise scalar to self
-    Derived pow(const mpz scalar) const {
+    Derived pow(const bigz scalar) const {
         size_t N = size();
         Derived res(N);
-        if constexpr (std::is_same_v<T, mpz>) {
+        if constexpr (std::is_same_v<T, bigz>) {
             for (size_t i = 0; i < N; i++) {
                 auto val = pow_(scalar, get(i), GROUP_MODULUS);
                 res.set(i, val);
@@ -251,7 +248,7 @@ public:
     Derived pow() const {
         size_t N = size();
         Derived res(N);
-        if constexpr (std::is_same_v<T, mpz>) {
+        if constexpr (std::is_same_v<T, bigz>) {
             for (size_t i = 0; i < N; i++) {
                 auto val = pow_(GENERATOR, get(i), GROUP_MODULUS);
                 res.set(i, val);
@@ -265,29 +262,6 @@ public:
             return res;
         }
     }
-    // // base case binary modular exponentiation
-    // i128 pow_(i128 base, i128 power) const {
-    //     // power = mod_(power, FIELD_MODULUS);
-    //     // base = mod_(base, GROUP_MODULUS);
-    //     i128 result = 1;
-    //     while (power > 0) {
-    //         bool is_power_odd = (power % 2) == 1;
-    //         if (is_power_odd)
-    //             result = (result * base) % GROUP_MODULUS;
-    //         power >>= 1;
-    //         base = (base * base) % GROUP_MODULUS;
-    //     }
-    //     return result;
-    // }
-
-    // // base case binary modular exponentiation
-    // mpz_class pow_(mpz_class base, mpz_class power) const {
-    //     mpz result = 1;
-    //     // TODO should we just mutate base?
-    //     mpz_powm(result.get_mpz_t(), base.get_mpz_t(), power.get_mpz_t(), GROUP_MODULUS.get_mpz_t());
-    //     return result;
-    // }
-
 
     T* begin() { return arr; }
     T* end() { return arr + size_; }
@@ -295,7 +269,7 @@ public:
     const T* end() const { return arr + size_; }
 
     void print() const {
-        if constexpr (std::is_same_v<T, i128>) {
+        if constexpr (std::is_same_v<T, bigz>) {
             std::cout << "{";
             for (size_t i = 0; i < size() - 1; i++) {
                 std::cout << i128str(get(i));
@@ -349,10 +323,10 @@ public:
     }
 
     void check_value_bounds(const T& val) const {
-        if constexpr (std::is_same_v<T, i128>) {
-            // i128 min_val = -1;
+        if constexpr (std::is_same_v<T, bigz>) {
+            // bigz min_val = -1;
             // min_val <<= 63;
-            // i128 max_val = (1UL << 63) - 1;
+            // bigz max_val = (1UL << 63) - 1;
             // if (val < min_val || val > max_val) {
             if (val >= FIELD_MODULUS) {
                 throw std::out_of_range(
@@ -399,7 +373,7 @@ public:
         }
     }
     void print() const {
-        if constexpr (std::is_same_v<T, i128>) {
+        if constexpr (std::is_same_v<T, bigz>) {
             print_i128();
         } else {
             print_array1d();
@@ -407,12 +381,12 @@ public:
     }
 };
 
-class poly : public array1d<i128, poly> {
+class poly : public array1d<bigz, poly> {
 private:
     bool isNTT = false;
 public:
-    poly() : array1d<i128, poly>() {}
-    poly(size_t N) : array1d<i128, poly>(N) {
+    poly() : array1d<bigz, poly>() {}
+    poly(size_t N) : array1d<bigz, poly>(N) {
         for (size_t i = 0; i < N; i++)
             set(i, 0);
         if (N == 2 * N_) // FIXME do better
@@ -428,8 +402,8 @@ public:
     size_t n_coeffs() const {
         return size();
     }
-    auto get_hash(vector_i128& eval_pows) const {
-        i128 hash = 0;
+    auto get_hash(vector_bigz& eval_pows) const {
+        bigz hash = 0;
         for (size_t i = 0; i < size(); i++) {
             hash += get(i) * eval_pows.at(i);
             hash = mod_(hash, FIELD_MODULUS);
@@ -437,7 +411,7 @@ public:
         return hash;
     }
     // See inline definition below class hashed_a_poly (avoids circular definitions)
-    auto get_hash_a(vector_i128& eval_pows) const;
+    auto get_hash_a(vector_bigz& eval_pows) const;
 
 
     poly convolve(const poly& other) const {
@@ -446,7 +420,7 @@ public:
         // NOTE rgsw mats should already be converted to NTT form
         assert(isNTT);
 
-        size_t n = POLY_SIZE;
+        size_t n = N_;
         poly a(2 * n);
         for (size_t i = 0; i < 2 * n; i++)
             a.set(i, get(i));
@@ -457,8 +431,8 @@ public:
         arr_u128 psi_pows = get_rou_pows(TWO_ROU);
         ntt_iter(b, psi_pows);
 
-        for (size_t i = 0; i < 2 * POLY_SIZE; i++) {
-            a.set(i, (a.get(i) * b.get(i)) % FIELD_MOD);
+        for (size_t i = 0; i < 2 * N_; i++) {
+            a.set(i, (a.get(i) * b.get(i)) % FIELD_MODULUS);
         }
         a.isNTT = true;
 
@@ -466,7 +440,7 @@ public:
     }
     poly nega_ntt(const poly& other) const {
         assert(n_coeffs() == other.n_coeffs());
-        size_t n = POLY_SIZE;
+        size_t n = N_;
         // NOTE constructor zero-initialises
         poly a(n);
         poly b(n);
@@ -475,14 +449,14 @@ public:
             b.set(i, other.get(i));
         }
 
-        u128 INV_2ROU = pow_constexpr(TWO_ROU, FIELD_MOD - 2, FIELD_MOD);
-        u128 INV_N = pow_constexpr(POLY_SIZE, FIELD_MOD - 2, FIELD_MOD);
+        bigz INV_2ROU = pow_constexpr(TWO_ROU, FIELD_MODULUS - 2, FIELD_MODULUS);
+        bigz INV_N = pow_constexpr(N_, FIELD_MODULUS - 2, FIELD_MODULUS);
         arr_u128 psi_pows = get_rou_pows(TWO_ROU);
         arr_u128 psi_inv_pows = get_rou_pows(INV_2ROU);
         ntt_iter1(a, psi_pows);
         ntt_iter1(b, psi_pows);
-        for (size_t i = 0; i < POLY_SIZE; i++) {
-            a.set(i, (a.get(i) * b.get(i)) % FIELD_MOD);
+        for (size_t i = 0; i < N_; i++) {
+            a.set(i, (a.get(i) * b.get(i)) % FIELD_MODULUS);
         }
         intt_iter1(a, psi_inv_pows, INV_N);
         return a;
@@ -509,16 +483,16 @@ public:
         for (size_t i = 0; i < n; i++) {
             a.set(i, get(i));
         }
-        u128 INV_2ROU = pow_constexpr(TWO_ROU, FIELD_MOD - 2, FIELD_MOD);
+        bigz INV_2ROU = pow_constexpr(TWO_ROU, FIELD_MODULUS - 2, FIELD_MODULUS);
         arr_u128 psi_inv_pows = get_rou_pows(INV_2ROU);
-        u128 INV_2N = pow_constexpr(2 * POLY_SIZE, FIELD_MOD - 2, FIELD_MOD);
+        bigz INV_2N = pow_constexpr(2 * N_, FIELD_MODULUS - 2, FIELD_MODULUS);
         intt_iter(a, psi_inv_pows, INV_2N);
         a.isNTT = false;
         assert(a.get(n - 1) == 0);
         return a;
     }
 
-    using array1d<i128, poly>::operator*;
+    using array1d<bigz, poly>::operator*;
     poly operator*(const poly& other) const {
         ASSERT(n_coeffs() == other.n_coeffs());
         return nega_ntt(other);
@@ -530,8 +504,8 @@ public:
         assert(conv.get(2 * n - 1) == 0);
         poly res(n);
         for (size_t i = 0; i < n - 1; i++) {
-            // i128 val = mod_(conv.get(i) - conv.get(i + n), FIELD_MODULUS);
-            i128 val = mod_sub(conv.get(i), conv.get(i + n));
+            // bigz val = mod_(conv.get(i) - conv.get(i + n), FIELD_MODULUS);
+            bigz val = mod_sub(conv.get(i), conv.get(i + n));
             res.set(i, val);
         }
         res.set(n - 1, conv.get(n - 1));
@@ -549,18 +523,18 @@ public:
         for (size_t i = 0; i < N; i++)
             negacyclic.set(i, get_coeff(i));
         for (size_t i = N; i < conv_degree + 1; i++) {
-            i128 coeff = negacyclic.get_coeff(i - N) - get_coeff(i);
+            bigz coeff = negacyclic.get_coeff(i - N) - get_coeff(i);
             negacyclic.set(i - N, mod_(coeff, FIELD_MODULUS));
         }
         return negacyclic;
     }
 };
 
-class hashed_a_poly : public array1d<mpz, hashed_a_poly> {
+class hashed_a_poly : public array1d<bigz, hashed_a_poly> {
 private:
 public:
-    hashed_a_poly() : array1d<mpz, hashed_a_poly>() {}
-    hashed_a_poly(size_t n_hashed_a_coeffs) : array1d<mpz, hashed_a_poly>(n_hashed_a_coeffs) {
+    hashed_a_poly() : array1d<bigz, hashed_a_poly>() {}
+    hashed_a_poly(size_t n_hashed_a_coeffs) : array1d<bigz, hashed_a_poly>(n_hashed_a_coeffs) {
         for (size_t i = 0; i < n_hashed_a_coeffs; i++)
             set(i, 0);
     }
@@ -570,13 +544,13 @@ public:
     size_t n_hashed_a_coeffs() const {
         return size();
     }
-    mpz get_hash_sec(const poly& other) const {
+    bigz get_hash_sec(const poly& other) const {
         TIMING(auto start = std::chrono::high_resolution_clock::now();)
         TIMING(timing.calls_get_hash_sec += 1;)
         // HACK get around gr having hashed_a_polys of length 2n-1, but x_nega_ only length n
         // ASSERT(size() == other.size() || size() == (2 * other.size() - 1));
-        mpz result = 1;
-        std::array<mpz, N_THREADS> partials;
+        bigz result = 1;
+        std::array<bigz, N_THREADS> partials;
         for (size_t t = 0; t < N_THREADS; t++) partials[t] = 1;
         #pragma omp parallel for num_threads(N_THREADS)
         for (size_t i = 0; i < other.size(); i++) {
@@ -594,12 +568,12 @@ public:
     }
 };
 
-inline auto poly::get_hash_a(vector_i128& eval_pows) const {
+inline auto poly::get_hash_a(vector_bigz& eval_pows) const {
     auto hash = get_hash(eval_pows);
     auto N = size();
     hashed_a_poly ha_poly(N);
     // TODO optimise
-    vector_i128 hashed_a_vec = scalar_vec_mult(hash, eval_pows, FIELD_MODULUS);
+    vector_bigz hashed_a_vec = scalar_vec_mult(hash, eval_pows, FIELD_MODULUS);
     for (size_t i = 0; i < N; i++) {
         auto val = hashed_a_vec.at(i);
         ha_poly.set(i, val);
@@ -607,12 +581,12 @@ inline auto poly::get_hash_a(vector_i128& eval_pows) const {
     return ha_poly;
 }
 
-class hashed_rlwe_decomp : public array1d<i128, hashed_rlwe_decomp> {
+class hashed_rlwe_decomp : public array1d<bigz, hashed_rlwe_decomp> {
 private:
 public:
     // NOTE hashed_rlwe always has two hashed_polys
-    hashed_rlwe_decomp() : array1d<i128, hashed_rlwe_decomp>() {}
-    hashed_rlwe_decomp(size_t n_hashed_polys) : array1d<i128, hashed_rlwe_decomp>(n_hashed_polys) {}
+    hashed_rlwe_decomp() : array1d<bigz, hashed_rlwe_decomp>() {}
+    hashed_rlwe_decomp(size_t n_hashed_polys) : array1d<bigz, hashed_rlwe_decomp>(n_hashed_polys) {}
     auto& get_hashed_poly(size_t n) const {
         return get(n);
     }
@@ -638,7 +612,7 @@ public:
         return get(n);
     }
     // calls poly's get_hash and returns hashed_rlwe_decomp
-    auto get_hash(vector_i128 eval_pows) const {
+    auto get_hash(vector_bigz eval_pows) const {
         hashed_rlwe_decomp hash(size()); // FIXME n_polys, do better
         for (size_t i = 0; i < size(); i++) {
             hash.set(i, get(i).get_hash(eval_pows));
@@ -703,7 +677,7 @@ public:
         return get_rlwe_decomp(0).get_poly(0).size();
     }
     // calls rlwe_decomp's get_hash and returns hashed_rlwe_decomp_vec
-    auto get_hash(vector_i128 eval_pows) const {
+    auto get_hash(vector_bigz eval_pows) const {
         hashed_rlwe_decomp_vec hash(n_rlwe_decomps(), get(0).size()); // FIXME n_polys, do better (global?)
         for (size_t i = 0; i < size(); i++) {
             hash.set(i, get(i).get_hash(eval_pows));
@@ -732,12 +706,12 @@ public:
     }
 };
 
-class hashed_rlwe : public array1d<i128, hashed_rlwe> {
+class hashed_rlwe : public array1d<bigz, hashed_rlwe> {
 private:
 public:
     // NOTE hashed_rlwe always has two hashed_polys
-    hashed_rlwe() : array1d<i128, hashed_rlwe>() {}
-    hashed_rlwe(size_t n_hashed_polys) : array1d<i128, hashed_rlwe>(n_hashed_polys) {
+    hashed_rlwe() : array1d<bigz, hashed_rlwe>() {}
+    hashed_rlwe(size_t n_hashed_polys) : array1d<bigz, hashed_rlwe>(n_hashed_polys) {
         ASSERT(n_hashed_polys == N_POLYS_IN_RLWE);
     }
     auto& get_hashed_poly(size_t n) const {
@@ -772,7 +746,7 @@ public:
     }
     // TODO move all get_hash() to array1d?
     // calls poly's get_hash and returns hashed_rlwe
-    auto get_hash(vector_i128 eval_pows) const {
+    auto get_hash(vector_bigz eval_pows) const {
         hashed_rlwe hash(N_POLYS_IN_RLWE); // FIXME n_polys, do better (global?)
         for (size_t i = 0; i < size(); i++) {
             hash.set(i, get(i).get_hash(eval_pows));
@@ -780,7 +754,7 @@ public:
         return hash;
     }
     // calls poly's get_hash and returns hashed_rlwe
-    auto get_hash_a(vector_i128 eval_pows) const {
+    auto get_hash_a(vector_bigz eval_pows) const {
         hashed_a_rlwe hash_a(N_POLYS_IN_RLWE, eval_pows.size() / 2); // FIXME n_polys, do better (global?)
         for (size_t i = 0; i < size(); i++) {
             hash_a.set(i, get(i).get_hash_a(eval_pows));
@@ -803,13 +777,13 @@ public:
     // creates d polynomials for each of the two polynomials in the rlwe object,
     // where the i'th coefficient has been decomposed with base v and depth d.
     // The i'th coefficient is spread across the i'th coefficients of the d polynomials.
-    rlwe_decomp decompose(const u128& v, const u32& d, const u32& power) const {
+    rlwe_decomp decompose(const bigz& v, const u32& d, const u32& power) const {
         rlwe_decomp polys(2 * d, n_coeffs());
         for (size_t k = 0; k < N_POLYS_IN_RLWE; k++) {
             const poly& pol = get_poly(k);
             for (size_t i = 0; i < n_coeffs(); i++) {
                 for (size_t j = 0; j < (size_t)d; j++) {
-                    i128 decomped_coeff = (v - 1) & (pol.get_coeff(i) >> (power * j));
+                    bigz decomped_coeff = (v - 1) & (pol.get_coeff(i) >> (power * j));
                     ASSERT(decomped_coeff < v);
                     polys.get_poly(d * k + j).set(i, decomped_coeff);
                 }
@@ -877,7 +851,7 @@ public:
     }
     // TODO move all get_hash() to array1d?
     // calls rlwe's get_hash and returns hashed_rlwe_vec
-    auto get_hash(vector_i128 eval_pows) const {
+    auto get_hash(vector_bigz eval_pows) const {
         hashed_rlwe_vec hash(size(), get(0).size()); // FIXME n_polys, do better (global?)
         for (size_t i = 0; i < size(); i++) {
             hash.set(i, get(i).get_hash(eval_pows));
@@ -894,7 +868,7 @@ public:
         return get_rlwe(0).get_poly(0).size();
     }
     // calls rlwe's decompose on each rlwe element and returns a rlwe_decomp_vec
-    auto decompose(i128 v, u32 d, u32 power) const {
+    auto decompose(bigz v, u32 d, u32 power) const {
         rlwe_decomp_vec decomps(size(), 2 * d, n_coeffs());
         for (size_t i = 0; i < size(); i++)
             decomps.set(i, get_rlwe(i).decompose(v, d, power));
@@ -1046,7 +1020,7 @@ public:
 
     rlwe convolve(const rlwe_decomp& other) const {
         ASSERT(n_rlwes() == other.n_polys());
-        rlwe res(n_polys(), 2 * POLY_SIZE); // FIXME
+        rlwe res(n_polys(), 2 * N_); // FIXME
         // TODO need thread array to accumulate sum
         // #pragma omp parallel for num_threads(N_THREADS)
         for (size_t i = 0; i < n_rlwes(); i++) {
@@ -1085,7 +1059,7 @@ public:
         return res;
     }
     // calls rlwe's get_hash for all the rlwe's in (*this)
-    auto get_hash(vector_i128 eval_pows) const {
+    auto get_hash(vector_bigz eval_pows) const {
         hashed_rgsw hash(size(), n_polys()); // FIXME n_polys, do better (global?)
         for (size_t i = 0; i < size(); i++) {
             hash.set(i, get(i).get_hash(eval_pows));
@@ -1093,7 +1067,7 @@ public:
         return hash;
     }
     // calls rlwe's get_hash_a for all the rlwe's in (*this)
-    auto get_hash_a(vector_i128 eval_pows) const {
+    auto get_hash_a(vector_bigz eval_pows) const {
         hashed_a_rgsw hash(size(), n_polys(), n_coeffs()); // FIXME n_polys, do better (global?)
         for (size_t i = 0; i < size(); i++) {
             hash.set(i, get(i).get_hash_a(eval_pows));
@@ -1249,7 +1223,7 @@ public:
         return res;
     }
     // calls rgsw's get_hash
-    auto get_hash(vector_i128 eval_pows) const {
+    auto get_hash(vector_bigz eval_pows) const {
         hashed_rgsw_vec hash(size(), n_rlwes(), n_polys()); // FIXME n_polys, do better (global?)
         for (size_t i = 0; i < size(); i++) {
             hash.set(i, get(i).get_hash(eval_pows));
@@ -1257,7 +1231,7 @@ public:
         return hash;
     }
     // calls rgsw's get_hash_a
-    auto get_hash_a(vector_i128 eval_pows) const {
+    auto get_hash_a(vector_bigz eval_pows) const {
         hashed_a_rgsw_vec hash(size(), n_rlwes(), n_polys(), n_coeffs()); // FIXME n_polys, do better (global?)
         for (size_t i = 0; i < size(); i++) {
             hash.set(i, get(i).get_hash_a(eval_pows));
@@ -1299,11 +1273,11 @@ public:
     }
     rlwe_vec convolve(const rlwe_decomp_vec& other) const {
         ASSERT(n_cols() == other.size());
-        ASSERT(POLY_SIZE == other.n_coeffs()); // FIXME
+        ASSERT(N_ == other.n_coeffs()); // FIXME
 
         rlwe_vec res(n_rows(), n_polys(), 2 * n_coeffs());
         for (size_t i = 0; i < n_rows(); i++) {
-            rlwe sum(n_polys(), 2 * POLY_SIZE); // FIXME
+            rlwe sum(n_polys(), 2 * N_); // FIXME
             for (size_t j = 0; j < n_cols(); j++) {
                 auto val = get(i, j).convolve(other.get(j));
                 sum = sum + val;
@@ -1351,12 +1325,12 @@ public:
 };
 
 
-// TODO use this instead of vector_i128
-class veri_vec_scalar : public array1d<i128, veri_vec_scalar> {
+// TODO use this instead of vector_bigz
+class veri_vec_scalar : public array1d<bigz, veri_vec_scalar> {
 private:
 public:
-    veri_vec_scalar() : array1d<i128, veri_vec_scalar>() {}
-    veri_vec_scalar(size_t N) : array1d<i128, veri_vec_scalar>(N) {}
+    veri_vec_scalar() : array1d<bigz, veri_vec_scalar>() {}
+    veri_vec_scalar(size_t N) : array1d<bigz, veri_vec_scalar>(N) {}
     ~veri_vec_scalar() {}
     rgsw_vec operator*(const rgsw_mat& other) const {
         const rgsw_mat& o = other;
@@ -1384,7 +1358,7 @@ public:
         }
         return sum;
     }
-    using array1d<i128, veri_vec_scalar>::pow;
+    using array1d<bigz, veri_vec_scalar>::pow;
     rlwe pow(const rlwe_vec& other) const {
         size_t n = other.size();
         ASSERT(size() == n);
@@ -1400,7 +1374,7 @@ public:
     }
 };
 
-i128 random_i128(i128 from, i128 to_inclusive) {
+bigz random_i128(bigz from, bigz to_inclusive) {
     // random int in range [from, to_inclusive]
     // TODO docs suggest the above inclusive range. Double check
     // HACK
@@ -1409,7 +1383,7 @@ i128 random_i128(i128 from, i128 to_inclusive) {
     std::random_device rd;  // Non-deterministic seed
     std::mt19937 gen(rd()); // Mersenne Twister engine
     std::uniform_int_distribution<unsigned long> distrib(from_, to_inclusive_); // Range: 0 to 100
-    mpz random_number = distrib(gen);
+    bigz random_number = distrib(gen);
     return random_number;
 }
 
@@ -1419,8 +1393,8 @@ u32 get_decomp_power() {
     size_t q_bits = static_cast<size_t>(log2mpz) + 1;
     u32 remainder = q_bits % N_DECOMP;
     u32 power = remainder ? q_bits / N_DECOMP + 1 : q_bits / N_DECOMP;
-    assert(FIELD_MODULUS <= mpz(1) << (power * N_DECOMP));
-    assert(FIELD_MODULUS > mpz(1) << (power * (N_DECOMP - 1)));
+    assert(FIELD_MODULUS <= bigz(1) << (power * N_DECOMP));
+    assert(FIELD_MODULUS > bigz(1) << (power * (N_DECOMP - 1)));
     return power;
 }
 
@@ -1458,13 +1432,13 @@ private:
 
     // FIXME needs to be mapped from negative to [0,q)
     // ======== Scale up G, R, and H to integers ========
-    array2d<i128> scalar_mat_mult(double scalar, matrix_double& mat, i128 q, size_t rows, size_t cols) {
-        array2d<i128> result(rows, cols);
+    array2d<bigz> scalar_mat_mult(double scalar, matrix_double& mat, bigz q, size_t rows, size_t cols) {
+        array2d<bigz> result(rows, cols);
         for (size_t i = 0; i < rows; i++) {
             for (size_t j = 0; j < cols; j++) {
                 mpf_class rounded = scalar * mat[i][j];
                 rounded = mpf_round(rounded);
-                i128 modded;
+                bigz modded;
                 if (rounded < 0)
                     modded = q + rounded;
                 else
@@ -1476,14 +1450,14 @@ private:
     }
 
     // FIXME extract lambdas from vfhe.cpp and remove this double up
-    // TODO update to array1d<i128> (add as another class?)
-    vector_i128 scalar_vec_mult(double scalar, vector_double& vec, i128 q) {
-        // TODO update to array1d<i128> (add as another class?)
-        vector_i128 result(vec.size());
+    // TODO update to array1d<bigz> (add as another class?)
+    vector_bigz scalar_vec_mult(double scalar, vector_double& vec, bigz q) {
+        // TODO update to array1d<bigz> (add as another class?)
+        vector_bigz result(vec.size());
         ASSERT(result.capacity() == result.size());
         for (size_t i = 0; i < vec.size(); i++) {
             mpf_class rounded = mpf_round(scalar * vec[i]);
-            i128 modded;
+            bigz modded;
             if (rounded < 0)
                 modded = rounded + q;
             else
@@ -1525,7 +1499,7 @@ public:
         for (size_t i = 0; i < F_.size(); i++) {
             for (size_t j = 0; j < F_.at(0).size(); j++) {
                 mpf_class val = F_.at(i).at(j);
-                i128 val1;
+                bigz val1;
                 if (val < 0)
                     val1 = val + FIELD_MODULUS;
                 else
@@ -1537,14 +1511,14 @@ public:
     }
     size_t N, iter_;
     double s, L, r;
-    i128 p, q, g;
+    bigz p, q, g;
 
-    array2d<i128> F, G_bar, R_bar, H_bar;
-    // TODO update to array1d<i128> (add as another class?)
-    vector_i128 x_cont_init_scaled;
+    array2d<bigz> F, G_bar, R_bar, H_bar;
+    // TODO update to array1d<bigz> (add as another class?)
+    vector_bigz x_cont_init_scaled;
     u32 d = N_DECOMP;
     u32 power = get_decomp_power();
-    // static constexpr i128 v = static_cast<i128>(1) << power;
+    // static constexpr bigz v = static_cast<bigz>(1) << power;
     u32 v = 1 << power;
 
     // ======== Plant matrices ========
@@ -1616,9 +1590,9 @@ public:
         std::cout << "*** END Params.print ***\n\n\n";
     }
     // TODO pass in gen as a param
-    vector_i128 sample_knowledge_exponents(i128 from, i128 to_inclusive) {
+    vector_bigz sample_knowledge_exponents(bigz from, bigz to_inclusive) {
         size_t N = 6;
-        vector_i128 res(N);
+        vector_bigz res(N);
         for (size_t i = 0; i < N; i++) {
             // TODO update range
             res.at(i) = random_i128(from, to_inclusive);
@@ -1629,13 +1603,13 @@ public:
     }
 
     // TODO pass in gen as a param
-    std::vector<vector_i128> sample_verification_vectors(__uint128_t m, __uint128_t n, i128 from, i128 to_inclusive) {
+    std::vector<vector_bigz> sample_verification_vectors(__uint128_t m, __uint128_t n, bigz from, bigz to_inclusive) {
         size_t N = 3;
-        std::vector<vector_i128> res(N);
+        std::vector<vector_bigz> res(N);
         for (size_t i = 0; i < N - 1; i++) {
-            res.at(i) = vector_i128(n);
+            res.at(i) = vector_bigz(n);
         }
-        res.at(N - 1) = vector_i128(m);
+        res.at(N - 1) = vector_bigz(m);
 
         for (auto& x : res) {
             for (size_t i = 0; i < x.size(); i++) {
@@ -1673,17 +1647,17 @@ struct eval_key {
 };
 
 struct veri_key {
-    vector_i128 s;
+    vector_bigz s;
     hashed_rgsw_vec rG_0;
     hashed_rgsw_vec rG_1;
     hashed_rgsw_vec rR_0;
     hashed_rgsw_vec rR_1;
-    i128 rho_0;
-    i128 rho_1;
-    i128 alpha_0;
-    i128 alpha_1;
-    i128 gamma_0;
-    i128 gamma_1;
+    bigz rho_0;
+    bigz rho_1;
+    bigz alpha_0;
+    bigz alpha_1;
+    bigz gamma_0;
+    bigz gamma_1;
 };
 
 struct Proof {

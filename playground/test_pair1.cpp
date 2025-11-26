@@ -8,7 +8,7 @@
 #include <string>
 #include <memory>
 
-using mpz = mpz_class;
+using bigz = mpz_class;
 
 // RAII wrapper for PBC element_t (stack-allocated array-of-1 idiom)
 class PBCElement {
@@ -97,8 +97,8 @@ int main() {
   const size_t N2 = 1000; // 1e6 for G2
   const size_t NP = 100;    // 1e3 pairings
 
-  std::vector<mpz> scalars1;
-  std::vector<mpz> scalars2;
+  std::vector<bigz> scalars1;
+  std::vector<bigz> scalars2;
   scalars1.reserve(N1);
   scalars2.reserve(N2);
 
@@ -114,9 +114,9 @@ int main() {
   gmp_randinit_default(state);
   gmp_randseed_ui(state, (unsigned long)time(nullptr));
 
-  auto gen_scalars = [&order, &state](std::vector<mpz> &vec, size_t n) { // , gmp_randstate_t& state) {
+  auto gen_scalars = [&order, &state](std::vector<bigz> &vec, size_t n) { // , gmp_randstate_t& state) {
     for (size_t i = 0; i < n; ++i) {
-      mpz s; mpz_init(s.get_mpz_t());
+      bigz s; mpz_init(s.get_mpz_t());
       mpz_urandomm(s.get_mpz_t(), state, order); // s in [0, r-1]
       vec.push_back(s);
     }

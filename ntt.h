@@ -11,56 +11,23 @@
 #include "shared.h"
 #include "vfhe.h"
 
-// using u128 = __uint128_t;
-using u128 = i128;
-// using u32 = unsigned int;
-using vec_u128 = std::vector<u128>;
+using vec_u128 = std::vector<bigz>;
+using arr2n_u128 = std::array<bigz, 2 * N_>;
+using arr_u128 = std::array<bigz, N_>;
+using span_u128 = std::span<bigz>;
 
-constexpr size_t POLY_SIZE = N_;
-u128 FIELD_MOD = FIELD_MODULUS;
-// constexpr u128 NTH_ROU = 2;
-// constexpr u128 TWO_ROU = 3;
-u128 GROUP_MOD = GROUP_MODULUS;
-// p = k * q + 1
-// constexpr u128 K = 6;
-// constexpr u128 GENERATOR = 64;
-
-using arr2n_u128 = std::array<u128, 2 * POLY_SIZE>;
-using arr_u128 = std::array<u128, POLY_SIZE>;
-using span_u128 = std::span<u128>;
-
-u128 mod_sub(const u128& x, const u128& y) {
-    u128 res;
+bigz mod_sub(const bigz& x, const bigz& y) {
+    bigz res;
     if (x < y) {
-        res = (x + FIELD_MOD) - y;
+        res = (x + FIELD_MODULUS) - y;
     } else {
         res = x - y;
     }
     return res;
 }
 
-// u128 pow_(u128 base, u128 power, u128 mod) {
-//     u128 result = 1;
-//     while (power > 0) {
-//         bool power_is_odd = ((power & 1) != 0);
-//         if (power_is_odd)
-//             result = (result * base) % mod;
-//         base = (base * base) % mod;
-//         power >>= 1;
-//     }
-//     return result;
-// }
-
-u128 pow_constexpr(u128 base, u128 power, u128 mod) {
-    // u128 result = 1;
-    // while (power > 0) {
-    //     bool power_is_odd = ((power & 1) != 0);
-    //     if (power_is_odd)
-    //         result = (result * base) % mod;
-    //     base = (base * base) % mod;
-    //     power >>= 1;
-    // }
-    // return result;
+// NOTE no more constexpr goodness (for now) due to heap allocated bigz
+bigz pow_constexpr(bigz base, bigz power, bigz mod) {
     return pow_(base, power, mod);
 }
 
@@ -118,18 +85,18 @@ bool is_prime_constexpr(int n) {
 }
 /* END ATCODER */
 
-bool is_prime_constexpr(u128 n) {
+bool is_prime_constexpr(bigz n) {
     if (n <= 1) return false;
     if (n <= 3) return true;
     if (n % 2 == 0 || n % 3 == 0) return false;
-    for (u128 i = 5; i * i <= n; i += 6) {
+    for (bigz i = 5; i * i <= n; i += 6) {
         if (n % i == 0 || n % (i + 2) == 0)
             return false;
     }
     return true;
 }
 
-bool are_q_and_N_legal(u128 q, __uint32_t N) {
+bool are_q_and_N_legal(bigz q, __uint32_t N) {
     bool both_legal = true;
     // DONE check q is prime
     both_legal = both_legal && is_prime_constexpr(q);
@@ -144,46 +111,46 @@ bool are_q_and_N_legal(u128 q, __uint32_t N) {
     return both_legal;
 }
 
-bool is_w_legal(u128 w, u128 n=POLY_SIZE) {
+bool is_w_legal(bigz w, bigz n=N_) {
     // w is an nth ROU: w^n == 1
-    bool w_pow_n_is_one = pow_constexpr(w, n, FIELD_MOD) == 1;
+    bool w_pow_n_is_one = pow_constexpr(w, n, FIELD_MODULUS) == 1;
     if (!w_pow_n_is_one)
         return false;
     // w is a primitive ROU: w^i != 1, for all i = [1, n - 1]
     for (size_t i = 1; i < n; i++) {
-        if (pow_constexpr(w, i, FIELD_MOD) == 1)
+        if (pow_constexpr(w, i, FIELD_MODULUS) == 1)
             return false;
     }
     return true;
 }
 
-bool is_psi_legal(u128 psi) {
+bool is_psi_legal(bigz psi) {
     // psi is a 2n-th ROU: psi^2n == 1
     // psi is a primitive 2n-th ROU: psi^i != 1, for all i = [1, 2n - 1]
-    u128 TWO_N = 2 * POLY_SIZE;
+    bigz TWO_N = 2 * N_;
     return is_w_legal(psi, TWO_N);
 }
 
-arr_u128 get_rou_pows(u128 rou) {
+arr_u128 get_rou_pows(bigz rou) {
     arr_u128 w_pows{};
     w_pows[0] = 1;
-    for (size_t i = 1; i < POLY_SIZE; i++) {
-        w_pows[i] = (w_pows[i - 1] * rou) % FIELD_MOD;
+    for (size_t i = 1; i < N_; i++) {
+        w_pows[i] = (w_pows[i - 1] * rou) % FIELD_MODULUS;
     }
     return w_pows;
 }
 
-bool is_w_pows_legal(const arr_u128& w_pows, u128 order=POLY_SIZE) {
+bool is_w_pows_legal(const arr_u128& w_pows, bigz order=N_) {
     if (w_pows[0] != 1) return false;
-    for (size_t i = 0; i < POLY_SIZE; i++) {
-        if (pow_constexpr(w_pows[i], order, FIELD_MOD) != 1)
+    for (size_t i = 0; i < N_; i++) {
+        if (pow_constexpr(w_pows[i], order, FIELD_MODULUS) != 1)
             return false;
     }
     return true;
 }
 
 bool is_psi_pows_legal(const arr_u128& psi_pows) {
-    return is_w_pows_legal(psi_pows, 2 * POLY_SIZE);
+    return is_w_pows_legal(psi_pows, 2 * N_);
 }
 
 // sorts the array in bit-reversed order
@@ -210,7 +177,7 @@ void print_arr(auto& x) {
     std::cout << "\n";
 }
 
-void ntt_recursive_(span_u128 x, u128 nth_root_unity) {
+void ntt_recursive_(span_u128 x, bigz nth_root_unity) {
     size_t n = x.size();
     if (n == 1)
         return;
@@ -218,35 +185,35 @@ void ntt_recursive_(span_u128 x, u128 nth_root_unity) {
     vec_u128 w(half);
     w[0] = 1;
     for (size_t i = 1; i < half; i++)
-        w[i] = (w[i - 1] * nth_root_unity) % FIELD_MOD;
+        w[i] = (w[i - 1] * nth_root_unity) % FIELD_MODULUS;
     auto x_even = x.subspan(0, half);
     auto x_odd = x.subspan(half, half);
-    nth_root_unity = pow_(nth_root_unity, 2, FIELD_MOD);
+    nth_root_unity = pow_(nth_root_unity, 2, FIELD_MODULUS);
     ntt_recursive_(x_even, nth_root_unity);
     ntt_recursive_(x_odd, nth_root_unity);
     for (size_t i = 0; i < half; i++) {
         auto even = x_even[i];
-        auto w_odd = (w[i] * x_odd[i]) % FIELD_MOD;
-        x[i] = (even + w_odd) % FIELD_MOD;
+        auto w_odd = (w[i] * x_odd[i]) % FIELD_MODULUS;
+        x[i] = (even + w_odd) % FIELD_MODULUS;
         x[i + half] = mod_sub(even, w_odd);
     }
 }
 
 void ntt_iter_(auto& x, const arr_u128& w) {
     // const size_t n = x.size();
-    size_t n = 2 * POLY_SIZE;
+    size_t n = 2 * N_;
     // TODO alg that does no->bo fwd and bo->no rev could remove this step
     bit_reverse(x);
     // NOTE These are just to ensure GMP only allocates once
-    mpz w_odd = x[1];
+    bigz w_odd = x[1];
     for (size_t half = 1; half < n; half *= 2) {
         const size_t len_chunk = 2 * half;
         const size_t n_chunks = n / len_chunk;
         for (size_t chunk = 0; chunk < n_chunks; chunk++) {
             const size_t j = len_chunk * chunk;
             for (size_t i = 0; i < half; i++) {
-                const mpz& even = x[i + j];
-                w_odd = (w[i * n_chunks] * x[i + j + half]) % FIELD_MOD;
+                const bigz& even = x[i + j];
+                w_odd = (w[i * n_chunks] * x[i + j + half]) % FIELD_MODULUS;
                 // x[i + j + half] = mod_sub(even, w_odd);
                 x[i + j + half] = (even - w_odd);
                 x[i + j] = (even + w_odd);
@@ -256,22 +223,22 @@ void ntt_iter_(auto& x, const arr_u128& w) {
 }
 
 void ntt_iter_ct_no_bo(auto& a, const arr_u128& psi) {
-    // constexpr size_t n = 2 * POLY_SIZE;
-    size_t n = POLY_SIZE;
+    // constexpr size_t n = 2 * N_;
+    size_t n = N_;
     size_t t = n;
-    mpz V = a[0];
+    bigz V = a[0];
     for (size_t m = 1; m < n; m = 2 * m) {
         t = t / 2;
         for (size_t i = 0; i < m; i++) {
             size_t j1 = 2 * i * t;
             size_t j2 = j1 + t - 1;
             for (size_t j = j1; j <= j2; j++) {
-                // assert(a[j] < FIELD_MOD);
-                // assert(a[j + t] < FIELD_MOD);
-                mpz& U = a[j];
+                // assert(a[j] < FIELD_MODULUS);
+                // assert(a[j + t] < FIELD_MODULUS);
+                bigz& U = a[j];
                 // assert((m + i) < psi.size());
-                // assert(psi[m + i] < FIELD_MOD);
-                V = (a[j + t] * psi[m + i]) % FIELD_MOD;
+                // assert(psi[m + i] < FIELD_MODULUS);
+                V = (a[j + t] * psi[m + i]) % FIELD_MODULUS;
                 a[j + t] = U - V;
                 a[j] = U + V;
             }
@@ -280,24 +247,24 @@ void ntt_iter_ct_no_bo(auto& a, const arr_u128& psi) {
 }
 
 void intt_iter_gs_bo_no(auto& a, const arr_u128& psi) {
-    size_t n = POLY_SIZE;
+    size_t n = N_;
     size_t t = 1;
-    mpz U = a[0];
+    bigz U = a[0];
     for (size_t m = n; m > 1; m = m / 2) {
         size_t j1 = 0;
         size_t h = m / 2;
         for (size_t i = 0; i < h; i++) {
             size_t j2 = j1 + t - 1;
             for (size_t j = j1; j <= j2; j++) {
-                // assert(a[j] < FIELD_MOD);
-                // assert(a[j + t] < FIELD_MOD);
+                // assert(a[j] < FIELD_MODULUS);
+                // assert(a[j + t] < FIELD_MODULUS);
                 U = a[j];
-                // mpz V = a[j + t];
+                // bigz V = a[j + t];
                 a[j] = (a[j] + a[j + t]);
                 // assert((h + i) < psi.size());
-                // assert(psi[h + i] < FIELD_MOD);
-                // a[j + t] = (mod_sub(U, a[j + t]) * psi[h + i]) % FIELD_MOD;
-                a[j + t] = ((U - a[j + t]) * psi[h + i]) % FIELD_MOD;
+                // assert(psi[h + i] < FIELD_MODULUS);
+                // a[j + t] = (mod_sub(U, a[j + t]) * psi[h + i]) % FIELD_MODULUS;
+                a[j + t] = ((U - a[j + t]) * psi[h + i]) % FIELD_MODULUS;
             }
             j1 += 2 * t;
         }
@@ -312,19 +279,19 @@ void ntt_iter(auto& x, const arr_u128& rou_pows) {
     ntt_iter_(x, rou_pows);
     // NOTE mod each value after NTT, due to lazy modding
     for (auto& el : x)
-        el = el % FIELD_MOD;
+        el = el % FIELD_MODULUS;
 
     TIMING(auto end = std::chrono::high_resolution_clock::now();)
     TIMING(timing.ntt += end - start;)
 }
-void intt_iter(auto& x, const arr_u128& rou_pows, u128 inv_x_len) {
+void intt_iter(auto& x, const arr_u128& rou_pows, bigz inv_x_len) {
     TIMING(timing.calls_intt += 1;)
     TIMING(auto start = std::chrono::high_resolution_clock::now();)
 
     ntt_iter_(x, rou_pows);
     // scale by N^-1
     for (auto& el : x)
-        el = (el * inv_x_len) % FIELD_MOD;
+        el = (el * inv_x_len) % FIELD_MODULUS;
 
     TIMING(auto end = std::chrono::high_resolution_clock::now();)
     TIMING(timing.intt += end - start;)
@@ -337,32 +304,32 @@ void ntt_iter1(auto& x, const arr_u128& rou_pows) {
     ntt_iter_ct_no_bo(x, rou_pows);
     // NOTE mod each value after NTT, due to lazy modding
     for (auto& el : x)
-        el = el % FIELD_MOD;
+        el = el % FIELD_MODULUS;
 
     TIMING(auto end = std::chrono::high_resolution_clock::now();)
     TIMING(timing.ntt1 += end - start;)
 }
-void intt_iter1(auto& x, const arr_u128& rou_pows, u128 inv_x_len) {
+void intt_iter1(auto& x, const arr_u128& rou_pows, bigz inv_x_len) {
     TIMING(timing.calls_intt1 += 1;)
     TIMING(auto start = std::chrono::high_resolution_clock::now();)
 
     intt_iter_gs_bo_no(x, rou_pows);
     // scale by N^-1
     for (auto& el : x)
-        el = (el * inv_x_len) % FIELD_MOD;
+        el = (el * inv_x_len) % FIELD_MODULUS;
 
     TIMING(auto end = std::chrono::high_resolution_clock::now();)
     TIMING(timing.intt1 += end - start;)
 }
 // Computes the recursive ntt
-void ntt_recursive(span_u128 x, u128 nth_root_unity) {
+void ntt_recursive(span_u128 x, bigz nth_root_unity) {
     bit_reverse(x);
     ntt_recursive_(x, nth_root_unity);
 }
 
-void intt_recursive(span_u128 x, u128 nth_root_unity, u128 inv_poly_size) {
+void intt_recursive(span_u128 x, bigz nth_root_unity, bigz inv_poly_size) {
     ntt_recursive(x, nth_root_unity);
     // scale by N^-1
     for (auto& el : x)
-        el = (el * inv_poly_size) % FIELD_MOD;
+        el = (el * inv_poly_size) % FIELD_MODULUS;
 }

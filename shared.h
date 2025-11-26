@@ -7,11 +7,8 @@
 #include <chrono>
 #include "gmpxx.h"
 
-using mpz = mpz_class;
-// typedef __uint128_t i128;
-typedef mpz i128;
-typedef long int u32;
-// typedef i128 u32;
+typedef mpz_class bigz;
+typedef long int u32; // FIXME - why signed? Rationalise usage across code
 u32 N_DECOMP = 1;
 constexpr size_t N_ = 4096;
 
@@ -46,38 +43,38 @@ typedef struct {
 // translation units without causing linker errors
 inline times_and_counts timing = { 0 };
 
-// constexpr i128 N_ = 2;
-// constexpr i128 GROUP_MODULUS = 11; // p
-// constexpr i128 FIELD_MODULUS = 5; // q
-// constexpr i128 GENERATOR = 4; // g
+// constexpr bigz N_ = 2;
+// constexpr bigz GROUP_MODULUS = 11; // p
+// constexpr bigz FIELD_MODULUS = 5; // q
+// constexpr bigz GENERATOR = 4; // g
 
 // q_pow = 30.000011008191272;
-// constexpr i128 N_ = 4096;
-// constexpr i128 GROUP_MODULUS = 17180000273;
-// constexpr i128 FIELD_MODULUS = 1073750017;
-// constexpr i128 GENERATOR = 65536;
-// constexpr i128 NTH_ROU = 625534531;
-// constexpr i128 TWO_ROU = 996876704;
+// constexpr bigz N_ = 4096;
+// constexpr bigz GROUP_MODULUS = 17180000273;
+// constexpr bigz FIELD_MODULUS = 1073750017;
+// constexpr bigz GENERATOR = 65536;
+// constexpr bigz NTH_ROU = 625534531;
+// constexpr bigz TWO_ROU = 996876704;
 
-// constexpr i128 N_ = 8;
-// constexpr i128 GROUP_MODULUS = 103;
-// constexpr i128 FIELD_MODULUS = 17;
-// constexpr i128 GENERATOR = 64;
-// constexpr i128 NTH_ROU = 3;
-// constexpr i128 TWO_ROU = 9;
+// constexpr bigz N_ = 8;
+// constexpr bigz GROUP_MODULUS = 103;
+// constexpr bigz FIELD_MODULUS = 17;
+// constexpr bigz GENERATOR = 64;
+// constexpr bigz NTH_ROU = 3;
+// constexpr bigz TWO_ROU = 9;
 
-// N = 2^12, q > 2^54
-// constexpr i128 GROUP_MODULUS = 540431955285196831;
-// constexpr i128 GENERATOR = 1073741824;
-i128 FIELD_MODULUS = 18014398509506561;
-i128 NTH_ROU = 5194839201355896;
-i128 TWO_ROU = 9455140237568613;
-mpz GROUP_MODULUS("898846567431158003760658660800415388695860588403194539336418\
+// N = 2^12, log q = 54.00000000000197 (55 bit prime)
+// constexpr bigz GROUP_MODULUS = 540431955285196831;
+// constexpr bigz GENERATOR = 1073741824;
+bigz FIELD_MODULUS = 18014398509506561;
+bigz NTH_ROU = 5194839201355896;
+bigz TWO_ROU = 9455140237568613;
+bigz GROUP_MODULUS("898846567431158003760658660800415388695860588403194539336418\
 3815501945595841537012838580057296239271804947467115111499650941742633115916727\
 4173985578890984435612970736081155406155170101580895226642186535601576839882976\
 8772042832628185349382795294302615514942250653305359248181354706753938688250603\
 16220145843");
-mpz GENERATOR("4516690346444892428005324399985509466774242146852912703800039069\
+bigz GENERATOR("4516690346444892428005324399985509466774242146852912703800039069\
 0990555413931211221819477288776566894331153249407833821645949924742511460070046\
 0752019004410401310119718077614657859287173286718671972587346128683743555111219\
 5974661753294711265189310135666066227878669003666163196105068185398215987576405\
@@ -97,14 +94,14 @@ mpz GENERATOR("4516690346444892428005324399985509466774242146852912703800039069\
 // root_2nth_inv = 10150407646632095964976043332470470774111901718625076075560248572110916115913
 
 /*
-mpz NTH_ROU("4158865282786404163413953114870269622875596290766033564087307867933865333818");
-mpz TWO_ROU("197302210312744933010843010704445784068657690384188106020011018676818793232");
+bigz NTH_ROU("4158865282786404163413953114870269622875596290766033564087307867933865333818");
+bigz TWO_ROU("197302210312744933010843010704445784068657690384188106020011018676818793232");
 
-mpz FIELD_MODULUS("\
+bigz FIELD_MODULUS("\
 21888242871839275222246405745257275088548364400416034343698204186575808495617\
 ");
 
-mpz GROUP_MODULUS("\
+bigz GROUP_MODULUS("\
 4392772178269698779249497429153895261004854964304840660916201900668102392172522\
 1753506683946649357502593478121301839448793513559065189266328303293304961319897\
 2723150271029646049216428731837578633690798776762679912532763693426565839974219\
@@ -119,7 +116,7 @@ mpz GROUP_MODULUS("\
 10733640448697722371484336761343601982747862276199417869\
 ");
 
-mpz GENERATOR("\
+bigz GENERATOR("\
 8823742294188297640804854095457577138987996318812276799865770484404943622156068\
 5066014132149511080421800977139935088238266642518265879921526379639802012792153\
 2598817785159844219314319798858780543520300210324574291390921835922872833005091\
@@ -139,14 +136,14 @@ mpz GENERATOR("\
 
 /*
 // 1152 bit p,  128 bit q
-mpz GROUP_MODULUS("\
+bigz GROUP_MODULUS("\
 4893786199427765557762591497536453196573320618411278635472176938119840441271\
 2502191283384375987166735470567071036504573974100823080776092800473413359198247\
 6239041963014833898372354040701042388893258698981186938413740280916319621417623\
 7471114636814326740929854005470025012660047589916149139703043020351672528846339\
 84145576703811773398576717571852999");
-mpz FIELD_MODULUS("340282366920938463463374607431767867393");
-mpz GENERATOR("\
+bigz FIELD_MODULUS("340282366920938463463374607431767867393");
+bigz GENERATOR("\
 4817716213549514035336014710666703183713025673847494424413528199993357208789\
 8913394575489847649253866038828334491235671772417871456974026431473237742550247\
 9497578100053448330287050686965459146273651762955474911950522760806904335945868\
@@ -157,11 +154,11 @@ mpz GENERATOR("\
 size_t N_POLYS_IN_RLWE = 2;
 using matrix_double = std::vector<std::vector<mpf_class>>;
 using vector_double = std::vector<mpf_class>;
-using vector_i128 = std::vector<i128>;
+using vector_bigz = std::vector<bigz>;
 
 // FIXME make types __uint128 so that regular modding works
-mpz& mod_(mpz& val, const mpz& q) {
-    // mpz ret(val);
+bigz& mod_(bigz& val, const bigz& q) {
+    // bigz ret(val);
     val %= q;
     // if (val < 0) {
     //     val += q;
@@ -187,11 +184,11 @@ std::string i128str(__uint128_t n) {
     std::reverse(buf.begin(), buf.end());
     return buf;
 }
-vector_i128 scalar_vec_mult(const i128& scalar, const vector_i128& vec, const i128& q) {
-    vector_i128 result(vec.size());
+vector_bigz scalar_vec_mult(const bigz& scalar, const vector_bigz& vec, const bigz& q) {
+    vector_bigz result(vec.size());
     for (size_t i = 0; i < vec.size(); i++) {
         // copy vec
-        result[i] = scalar * i128(vec[i]);
+        result[i] = scalar * bigz(vec[i]);
         result[i] = mod_(result[i], q);
     }
     return result;
@@ -229,7 +226,7 @@ void print_vector_double(const vector_double& vec) {
     std::cout << "\n";
 }
 
-char* print_to_string_mpz(mpz m) {
+char* print_to_string_mpz(bigz m) {
     int size = 10000;
     char* buf = new char[size];
     buf[size - 1] = '\0';
@@ -240,7 +237,7 @@ char* print_to_string_mpz(mpz m) {
     return buf;
 }
 
-void print_vector_mpz(const vector_i128& vec) {
+void print_vector_mpz(const vector_bigz& vec) {
     for (const auto& val : vec) {
         std::cout << print_to_string_mpz(val) << ", ";
     }
@@ -248,7 +245,7 @@ void print_vector_mpz(const vector_i128& vec) {
 }
 // TODO types and move somewhere
 // Returns floor(log2(x))
-double log2_mpz(const mpz_class& x) {
+double log2_mpz(const bigz& x) {
     if (x == 0) return -1; // or throw/handle as needed
     return static_cast<double>(mpz_sizeinbase(x.get_mpz_t(), 2) - 1);
 }
@@ -262,8 +259,8 @@ mpf_class mpf_round(const mpf_class &x) {
 }
 
 // base case binary modular exponentiation
-mpz_class pow_(mpz_class base, mpz_class power, mpz mod) {
-    mpz result = 1;
+bigz pow_(bigz base, bigz power, bigz mod) {
+    bigz result = 1;
     // TODO should we just mutate base?
     mpz_powm(result.get_mpz_t(), base.get_mpz_t(), power.get_mpz_t(), mod.get_mpz_t());
     return result;

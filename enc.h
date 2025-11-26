@@ -10,10 +10,10 @@ poly sample_discrete_gaussian(size_t N, double mu = 3.2, double sigma = 19.2) {
     std::mt19937 gen(rd());
     std::normal_distribution<double> dist(mu, sigma);
     for (size_t i = 0; i < N; i++) {
-        i128 res = static_cast<long int>(std::round(dist(gen)));
+        bigz res = static_cast<long int>(std::round(dist(gen)));
         if (res < 0)
-            res += FIELD_MOD;
-        result[i] = static_cast<i128>(res);
+            res += FIELD_MODULUS;
+        result[i] = static_cast<bigz>(res);
     }
     #ifdef DEBUG1_ON
         for (size_t i = 0; i < N; i++)
@@ -45,22 +45,22 @@ poly sample_secret_key(size_t N) {
     return s;
 }
 // Sample a random polynomial of degree N-1 with coefficients in the range [0, q).
-poly sample_random_polynomial(size_t N, i128 q) {
+poly sample_random_polynomial(size_t N, bigz q) {
     poly poly(N);
     // std::random_device rd;
     // std::mt19937 gen(rd());
-    // std::uniform_int_distribution<i128> dist(0, q - 1);
-    mpz rop;
+    // std::uniform_int_distribution<bigz> dist(0, q - 1);
+    bigz rop;
     gmp_randstate_t state;
     gmp_randinit_default(state);
-    mpz seed = 42;
+    bigz seed = 42;
     gmp_randseed(state, seed.get_mpz_t());
     // mp_bitcnt_t n = log2_mpz(q) + 1;
     for (size_t i = 0; i < N; i++) {
         // poly[i] = dist(gen);
         // mpz_urandomb(rop, state, n);
         mpz_urandomm(rop.get_mpz_t(), state, q.get_mpz_t());
-        poly[i] = mpz(rop);
+        poly[i] = bigz(rop);
     }
     gmp_randclear(state);
     #ifdef DEBUG1_ON
@@ -79,14 +79,14 @@ poly sample_noise_polynomial(size_t N) {
 
 class Encryptor {
 private:
-    u128 v;
+    bigz v;
     size_t d;
     size_t N;
-    i128 q;
+    bigz q;
 
 public:
     poly sk;
-    Encryptor(u128 v_, size_t d_, size_t N_, i128 q_)
+    Encryptor(bigz v_, size_t d_, size_t N_, bigz q_)
         : v(v_), d(d_), N(N_), q(q_), sk(N) {
             poly sk_ = sample_secret_key(N);
         }
@@ -99,7 +99,7 @@ public:
 
         poly b = m + noise + ask;
         // for (size_t i = 0; i < N; i++) {
-        //     i128 val = m.get(i) + noise.get(i) + ask.get(i);
+        //     bigz val = m.get(i) + noise.get(i) + ask.get(i);
         //     b.set(i, mod_(val, q));
         // }
 
@@ -109,7 +109,7 @@ public:
         return res;
     }
 
-    rlwe_vec encrypt_rlwe_vec(const vector_i128& vec) {
+    rlwe_vec encrypt_rlwe_vec(const vector_bigz& vec) {
         rlwe_vec res(vec.size());
         for (size_t i = 0; i < vec.size(); i++) {
             poly p(N);
@@ -129,8 +129,8 @@ public:
         return m;
     }
 
-    vector_i128 decrypt_rlwe_vec(const rlwe_vec& ctxs) const {
-        vector_i128 ptxs(ctxs.size());
+    vector_bigz decrypt_rlwe_vec(const rlwe_vec& ctxs) const {
+        vector_bigz ptxs(ctxs.size());
         for (size_t i = 0; i < ctxs.size(); i++) {
             poly m = decrypt_rlwe(ctxs.get(i));
             ptxs.at(i) = m.get(0);
@@ -146,7 +146,7 @@ public:
         // if (M.get(0) > v / 2)
         //     std::cout << "Warning: (encrypt_rgsw) Message greater than v/2: " + i128str(M.get(0)) + "\n";
 
-        vector_i128 v_powers(d);
+        vector_bigz v_powers(d);
         v_powers[0] = 1;
         for (size_t i = 1; i < d; i++)
             v_powers[i] = v_powers[i - 1] * v % FIELD_MODULUS;
@@ -180,8 +180,8 @@ public:
         rgsw res = G + encs_of_zero;
         return res;
     }
-    // takes an array2d<i128> and returns an encrypted rgsw_mat
-    rgsw_mat encrypt_rgsw_mat(const array2d<i128>& mat) {
+    // takes an array2d<bigz> and returns an encrypted rgsw_mat
+    rgsw_mat encrypt_rgsw_mat(const array2d<bigz>& mat) {
         size_t rows = mat.n_rows();
         size_t cols = mat.n_cols();
         rgsw_mat res(rows, cols, 2 * d, N_POLYS_IN_RLWE, N);
@@ -200,7 +200,7 @@ public:
     // Encodes an RGSW plaintext (not encryption, just encoding)
     rgsw encode_rgsw(const poly& M) const {
         // Compute v powers: v^0, v^1, ..., v^{d-1}
-        vector_i128 v_powers(d);
+        vector_bigz v_powers(d);
         for (size_t i = 0; i < d; i++) {
             v_powers[i] = 1;
             for (size_t j = 0; j < i; j++) {
@@ -210,7 +210,7 @@ public:
         }
 
         // Build G matrix: 2 x 2d, each row is [v_powers, 0...], [0..., v_powers]
-        std::vector<vector_i128> G(2, vector_i128(2 * d, 0));
+        std::vector<vector_bigz> G(2, vector_bigz(2 * d, 0));
         for (size_t i = 0; i < d; i++) {
             G[0][i] = v_powers[i];
             G[1][d + i] = v_powers[i];
@@ -223,7 +223,7 @@ public:
             for (size_t row = 0; row < 2; ++row) {
                 poly p(N);
                 for (size_t i = 0; i < N; i++) {
-                    i128 val = G[row][j] * M.get(i);
+                    bigz val = G[row][j] * M.get(i);
                     val = mod_(val, q);
                     p.set(i, val);
                 }

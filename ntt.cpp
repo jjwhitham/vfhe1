@@ -1,12 +1,12 @@
 #include "ntt.h"
 
 int main() {
-    constexpr u128 INV_2ROU = pow_constexpr(TWO_ROU, FIELD_MOD - 2, FIELD_MOD);
-    constexpr u128 INV_2N = pow_constexpr(2 * POLY_SIZE, FIELD_MOD - 2, FIELD_MOD);
+    constexpr bigz INV_2ROU = pow_constexpr(TWO_ROU, FIELD_MODULUS - 2, FIELD_MODULUS);
+    constexpr bigz INV_2N = pow_constexpr(2 * N_, FIELD_MODULUS - 2, FIELD_MODULUS);
     // check n, q
-    constexpr bool q_and_N_legal = are_q_and_N_legal(FIELD_MOD, POLY_SIZE);
-    static_assert(are_q_and_N_legal(FIELD_MOD, POLY_SIZE));
-    constexpr bool is_prime = is_prime_constexpr(FIELD_MOD);
+    constexpr bool q_and_N_legal = are_q_and_N_legal(FIELD_MODULUS, N_);
+    static_assert(are_q_and_N_legal(FIELD_MODULUS, N_));
+    constexpr bool is_prime = is_prime_constexpr(FIELD_MODULUS);
     // check primitive nth ROU, w
     constexpr bool w_is_legal = is_w_legal(NTH_ROU);
     static_assert(is_w_legal(NTH_ROU));
@@ -27,15 +27,15 @@ int main() {
     static_assert(all_legal);
 
     arr2n_u128 x{};
-    for (size_t i = 0; i < 2 * POLY_SIZE; i++)
+    for (size_t i = 0; i < 2 * N_; i++)
         assert(x[i] == 0);
-    for (size_t i = 0; i < POLY_SIZE; i++) {
+    for (size_t i = 0; i < N_; i++) {
         x[i] = i + 1;
     }
     span_u128 x_span(x);
     ntt_recursive(x_span, TWO_ROU);
-    // for (size_t i = 0; i < 2 * POLY_SIZE; i++) {
-    //     x[i] = x[i] * x[i] % FIELD_MOD;
+    // for (size_t i = 0; i < 2 * N_; i++) {
+    //     x[i] = x[i] * x[i] % FIELD_MODULUS;
     // }
     print_arr(x);
     intt_recursive(x_span, INV_2ROU, INV_2N);
@@ -45,9 +45,9 @@ int main() {
     print_arr(x);
     intt_iter(x, psi_inv_pows, INV_2N);
     print_arr(x);
-    for (size_t i = 0; i < POLY_SIZE; i++)
+    for (size_t i = 0; i < N_; i++)
         assert(x[i] == i + 1);
-    for (size_t i = POLY_SIZE; i < 2 * POLY_SIZE; i++)
+    for (size_t i = N_; i < 2 * N_; i++)
         assert(x[i] == 0);
     return 0;
 }

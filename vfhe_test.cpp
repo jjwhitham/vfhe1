@@ -4,9 +4,9 @@
 void init(rgsw_mat& F, rlwe_decomp_vec& x, veri_vec_scalar& r) {
     std::random_device rd;  // Non-deterministic seed
     std::mt19937 gen(rd()); // Mersenne Twister engine
-    std::uniform_int_distribution<i128> distrib(0, FIELD_MODULUS - 1); // Range: 0 to 100
-    i128 random_number = distrib(gen);
-    i128 counter = random_number;
+    std::uniform_int_distribution<bigz> distrib(0, FIELD_MODULUS - 1); // Range: 0 to 100
+    bigz random_number = distrib(gen);
+    bigz counter = random_number;
     for (size_t i = 0; i < F.n_rows(); ++i) {
         for (size_t j = 0; j < F.n_cols(); ++j) {
             rgsw& rg = F.get_rgsw(i, j);
@@ -59,13 +59,13 @@ void test() {
 
     std::cout << "ru:\n";
     ru.print();
-    i128 expected[] = {0, 3, 6, 9};
+    bigz expected[] = {0, 3, 6, 9};
     for (auto& x : ru) {
         for (size_t i = 0; i < x.size(); i++) {
             assert(x.get(i) == expected[i]);
         }
     }
-    i128 expected1[] = {1, 18, 2, 13};
+    bigz expected1[] = {1, 18, 2, 13};
     rlwe gru = ru.pow();
     std::cout << "gru:\n";
     gru.print();
@@ -78,14 +78,14 @@ void test() {
     std::cout << "gr:\n";
     gr.print();
     std::cout << "\n";
-    i128 expected2[] = {4, 16};
+    bigz expected2[] = {4, 16};
     for (size_t i = 0; i < r.size(); i++) {
         assert(gr.get(i) == expected2[i]);
     }
     rlwe_vec gu = u.pow();
     std::cout << "gu:\n";
     gu.print();
-    i128 expected3[] = {1, 4, 16, 18};
+    bigz expected3[] = {1, 4, 16, 18};
     for (auto& rlwe_el : gu)
         for (auto& poly_el : rlwe_el)
             for (size_t i = 0; i < poly_el.size(); i++) {
@@ -142,7 +142,7 @@ void test_rlwe_decomp() {
     std::cout << "rlwe from rgsw * rlwe_decomp:\n";
     rl.print();
 
-    i128 r = 2;
+    bigz r = 2;
     rlwe rrl = rl * r; // scalar * rlwe
     std::cout << "rlwe from scalar * rlwe:\n";
     rrl.print();
@@ -151,7 +151,7 @@ void test_rlwe_decomp() {
     rlwe grrl = rrl.pow();
     std::cout << "grrl";
     grrl.print();
-    i128 gr = 16; // g^r = 4^2 % 23 = 16
+    bigz gr = 16; // g^r = 4^2 % 23 = 16
     rlwe grl = rl.pow(gr); // g^r.pow(rlwe)
     std::cout << "grl:\n";
     grl.print();
@@ -163,7 +163,7 @@ void test_rlwe_decomp_vec() {
     size_t n_rlwes = 2;
     size_t n_rlwe_decomps = 2;
     rlwe_decomp_vec x(n_rlwe_decomps, n_polys, n_coeffs);
-    i128 counter = 0;
+    bigz counter = 0;
     for (size_t v = 0; v < x.size(); v++) {
         rlwe_decomp& rd = x.get(v);
         for (size_t i = 0; i < rd.size(); i++) {

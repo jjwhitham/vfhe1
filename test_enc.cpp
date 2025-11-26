@@ -5,12 +5,12 @@
 void test_rlwe() {
     static constexpr u32 d = N_DECOMP;
     static constexpr u32 power = get_decomp_power();
-    static constexpr i128 v = static_cast<i128>(1) << power;
-    static constexpr i128 N = N_;
-    static constexpr i128 q = FIELD_MODULUS;
+    static constexpr bigz v = static_cast<bigz>(1) << power;
+    static constexpr bigz N = N_;
+    static constexpr bigz q = FIELD_MODULUS;
     Encryptor enc(v, d, N, q);
-    i128 scale = 1000000; // 1e3
-    i128 message = 30000;
+    bigz scale = 1000000; // 1e3
+    bigz message = 30000;
     poly ptx(N);
     // ptx.set(0, scale * message); // set the first coefficient to the value
     ptx.set(0, message * scale); // set the first coefficient to the value
@@ -18,7 +18,7 @@ void test_rlwe() {
     ptx_rgsw.set(0, message); // set the first coefficient to the value
     rlwe ctx = enc.encrypt_rlwe(ptx);
     poly ptx1 = enc.decrypt_rlwe(ctx);
-    i128 message_decrypted = ptx1.get(0);
+    bigz message_decrypted = ptx1.get(0);
     std::cout << "message decrypted: "
         << i128str(message_decrypted) << "\n";
 
@@ -37,7 +37,7 @@ void test_rlwe() {
     // prod.conv_to_coeff();
     // prod2 = prod.conv_to_nega(N);
 
-    i128 prod_dec = enc.decrypt_rlwe(prod2).get(0);
+    bigz prod_dec = enc.decrypt_rlwe(prod2).get(0);
     std::cout << "prod decrypted: "
         << i128str(prod_dec) << "\n";
 }
@@ -45,13 +45,13 @@ void test_rlwe() {
 void test_decomp() {
     static constexpr u32 d = N_DECOMP;
     static constexpr u32 power = get_decomp_power();
-    static constexpr i128 v = static_cast<i128>(1) << power;
-    static constexpr i128 N = N_;
-    static constexpr i128 q = FIELD_MODULUS;
+    static constexpr bigz v = static_cast<bigz>(1) << power;
+    static constexpr bigz N = N_;
+    static constexpr bigz q = FIELD_MODULUS;
     Encryptor enc(v, d, N, q);
-    i128 scale = 1e12; // 1e12
+    bigz scale = 1e12; // 1e12
     // std::cout << "scale: " << i128str(scale) << "\n";
-    i128 message = 42 * scale;
+    bigz message = 42 * scale;
     poly ptx(N);
     ptx.set(0, message); // set the first coefficient to the value
     rlwe ctx = enc.encrypt_rlwe(ptx);
@@ -59,7 +59,7 @@ void test_decomp() {
 
     // std::cout << "ctx_decomp.size(): " << ctx_decomp.size() << "\n";
 
-    vector_i128 v_pows(d);
+    vector_bigz v_pows(d);
     for (size_t i = 0; i < d; i++)
         v_pows.at(i) = pow_(v, i, q);
     // std::cout << "v_pows:\n";
