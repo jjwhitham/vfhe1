@@ -301,8 +301,8 @@ void verify_with_lin_and_dyn_checks(
     hashed_rlwe su = vec_dot_prod(s, u);
     hashed_rlwe gsu = su.pow();
     hashed_rlwe rhs_u = G_3.group_mult(g_1);
-    // for (size_t i = 0; i < 2; i++)
-        // assert(gsu.get(i) == rhs_u.get(i));
+    for (size_t i = 0; i < 2; i++)
+        assert(gsu.get(i) == rhs_u.get(i));
 
     hashed_rlwe rhs = G_2.group_mult(g_1);
     hashed_rlwe rGy = vec_dot_prod_enc(rG, y, eval_pows, v, d, power);
@@ -311,8 +311,8 @@ void verify_with_lin_and_dyn_checks(
     hashed_rlwe rRu = vec_dot_prod_enc(rR, u_reenc, eval_pows, v, d, power);
     hashed_rlwe grRu = rRu.pow();
     rhs = rhs.group_mult(grRu);
-    // for (size_t i = 0; i < 2; i++)
-        // assert(G_1.get(i) == rhs.get(i));
+    for (size_t i = 0; i < 2; i++)
+        assert(G_1.get(i) == rhs.get(i));
 }
 
 vector_double mat_vec_mult(const matrix_double& mat, const vector_double& vec) {
@@ -500,10 +500,10 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     veri_key vk = std::get<1>(keys);
 
     // convert rgsw mats to ntt/eval form
-    F_ctx.conv_to_ntt();
-    G_bar_ctx.conv_to_ntt();
-    R_bar_ctx.conv_to_ntt();
-    H_bar_ctx.conv_to_ntt();
+    F_ctx.to_eval_form();
+    G_bar_ctx.to_eval_form();
+    R_bar_ctx.to_eval_form();
+    H_bar_ctx.to_eval_form();
 
     auto x_cont_ctx_hashed = x_cont_ctx.get_hash(eval_pows);
     auto rx_0 = vec_dot_prod(r_1, x_cont_ctx_hashed);
@@ -550,11 +550,12 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
 
 
         /* ### Controller: Compute output ### */
-        rlwe_decomp_vec x_cont_ctx_decomp = x_cont_ctx.decompose(v, d, power);
-        // DEBUG(std::cout << "x_cont_ctx_decomp:\n";)
-        // DEBUG(x_cont_ctx_decomp.print();)
-        rlwe_vec u_out_ctx_convolved = H_bar_ctx.convolve(x_cont_ctx_decomp); // C -> P
-        u_out_ctx_convolved.conv_to_coeff();
+        rlwe_decomp_vec x_cont_ctx_decomped = x_cont_ctx.decompose(v, d, power);
+        // DEBUG(std::cout << "x_cont_ctx_decomped:\n";)
+        // DEBUG(x_cont_ctx_decomped.print();)
+        x_cont_ctx_decomped.to_eval_form();
+        rlwe_vec u_out_ctx_convolved = H_bar_ctx.convolve(x_cont_ctx_decomped); // C -> P
+        u_out_ctx_convolved.to_coeff_form();
         // DEBUG(std::cout << "u_out_ctx_convolved:\n";)
         // DEBUG(u_out_ctx_convolved.print();)
 
@@ -568,7 +569,7 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         hashed_rlwe_vec u_out_ctx_hashed = u_out_ctx_convolved.get_hash(eval_pows);
         // DEBUG(std::cout << "u_out_ctx_hashed:\n";)
         // DEBUG(u_out_ctx_hashed.print();)
-        rlwe_vec u_out_ctx = u_out_ctx_convolved.conv_to_nega(N);
+        rlwe_vec u_out_ctx = u_out_ctx_convolved.mod_cyclo(N);
         // DEBUG(std::cout << "u_out_ctx:\n";)
         // DEBUG(u_out_ctx.print();)
         vector_bigz u_out_ptx = enc.decrypt_rlwe_vec(u_out_ctx);
@@ -606,10 +607,11 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         #endif
 
         /* ###  Controller: Update state ### */
-        rlwe_vec F_x = F_ctx.convolve(x_cont_ctx.decompose(v, d, power));
+        rlwe_vec F_x = F_ctx.convolve(x_cont_ctx_decomped);
         // DEBUG(std::cout << "F_x:\n";)
         // DEBUG(F_x.print();)
         rlwe_decomp_vec y_out_ctx_decomped = y_out_ctx.decompose(v, d, power);
+        y_out_ctx_decomped.to_eval_form();
         rlwe_vec G_y = G_bar_ctx.convolve(y_out_ctx_decomped);
         // DEBUG(std::cout << "y_out_ctx_decomped:\n";)
         // DEBUG(y_out_ctx_decomped.print();)
@@ -619,17 +621,20 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         // DEBUG(y_out_ctx.print();)
         // DEBUG(std::cout << "G_y:\n";)
         // DEBUG(G_y.print();)
-        rlwe_vec R_u = R_bar_ctx.convolve(u_reenc_ctx.decompose(v, d, power));
+        rlwe_decomp_vec u_reenc_ctx_decomped = u_reenc_ctx.decompose(v, d, power);
+        u_reenc_ctx_decomped.to_eval_form();
+        rlwe_vec R_u = R_bar_ctx.convolve(u_reenc_ctx_decomped);
         // DEBUG(std::cout << "u_reenc_ctx:\n";)
         // DEBUG(u_reenc_ctx.print();)
         // DEBUG(std::cout << "R_u:\n";)
         // DEBUG(R_u.print();)
         rlwe_vec x_cont_ctx_convolved = F_x + G_y + R_u;
-        x_cont_ctx_convolved.conv_to_coeff();
+        x_cont_ctx_convolved.to_coeff_form();
         rlwe_vec x_cont_old_ctx = x_cont_ctx;
         // DEBUG(std::cout << "x_cont_old_ctx:\n";)
         // DEBUG(x_cont_old_ctx.print();)
-        x_cont_ctx = x_cont_ctx_convolved.conv_to_nega(N);
+        // FIXME remove N from mod_cyclo
+        x_cont_ctx = x_cont_ctx_convolved.mod_cyclo(N);
 
         // Decrypt and capture controller state
         vector_bigz x_cont_ptx = enc.decrypt_rlwe_vec(x_cont_ctx);

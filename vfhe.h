@@ -415,27 +415,14 @@ public:
 
 
     poly convolve(const poly& other) const {
-        // FIXME n_coeffs differs when first poly is in NTT form
-        ASSERT(n_coeffs() == 2 * other.n_coeffs());
         // NOTE rgsw mats should already be converted to NTT form
         assert(isNTT);
-
+        assert(other.isNTT);
         size_t n = N_;
         poly a(2 * n);
-        for (size_t i = 0; i < 2 * n; i++)
-            a.set(i, get(i));
-
-        poly b(2 * n);
-        for (size_t i = 0; i < n; i++)
-            b.set(i, other.get(i));
-        arr_u128 psi_pows = get_rou_pows(TWO_ROU);
-        ntt_iter(b, psi_pows);
-
-        for (size_t i = 0; i < 2 * N_; i++) {
-            a.set(i, (a.get(i) * b.get(i)) % FIELD_MODULUS);
-        }
+        for (size_t i = 0; i < 2 * N_; i++)
+            a.set(i, (get(i) * other.get(i)) % FIELD_MODULUS);
         a.isNTT = true;
-
         return a;
     }
     poly nega_ntt(const poly& other) const {
@@ -449,10 +436,10 @@ public:
             b.set(i, other.get(i));
         }
 
-        bigz INV_2ROU = pow_constexpr(TWO_ROU, FIELD_MODULUS - 2, FIELD_MODULUS);
-        bigz INV_N = pow_constexpr(N_, FIELD_MODULUS - 2, FIELD_MODULUS);
-        arr_u128 psi_pows = get_rou_pows(TWO_ROU);
-        arr_u128 psi_inv_pows = get_rou_pows(INV_2ROU);
+        static const bigz INV_2ROU = pow_constexpr(TWO_ROU, FIELD_MODULUS - 2, FIELD_MODULUS);
+        static const bigz INV_N = pow_constexpr(N_, FIELD_MODULUS - 2, FIELD_MODULUS);
+        static const arr_u128 psi_pows = get_rou_pows(TWO_ROU);
+        static const arr_u128 psi_inv_pows = get_rou_pows(INV_2ROU);
         ntt_iter1(a, psi_pows);
         ntt_iter1(b, psi_pows);
         for (size_t i = 0; i < N_; i++) {
@@ -462,7 +449,7 @@ public:
         return a;
     }
 
-    poly conv_to_ntt() {
+    poly to_eval_form() {
         ASSERT(isNTT == false);
         size_t n = n_coeffs();
         // NOTE constructor zero-initialises
@@ -470,12 +457,12 @@ public:
         for (size_t i = 0; i < n; i++) {
             a.set(i, get(i));
         }
-        arr_u128 psi_pows = get_rou_pows(TWO_ROU);
+        static const arr_u128 psi_pows = get_rou_pows(TWO_ROU);
         ntt_iter(a, psi_pows);
         a.isNTT = true;
         return a;
     }
-    poly conv_to_coeff() {
+    poly to_coeff_form() {
         ASSERT(isNTT == true);
         size_t n = n_coeffs();
         // NOTE constructor zero-initialises
@@ -483,9 +470,9 @@ public:
         for (size_t i = 0; i < n; i++) {
             a.set(i, get(i));
         }
-        bigz INV_2ROU = pow_constexpr(TWO_ROU, FIELD_MODULUS - 2, FIELD_MODULUS);
-        arr_u128 psi_inv_pows = get_rou_pows(INV_2ROU);
-        bigz INV_2N = pow_constexpr(2 * N_, FIELD_MODULUS - 2, FIELD_MODULUS);
+        static const bigz INV_2ROU = pow_constexpr(TWO_ROU, FIELD_MODULUS - 2, FIELD_MODULUS);
+        static const arr_u128 psi_inv_pows = get_rou_pows(INV_2ROU);
+        static const bigz INV_2N = pow_constexpr(2 * N_, FIELD_MODULUS - 2, FIELD_MODULUS);
         intt_iter(a, psi_inv_pows, INV_2N);
         a.isNTT = false;
         assert(a.get(n - 1) == 0);
@@ -511,7 +498,7 @@ public:
         res.set(n - 1, conv.get(n - 1));
         return res;
     }
-    auto conv_to_nega(size_t N) const {
+    auto mod_cyclo(size_t N) const {
         TIMING(timing.calls_conv_to_nega += 1;)
         // ASSERT(n_coeffs() == 2 * N - 1);
         size_t conv_degree = n_coeffs() - 1;
@@ -625,6 +612,12 @@ public:
     size_t n_coeffs() const {
         return get_poly(0).size();
     }
+    void to_eval_form() {
+        for (size_t i = 0; i < n_polys(); i++) {
+            poly x = get_poly(i).to_eval_form();
+            set(i, x);
+        }
+    }
 };
 
 class hashed_rlwe_decomp_vec : public array1d<hashed_rlwe_decomp, hashed_rlwe_decomp_vec> {
@@ -683,6 +676,10 @@ public:
             hash.set(i, get(i).get_hash(eval_pows));
         }
         return hash;
+    }
+    void to_eval_form() {
+        for (size_t i = 0; i < n_rlwe_decomps(); i++)
+            get_rlwe_decomp(i).to_eval_form();
     }
 };
 
@@ -791,22 +788,22 @@ public:
         }
         return polys;
     }
-    auto conv_to_nega(size_t N) const {
+    auto mod_cyclo(size_t N) const {
         rlwe conv(N_POLYS_IN_RLWE);
         for (size_t i = 0; i < N_POLYS_IN_RLWE; i++) {
-            poly p = get_poly(i).conv_to_nega(N);
+            poly p = get_poly(i).mod_cyclo(N);
             conv.set(i, p);
         }
         return conv;
     }
-    void conv_to_ntt() {
+    void to_eval_form() {
         for (size_t i = 0; i < N_POLYS_IN_RLWE; i++) {
-            set(i, get_poly(i).conv_to_ntt());
+            set(i, get_poly(i).to_eval_form());
         }
     }
-    void conv_to_coeff() {
+    void to_coeff_form() {
         for (size_t i = 0; i < N_POLYS_IN_RLWE; i++) {
-            set(i, get_poly(i).conv_to_coeff());
+            set(i, get_poly(i).to_coeff_form());
         }
     }
 };
@@ -874,17 +871,17 @@ public:
             decomps.set(i, get_rlwe(i).decompose(v, d, power));
         return decomps;
     }
-    auto conv_to_nega(size_t N) const {
+    auto mod_cyclo(size_t N) const {
         rlwe_vec conv(n_rlwes());
         for (size_t i = 0; i < n_rlwes(); i++) {
-            rlwe r = get_rlwe(i).conv_to_nega(N);
+            rlwe r = get_rlwe(i).mod_cyclo(N);
             conv.set(i, r);
         }
         return conv;
     }
-    void conv_to_coeff() const {
+    void to_coeff_form() const {
         for (size_t i = 0; i < n_rlwes(); i++) {
-            get_rlwe(i).conv_to_coeff();
+            get_rlwe(i).to_coeff_form();
         }
     }
 };
@@ -1033,9 +1030,9 @@ public:
         return res;
     }
 
-    void conv_to_ntt() {
+    void to_eval_form() {
         for (size_t i = 0 ; i < n_rlwes(); i++)
-            get_rlwe(i).conv_to_ntt();
+            get_rlwe(i).to_eval_form();
     }
 
     using array1d<rlwe, rgsw>::pow;
@@ -1273,9 +1270,11 @@ public:
     }
     rlwe_vec convolve(const rlwe_decomp_vec& other) const {
         ASSERT(n_cols() == other.size());
-        ASSERT(N_ == other.n_coeffs()); // FIXME
-
-        rlwe_vec res(n_rows(), n_polys(), 2 * n_coeffs());
+        // ASSERT(N_ == other.n_coeffs()); // FIXME
+        ASSERT(n_coeffs() == 2 * N_);
+        // std::cout << "\n\nInside rgsw_mat::convolve\n  n_coeffs(): " << n_coeffs() << ", other.n_coeffs(): " << other.n_coeffs() << "\n\n";
+        // exit(0);
+        rlwe_vec res(n_rows(), n_polys(), n_coeffs());
         for (size_t i = 0; i < n_rows(); i++) {
             rlwe sum(n_polys(), 2 * N_); // FIXME
             for (size_t j = 0; j < n_cols(); j++) {
@@ -1302,10 +1301,10 @@ public:
         }
         return res;
     }
-    void conv_to_ntt() {
+    void to_eval_form() {
         for (size_t row = 0; row < n_rows(); row++) {
             for (size_t col = 0; col < n_cols(); col++) {
-                get_rgsw(row, col).conv_to_ntt();
+                get_rgsw(row, col).to_eval_form();
             }
         }
     }

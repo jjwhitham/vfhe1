@@ -32,10 +32,10 @@ void test_rlwe() {
     rlwe prod2 = rg * ctx.decompose(v, d, power);
 
     // // /* ### negacyclic convolution ### */
-    // rg.conv_to_ntt();
+    // rg.to_eval_form();
     // rlwe prod = rg.convolve(ctx.decompose(v, d, power));
-    // prod.conv_to_coeff();
-    // prod2 = prod.conv_to_nega(N);
+    // prod.to_coeff_form();
+    // prod2 = prod.mod_cyclo(N);
 
     bigz prod_dec = enc.decrypt_rlwe(prod2).get(0);
     std::cout << "prod decrypted: "

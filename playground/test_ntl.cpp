@@ -11,7 +11,7 @@
 
 using namespace NTL;
 
-void conv_to_nega() {
+void mod_cyclo() {
 
 }
 

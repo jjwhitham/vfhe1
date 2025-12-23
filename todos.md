@@ -8,24 +8,26 @@
 | Verify | \(su_k, r_G y_k \\ g^{s u_k}, g^{r_G y_k}\) | veri_vec_scalar * rlwe_vec, rgsw_vec * rlwe_vec \(\\\)  rlwe_vec.pow()
 
 ##### TODO
-- [x] simplify pow1() NOTE can't
-- [ ] operator+: confirm this doesn't accumulate
-- [ ] should accumulate:
-    - [x] veri_vec_scalar * rgsw_mat -> rgsw_vec
+- [ ] Integrate MLC
+  - [ ] Get MLC in the quickest way possible: Do exps in G1
+  - [ ] Update existing code to flatten hashed RLWEs (use 2m/2n dim for r_i/s)
+    - [ ]
 
-    - [x] veri_vec_scalar * rlwe_vec -> rlwe
-    - [x] veri_vec_scalar.pow(rlwe_vec)->rlwe
+- [ ] Write performant code
+  - [ ] Fix redundant NTTs: convert x, y, u_re to eval form once
+    - [ ] Use more distinctive names: mod_cyclo(), convert_to_eval/eval_form, coeff_form
+    - [ ] Remove excessive copying
+  - [ ] Compare MCL against BLST and others
+  - [ ] Allocate all variables upfront and mutate them across time
+    - [ ] Q: How for NTL & MCL?
+  - [ ] Investigate increasing stack size and performing everything on stack
+  - [ ] Experiment: Fastest scalars - MCL or NTL?
 
-    - [x] rgsw_vec * rlwe_decomp_vec -> rlwe
-    - [x] rgsw_vec.pow(rlwe_decomp_vec)->rlwe (needs group mult)
+- [ ] Start new codebase (called vHEctrl? vHE? VEctlr?)
+  - [ ] If NTL > MCL: Use NTL ZZ for ints ZZX for polys
+  - [ ] Make design decision: vec_ZZX for rlwe and std::vector<vec_ZZX>, vecs of vecs of vec_ZZX etc. to make compound types, or just have vec_ZZX and std::vector<vec_ZZX> as the core 1d/2d arrays of polys, with everything else just aliasing these...
 
-    - [x] rgsw_mat * rlwe_decomp_vec -> rlwe_vec
-- [ ] rgsw_vec
-- [x] this.pow() should take underying poly elements and do \(g^{element}\)
-- [ ] group multiplication
-- [ ] standard mult requires (mod q)
-
-###### TODO later
-- [ ] decomp func
-- [ ] PRNG
-- [ ] enc/dec
+###### TODO future
+- [ ] Build with CMake
+- [ ] Add simple testing (Ctest? Might be from Google)
+- [ ] Investigate hardware acceleration options
