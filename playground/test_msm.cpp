@@ -13,108 +13,198 @@
 using namespace mcl::bn;
 
 int main(int argc, char **argv) {
-	size_t n_threads = 16;
+    size_t n_threads = 16;
     std::cout << "n_threads = " << n_threads << "\n";
 
-	// defaults
-	size_t N = 8192; // number of base points
-	size_t M = 40;  // number of scalar vectors to apply
+    // defaults
+    size_t N = 8192; // number of base points
+    size_t M = 300;  // number of scalar vectors to apply
 
-	if (argc > 1) N = std::stoul(argv[1]);
-	if (argc > 2) M = std::stoul(argv[2]);
+    if (argc > 1) N = std::stoul(argv[1]);
+    if (argc > 2) M = std::stoul(argv[2]);
 
-	// Initialize curve / pairing (sets params for G1/G2/Fr)
-	initPairing(BN_SNARK1);
+    // Initialize curve / pairing (sets params for G1/G2/Fr)
+    initPairing(BN_SNARK1);
     std::cout << "|Fp| = " << mcl::Fp::getBitSize() << "\n";
     std::cout << "|Fr| = " << mcl::Fr::getBitSize() << "\n";
-	// Prepare base points P
-	std::vector<G1> P; P.reserve(N);
-	for (size_t i = 0; i < N; ++i) {
-		G1 p;
-		hashAndMapToG1(p, std::string("P_") + std::to_string(i));
-		P.push_back(p);
-	}
+    // Prepare base points P
+    std::vector<G1> P; P.reserve(N);
+    for (size_t i = 0; i < N; ++i) {
+        G1 p;
+        hashAndMapToG1(p, std::string("P_") + std::to_string(i));
+        P.push_back(p);
+    }
 
-	// Create T: powers of t multiplied by G1's generator, i.e. (tP, (t^2)P, ..., (t^{N-1})P)
-	Fr t = 42;
-	Fr t_pow = 1;
-	std::vector<G1> T;
-	T.reserve(N);
-	G1 Generator;
-	bool use_random_gen = false;
-	if (use_random_gen) {
-		Fr s;
-		s.setByCSPRNG();
-		hashAndMapToG1(Generator, std::string("P_") + s.getStr());
-	} else {
-		int gen_seed = 0;
-		hashAndMapToG1(Generator, std::string("P_") + std::to_string(gen_seed));
-	}
-	G1 tpowGen = Generator;
-	for (size_t i = 0; i < N; i++) {
-		// procedural style
-		G1::mul(tpowGen, tpowGen, t);
-		// alternative declarative/functional style
-		tpowGen *= t;
+    // Set a generator
+    G1 Generator;
+    bool use_random_gen = false;
+    if (use_random_gen) {
+        Fr s;
+        s.setByCSPRNG();
+        hashAndMapToG1(Generator, std::string("P_") + s.getStr());
+    } else {
+        int gen_seed = 0;
+        hashAndMapToG1(Generator, std::string("P_") + std::to_string(gen_seed));
+    }
+    // Create T: powers of t multiplied by G1's generator, i.e. (P, tP, (t^2)P, ..., (t^{N-1})P)
+    std::vector<G1> T;
+    T.reserve(N);
+    G1 tpowGen = Generator;
+    Fr t = 42;
+    for (size_t i = 0; i < N; i++) {
+        // procedural style
+        // G1::mul(tpowGen, tpowGen, t);
+        // alternative declarative/functional style
+        tpowGen *= t;
 
-		T.push_back(tpowGen);
-	}
+        T.push_back(tpowGen);
+    }
 
 
-	// Prepare M scalar vectors (each length N)
-	std::vector<std::vector<Fr>> scalars; scalars.reserve(M);
-	for (size_t i = 0; i < M; ++i) {
-		scalars.emplace_back();
-		scalars.back().reserve(N);
-		for (size_t j = 0; j < N; ++j) {
-			Fr s; s.setByCSPRNG();
-			scalars.back().push_back(s);
-		}
-	}
+    // Prepare M scalar vectors (each length N)
+    std::vector<std::vector<Fr>> scalars;
+    scalars.reserve(M);
+    for (size_t i = 0; i < M; ++i) {
+        scalars.emplace_back();
+        scalars.back().reserve(N);
+        for (size_t j = 0; j < N; ++j) {
+            Fr s; s.setByCSPRNG();
+            scalars.back().push_back(s);
+        }
+    }
 
-	// Benchmark optimized multi-scalar (G1::mulVec)
-	{
-		G1 out;
-		auto t0 = std::chrono::high_resolution_clock::now();
-		for (size_t i = 0; i < M; ++i) {
-			G1::mulVec(out, T.data(), scalars[i].data(), N);
-		}
-		auto t1 = std::chrono::high_resolution_clock::now();
-		double secs = std::chrono::duration<double>(t1 - t0).count();
-		std::cout << "mulVec: " << M << " MSMs of size " << N << " in " << secs << " s, "
-							<< (M / secs) << " ops/s\n";
-	}
+    // Measurements:
+    // TODO exps in G1
+    {
+        G1 gen1;
+        int gen_seed = 0;
+        hashAndMapToG1(gen1, std::string("P_") + std::to_string(gen_seed));
+        std::vector<G1> P1;
+        // Prepare M scalar vectors (each length N)
+        P1.reserve(N);
+        auto t0 = std::chrono::high_resolution_clock::now();
+        for (size_t i = 0; i < N; ++i) {
+            gen1 *= scalars[0][i];
+        }
+        auto t1 = std::chrono::high_resolution_clock::now();
+        double secs = std::chrono::duration<double>(t1 - t0).count();
+        std::cout << "G1 exps: " << N << " mults of aG1 in " << secs << " s, "
+                            << (N / secs) << " ops/s\n";
+    }
+    // TODO exps in G2
+    {
+        G2 gen2;
+        int gen_seed = 0;
+        hashAndMapToG2(gen2, std::string("P_") + std::to_string(gen_seed));
+        std::vector<G2> P2;
+        P2.reserve(N);
+        // Prepare M scalar vectors (each length N)
+        auto t0 = std::chrono::high_resolution_clock::now();
+        for (size_t i = 0; i < N; ++i) {
+            gen2 *= scalars[0][i];
+        }
+        auto t1 = std::chrono::high_resolution_clock::now();
+        double secs = std::chrono::duration<double>(t1 - t0).count();
+        std::cout << "G2 exps: " << N << " mults of aG2 in " << secs << " s, "
+                            << (N / secs) << " ops/s\n";
+    }
+    // TODO exps in GT
+    {
+    	G1 gen1;
+    	G2 gen2;
+    	int gen_seed = 0;
+    	hashAndMapToG1(gen1, std::string("P_") + std::to_string(gen_seed));
+    	hashAndMapToG2(gen2, std::string("P_") + std::to_string(gen_seed));
 
-	// Benchmark multi-threaded mulVecMT (auto threads)
-	{
-		G1 out;
-		auto t0 = std::chrono::high_resolution_clock::now();
-		for (size_t i = 0; i < M; ++i) {
-			G1::mulVecMT(out, T.data(), scalars[i].data(), N, n_threads);
-		}
-		auto t1 = std::chrono::high_resolution_clock::now();
-		double secs = std::chrono::duration<double>(t1 - t0).count();
-		std::cout << "mulVecMT: " << M << " MSMs of size " << N << " in " << secs << " s, "
-							<< (M / secs) << " ops/s\n";
-	}
+        // TODO what other ways to initialise GT? How to create a generator?
+        GT gT;
+        pairing(gT, gen1, gen2);
+        // Prepare M scalar vectors (each length N)
+        auto t0 = std::chrono::high_resolution_clock::now();
+        for (size_t i = 0; i < N; ++i) {
+            GT::pow(gT, gT, scalars[0][i]);
+        }
+        auto t1 = std::chrono::high_resolution_clock::now();
+        double secs = std::chrono::duration<double>(t1 - t0).count();
+        std::cout << "GT exps: " << N << " exps of gT^a in " << secs << " s, "
+                            << (N / secs) << " ops/s\n";
+    }
 
-	// Benchmark naive approach: per-scalar multiplication then add
-	{
-		G1 out;
-		auto t0 = std::chrono::high_resolution_clock::now();
-		for (size_t i = 0; i < M; ++i) {
-			out.clear();
-			for (size_t j = 0; j < N; ++j) {
-				G1 tmp;
-				G1::mul(tmp, T[j], scalars[i][j]);
-				out += tmp;
-			}
-		}
-		auto t1 = std::chrono::high_resolution_clock::now();
-		double secs = std::chrono::duration<double>(t1 - t0).count();
-		std::cout << "naive: " << M << " MSMs of size " << N << " in " << secs << " s, "
-							<< (M / secs) << " ops/s\n";
-	}
 
-	return 0;
+    // DONE pairings in GT
+    {
+    	G1 gen1;
+    	G2 gen2;
+    	GT out;
+    	int gen_seed = 0;
+    	hashAndMapToG1(gen1, std::string("P_") + std::to_string(gen_seed));
+    	hashAndMapToG2(gen2, std::string("P_") + std::to_string(gen_seed));
+    	std::vector<G1> P1;
+    	std::vector<G2> P2;
+    	// Prepare M scalar vectors (each length N)
+    	P1.reserve(M);
+    	P2.reserve(M);
+    	for (size_t i = 0; i < M; ++i) {
+    		P1.push_back(gen1 * scalars[i][0]);
+    		P2.push_back(gen2 * scalars[i][1]);
+    	}
+    	auto t0 = std::chrono::high_resolution_clock::now();
+    	for (size_t i = 0; i < M; ++i) {
+    		pairing(out, P1[i], P2[i]);
+    	}
+    	auto t1 = std::chrono::high_resolution_clock::now();
+    	double secs = std::chrono::duration<double>(t1 - t0).count();
+    	std::cout << "pairing: " << M << " pairings of e(aP, bQ) in " << secs << " s, "
+    						<< (M / secs) << " ops/s\n";
+    }
+
+    // Benchmark optimized multi-scalar (G1::mulVec)
+    // mulVec: 140 MSMs of size 8192 in 6.29867 s, 22.2269 ops/s - 16 threads
+    {
+    	G1 out;
+    	auto t0 = std::chrono::high_resolution_clock::now();
+    	for (size_t i = 0; i < M; ++i) {
+    		G1::mulVec(out, T.data(), scalars[i].data(), N);
+    	}
+    	auto t1 = std::chrono::high_resolution_clock::now();
+    	double secs = std::chrono::duration<double>(t1 - t0).count();
+    	std::cout << "mulVec: " << M << " MSMs of size " << N << " in " << secs << " s, "
+    						<< (M / secs) << " ops/s\n";
+    }
+
+    // Benchmark multi-threaded mulVecMT (auto threads)
+    // mulVecMT: 140 MSMs of size 8192 in 0.878884 s, 159.293 ops/s - 16 threads
+    {
+    	G1 out;
+    	auto t0 = std::chrono::high_resolution_clock::now();
+    	for (size_t i = 0; i < M; ++i) {
+    		G1::mulVecMT(out, T.data(), scalars[i].data(), N, n_threads);
+    	}
+    	auto t1 = std::chrono::high_resolution_clock::now();
+    	double secs = std::chrono::duration<double>(t1 - t0).count();
+    	std::cout << "mulVecMT: " << M << " MSMs of size " << N << " in " << secs << " s, "
+    						<< (M / secs) << " ops/s\n";
+    }
+
+    // Benchmark naive approach: per-scalar multiplication then add
+    // naive: 140 MSMs of size 8192 in 35.3093 s, 3.96496 ops/s  - 16 threads
+    {
+    	G1 out;
+    	auto t0 = std::chrono::high_resolution_clock::now();
+    	for (size_t i = 0; i < M; ++i) {
+    		out.clear();
+    		for (size_t j = 0; j < N; ++j) {
+    			G1 tmp;
+    			G1::mul(tmp, T[j], scalars[i][j]);
+    			out += tmp;
+    		}
+    	}
+    	auto t1 = std::chrono::high_resolution_clock::now();
+    	double secs = std::chrono::duration<double>(t1 - t0).count();
+    	std::cout << "naive: " << M << " MSMs of size " << N << " in " << secs << " s, "
+    						<< (M / secs) << " ops/s\n";
+    }
+
+
+    return 0;
 }
