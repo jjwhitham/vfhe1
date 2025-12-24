@@ -270,13 +270,7 @@ G1 pow_(G1 base, bigz power) { //, bigz mod) {
     // TODO mutate me
     G1 result = base;
     // mpz_powm(result.get_mpz_t(), base.get_mpz_t(), power.get_mpz_t(), mod.get_mpz_t());
-    // TODO convert power to Fr
-    // TODO mutate me (static Fr..)
     Fr power1 = mpz_to_new_Fr(power);
-
-    // TODO perform exponentiation
     result = base * power1;
-    // TODO convert result to bigz
-
     return result;
 }

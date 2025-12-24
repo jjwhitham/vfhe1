@@ -167,22 +167,22 @@ public:
         }
         return res;
     }
-    // TODO might need to change bigz to either bigz or U (if bigz & bigz required)
-    Derived group_mult(const bigz& scalar) const {
-        size_t N = size();
-        Derived res(N);
-        for (size_t i = 0; i < N; i++) {
-            T val;
-            if constexpr (std::is_same_v<T, bigz>) {
-                throw std::runtime_error("Derived group_mult(Derived): Received a bigz arg!\n");
-                // val = group_mult_(get(i) * scalar, GROUP_MODULUS);
-            } else {
-                val = get(i).group_mult(scalar);
-            }
-            res.set(i, val);
-        }
-        return res;
-    }
+    // // TODO might need to change bigz to either bigz or U (if bigz & bigz required)
+    // Derived group_mult(const bigz& scalar) const {
+    //     size_t N = size();
+    //     Derived res(N);
+    //     for (size_t i = 0; i < N; i++) {
+    //         T val;
+    //         if constexpr (std::is_same_v<T, bigz>) {
+    //             throw std::runtime_error("Derived group_mult(Derived): Received a bigz arg!\n");
+    //             // val = group_mult_(get(i) * scalar, GROUP_MODULUS);
+    //         } else {
+    //             val = get(i).group_mult(scalar);
+    //         }
+    //         res.set(i, val);
+    //     }
+    //     return res;
+    // }
     Derived operator+(const Derived& other) const {
         size_t N = size();
         Derived res(N);
@@ -783,7 +783,7 @@ public:
         arr_g[i] = val;
     }
     using int_rlwe::group_mult;
-    hashed_rlwe group_mult(hashed_rlwe other) {
+    hashed_rlwe group_mult(const hashed_rlwe& other) const {
         hashed_rlwe res(N_POLYS_IN_RLWE);
         for (size_t i = 0; i < N_POLYS_IN_RLWE; i++) {
             res.set_g(i, get_g(i) + other.get_g(i));
@@ -1519,7 +1519,6 @@ private:
         {-0.0615, -0.0492, -0.0322, -0.0077, -0.0084}
     };
 
-    // FIXME needs to be mapped from negative to [0,q)
     // ======== Scale up G, R, and H to integers ========
     array2d<bigz> scalar_mat_mult(double scalar, matrix_double& mat, bigz q, size_t rows, size_t cols) {
         array2d<bigz> result(rows, cols);
@@ -1527,11 +1526,11 @@ private:
             for (size_t j = 0; j < cols; j++) {
                 mpf_class rounded = scalar * mat[i][j];
                 rounded = mpf_round(rounded);
-                bigz modded;
+                bigz modded = (bigz)rounded; // = (rounded < 0) ? (bigz)(q + rounded) : (bigz)rounded;
                 if (rounded < 0)
                     modded = q + rounded;
-                else
-                    modded = rounded;
+                // else
+                //     modded = rounded;
                 result.set(i, j, modded);
             }
         }
@@ -1632,9 +1631,6 @@ public:
         {0, 0, 0, 1, 0},
         {0, 0, 0, 0, 1}
     };
-
-
-
 
     // ======== Plant and Controller initial state ========
     vector_double x_plant_init = {
