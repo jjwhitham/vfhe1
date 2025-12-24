@@ -5,11 +5,16 @@
 #include <string>
 #include <algorithm>
 #include <chrono>
-#include "gmpxx.h"
+#include <gmpxx.h>
+
+#include "serialisation.hpp"
+#include "/home/jw/Projects/mcl/include/mcl/bn.hpp"
+
+using namespace mcl::bn;
 
 typedef mpz_class bigz;
 typedef long int u32; // FIXME - why signed? Rationalise usage across code
-u32 N_DECOMP = 2;
+u32 N_DECOMP = 7;
 constexpr size_t N_ = 4096;
 
 #ifdef TIMING_ON
@@ -64,11 +69,11 @@ inline times_and_counts timing = { 0 };
 // constexpr bigz TWO_ROU = 9;
 
 // N = 2^12, log q = 54.00000000000197 (55 bit prime)
-bigz GROUP_MODULUS = 540431955285196831;
-bigz GENERATOR = 1073741824;
-bigz FIELD_MODULUS = 18014398509506561;
-bigz NTH_ROU = 5194839201355896;
-bigz TWO_ROU = 9455140237568613;
+// bigz GROUP_MODULUS = 540431955285196831;
+// bigz GENERATOR = 1073741824;
+// bigz FIELD_MODULUS = 18014398509506561;
+// bigz NTH_ROU = 5194839201355896;
+// bigz TWO_ROU = 9455140237568613;
 /*
 bigz GROUP_MODULUS("898846567431158003760658660800415388695860588403194539336418\
 3815501945595841537012838580057296239271804947467115111499650941742633115916727\
@@ -94,7 +99,7 @@ bigz GENERATOR("4516690346444892428005324399985509466774242146852912703800039069
 // root_2nth = 197302210312744933010843010704445784068657690384188106020011018676818793232
 // root_2nth_inv = 10150407646632095964976043332470470774111901718625076075560248572110916115913
 
-/*
+G1 Generator;
 bigz NTH_ROU("4158865282786404163413953114870269622875596290766033564087307867933865333818");
 bigz TWO_ROU("197302210312744933010843010704445784068657690384188106020011018676818793232");
 
@@ -102,6 +107,7 @@ bigz FIELD_MODULUS("\
 21888242871839275222246405745257275088548364400416034343698204186575808495617\
 ");
 
+/*
 bigz GROUP_MODULUS("\
 4392772178269698779249497429153895261004854964304840660916201900668102392172522\
 1753506683946649357502593478121301839448793513559065189266328303293304961319897\
@@ -260,9 +266,11 @@ mpf_class mpf_round(const mpf_class &x) {
 }
 
 // base case binary modular exponentiation
-bigz pow_(bigz base, bigz power, bigz mod) {
-    bigz result = 1;
-    // TODO should we just mutate base?
-    mpz_powm(result.get_mpz_t(), base.get_mpz_t(), power.get_mpz_t(), mod.get_mpz_t());
+G1 pow_(G1 base, bigz power) { //, bigz mod) {
+    // TODO mutate me
+    G1 result = base;
+    // mpz_powm(result.get_mpz_t(), base.get_mpz_t(), power.get_mpz_t(), mod.get_mpz_t());
+    Fr power1 = mpz_to_new_Fr(power);
+    result = base * power1;
     return result;
 }

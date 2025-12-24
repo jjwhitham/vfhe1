@@ -27,6 +27,8 @@
   - [ ] If NTL > MCL: Use NTL ZZ for ints ZZX for polys
   - [ ] Make design decision: vec_ZZX for rlwe and std::vector<vec_ZZX>, vecs of vecs of vec_ZZX etc. to make compound types, or just have vec_ZZX and std::vector<vec_ZZX> as the core 1d/2d arrays of polys, with everything else just aliasing these...
 
+The classes Vec<ZZ_p> (a.k.a., vec_ZZ_p), Mat<ZZ_p> (a.k.a., mat_ZZ_p), and ZZ_pX represent vectors, matrices, and polynomials mod p, and work much the same way as the corresponding classes for ZZ.
+
 ###### TODO future
 - [ ] Build with CMake
 - [ ] Add simple testing (Ctest? Might be from Google)

@@ -28,7 +28,9 @@ bigz mod_sub(const bigz& x, const bigz& y) {
 
 // NOTE no more constexpr goodness (for now) due to heap allocated bigz
 bigz pow_constexpr(bigz base, bigz power, bigz mod) {
-    return pow_(base, power, mod);
+    bigz result;
+    mpz_powm(result.get_mpz_t(), base.get_mpz_t(), power.get_mpz_t(), mod.get_mpz_t());
+    return result;
 }
 
 
@@ -188,7 +190,7 @@ void ntt_recursive_(span_u128 x, bigz nth_root_unity) {
         w[i] = (w[i - 1] * nth_root_unity) % FIELD_MODULUS;
     auto x_even = x.subspan(0, half);
     auto x_odd = x.subspan(half, half);
-    nth_root_unity = pow_(nth_root_unity, 2, FIELD_MODULUS);
+    nth_root_unity = pow_constexpr(nth_root_unity, 2, FIELD_MODULUS);
     ntt_recursive_(x_even, nth_root_unity);
     ntt_recursive_(x_odd, nth_root_unity);
     for (size_t i = 0; i < half; i++) {

@@ -77,7 +77,7 @@ public:
     void check_value_bounds(const T& val) const {
         if constexpr (std::is_same_v<T, bigz>) {
             bigz min_val = 0;
-            bigz max_val = GROUP_MODULUS - 1;
+            bigz max_val = FIELD_MODULUS - 1;
             if (val < min_val || val > max_val) {
             // if (val > max_val) {
                 throw std::out_of_range(
@@ -148,9 +148,8 @@ public:
         }
         return res;
     }
-    bigz group_mult_(bigz& a, const bigz& b) const {
-        bigz res = a * b;
-        return mod_(res, GROUP_MODULUS);
+    G1 group_mult_(G1& a, const G1& b) const {
+        return a + b;
     }
     Derived group_mult(const Derived& other) const {
         size_t N = size();
@@ -158,6 +157,8 @@ public:
         for (size_t i = 0; i < N; i++) {
             T val;
             if constexpr (std::is_same_v<T, bigz>) {
+                throw std::runtime_error("Derived group_mult(Derived): Received a bigz arg!\n");
+            } else if constexpr (std::is_same_v<T, G1>) {
                 val = group_mult_(get(i), other.get(i));
             } else {
                 val = get(i).group_mult(other.get(i));
@@ -166,21 +167,22 @@ public:
         }
         return res;
     }
-    // TODO might need to change bigz to either bigz or U (if bigz & bigz required)
-    Derived group_mult(const bigz& scalar) const {
-        size_t N = size();
-        Derived res(N);
-        for (size_t i = 0; i < N; i++) {
-            T val;
-            if constexpr (std::is_same_v<T, bigz>) {
-                val = group_mult_(get(i) * scalar, GROUP_MODULUS);
-            } else {
-                val = get(i).group_mult(scalar);
-            }
-            res.set(i, val);
-        }
-        return res;
-    }
+    // // TODO might need to change bigz to either bigz or U (if bigz & bigz required)
+    // Derived group_mult(const bigz& scalar) const {
+    //     size_t N = size();
+    //     Derived res(N);
+    //     for (size_t i = 0; i < N; i++) {
+    //         T val;
+    //         if constexpr (std::is_same_v<T, bigz>) {
+    //             throw std::runtime_error("Derived group_mult(Derived): Received a bigz arg!\n");
+    //             // val = group_mult_(get(i) * scalar, GROUP_MODULUS);
+    //         } else {
+    //             val = get(i).group_mult(scalar);
+    //         }
+    //         res.set(i, val);
+    //     }
+    //     return res;
+    // }
     Derived operator+(const Derived& other) const {
         size_t N = size();
         Derived res(N);
@@ -213,11 +215,12 @@ public:
         size_t N = size();
         Derived res(N);
         if constexpr (std::is_same_v<T, bigz>) {
-            for (size_t i = 0; i < N; i++) {
-                auto val = pow_(get(i), other.get(i), GROUP_MODULUS);
-                res.set(i, val);
-            }
-            return res;
+            throw std::runtime_error("Derived group_mult(Derived): Received a bigz arg!\n");
+            // for (size_t i = 0; i < N; i++) {
+            //     auto val = pow_(get(i), other.get(i), GROUP_MODULUS);
+            //     res.set(i, val);
+            // }
+            // return res;
         } else {
             for (size_t i = 0; i < N; i++) {
                 auto val = get(i).pow(other.get(i));
@@ -231,11 +234,12 @@ public:
         size_t N = size();
         Derived res(N);
         if constexpr (std::is_same_v<T, bigz>) {
-            for (size_t i = 0; i < N; i++) {
-                auto val = pow_(scalar, get(i), GROUP_MODULUS);
-                res.set(i, val);
-            }
-            return res;
+            throw std::runtime_error("Derived group_mult(Derived): Received a bigz arg!\n");
+            // for (size_t i = 0; i < N; i++) {
+            //     auto val = pow_(scalar, get(i), GROUP_MODULUS);
+            //     res.set(i, val);
+            // }
+            // return res;
         } else {
             for (size_t i = 0; i < N; i++) {
                 auto val = get(i).pow(scalar);
@@ -249,11 +253,12 @@ public:
         size_t N = size();
         Derived res(N);
         if constexpr (std::is_same_v<T, bigz>) {
-            for (size_t i = 0; i < N; i++) {
-                auto val = pow_(GENERATOR, get(i), GROUP_MODULUS);
-                res.set(i, val);
-            }
-            return res;
+            throw std::runtime_error("Derived group_mult(Derived): Received a bigz arg!\n");
+            // for (size_t i = 0; i < N; i++) {
+            //     auto val = pow_(GENERATOR, get(i), GROUP_MODULUS);
+            //     res.set(i, val);
+            // }
+            // return res;
         } else {
             for (size_t i = 0; i < N; i++) {
                 auto val = get(i).pow();
@@ -517,42 +522,96 @@ public:
     }
 };
 
+// class hashed_a_poly_g : public array1d<G1, hashed_a_poly_g> {
+
+// };
+
+// TODO add pow() which raises (multiplies) grp_poly::set(i) Generator by get(i)
+// TODO
+// TODO
+// TODO
+// TODO
+// TODO
+// TODO
 class hashed_a_poly : public array1d<bigz, hashed_a_poly> {
+    using grp_poly = std::vector<G1>;
 private:
+    grp_poly arr_g;
 public:
+    // using grp_poly = array1d<G1, hashed_a_poly_g>;
     hashed_a_poly() : array1d<bigz, hashed_a_poly>() {}
-    hashed_a_poly(size_t n_hashed_a_coeffs) : array1d<bigz, hashed_a_poly>(n_hashed_a_coeffs) {
-        for (size_t i = 0; i < n_hashed_a_coeffs; i++)
+    hashed_a_poly(size_t n_hashed_a_coeffs) : array1d<bigz, hashed_a_poly>(n_hashed_a_coeffs), arr_g(n_hashed_a_coeffs) {
+        for (size_t i = 0; i < n_hashed_a_coeffs; i++) {
             set(i, 0);
+            arr_g[i] = Generator * 0;
+        }
     }
-    auto& get_hashed_a_coeff(size_t n) const {
-        return get(n);
+    // auto& get_hashed_a_coeff(size_t n) const {
+    //     return get(n);
+    // }
+    // size_t n_hashed_a_coeffs() const {
+    //     return size();
+    // }
+    G1 get_g(size_t i) const {
+        return arr_g[i];
     }
-    size_t n_hashed_a_coeffs() const {
-        return size();
+    void set_g(size_t i, G1 val) {
+        arr_g[i] = val;
     }
-    bigz get_hash_sec(const poly& other) const {
+    using int_poly = array1d<bigz, hashed_a_poly>;
+    using int_poly::pow;
+    // This gets called when setting up keys. Raise (mult) Gen to get(i)
+    hashed_a_poly pow() {
+        hashed_a_poly res(size());
+        for (size_t i = 0; i < size(); i++) {
+            res.set_g(i, pow_(get_g(i), get(i)));
+        }
+        // return *this;
+        return res;
+    }
+    G1 get_hash_sec(const poly& other) const {
         TIMING(auto start = std::chrono::high_resolution_clock::now();)
         TIMING(timing.calls_get_hash_sec += 1;)
         // HACK get around gr having hashed_a_polys of length 2n-1, but x_nega_ only length n
         // ASSERT(size() == other.size() || size() == (2 * other.size() - 1));
-        bigz result = 1;
-        std::array<bigz, N_THREADS> partials;
-        for (size_t t = 0; t < N_THREADS; t++) partials[t] = 1;
-        #pragma omp parallel for num_threads(N_THREADS)
-        for (size_t i = 0; i < other.size(); i++) {
-            int tid = omp_get_thread_num();
-            partials[tid] = group_mult_(partials[tid], pow_(get(i), other.get(i), GROUP_MODULUS));
-            // mpz_powm(res.get_mpz_t(), res.get_mpz_t(), exp.get_mpz_t(), GROUP_MODULUS.get_mpz_t());
-            // partials[tid] = group_mult_(partials[tid], mpz_powm(get(i)., other.get(i));
+        // bigz result = 1;
+        // std::array<bigz, N_THREADS> partials;
+        // for (size_t t = 0; t < N_THREADS; t++) partials[t] = 1;
+        // #pragma omp parallel for num_threads(N_THREADS)
+        // for (size_t i = 0; i < other.size(); i++) {
+        //     int tid = omp_get_thread_num();
+        //     partials[tid] = group_mult_(partials[tid], pow_(get(i), other.get(i), GROUP_MODULUS));
+        // }
+        // for (size_t t = 0; t < N_THREADS; t++) {
+        //     result = group_mult_(result, partials[t]);
+        // }
+
+        // TODO is it okay to do the whole loop from i = 0? Check G1 init code
+        G1 result = pow_(arr_g[0], other.get(0));
+        for (size_t i = 1; i < other.size(); i++) {
+            result += pow_(arr_g[i], other.get(i));
         }
-        for (size_t t = 0; t < N_THREADS; t++) {
-            result = group_mult_(result, partials[t]);
-        }
+
         TIMING(auto end = std::chrono::high_resolution_clock::now();)
         TIMING(timing.get_hash_sec += end - start;)
         return result;
     }
+    // // TODO write concrete logic
+    // using grp_poly::operator*;
+    // hashed_a_poly operator*(const G1& scalar) const {
+    //     grp_poly::set(0, Generator * 1);        /* no-op */ }
+    // using grp_poly::operator+;
+    // hashed_a_poly operator+(const G1& scalar) const { /* no-op */ }
+    // using grp_poly::operator-;
+    // hashed_a_poly operator-(const G1& scalar) const { /* no-op */ }
+    // using grp_poly::pow;
+    // // TODO update pow logic here
+
+    // // we keep these
+    // using int_poly::operator*;
+    // using int_poly::operator+;
+    // using int_poly::operator-;
+    // // using int_poly::pow;
 };
 
 inline auto poly::get_hash_a(vector_bigz& eval_pows) const {
@@ -704,22 +763,53 @@ public:
 };
 
 class hashed_rlwe : public array1d<bigz, hashed_rlwe> {
+    using int_rlwe = array1d<bigz, hashed_rlwe>;
+    using grp_rlwe = std::vector<G1>;
 private:
+    grp_rlwe arr_g;
 public:
     // NOTE hashed_rlwe always has two hashed_polys
     hashed_rlwe() : array1d<bigz, hashed_rlwe>() {}
-    hashed_rlwe(size_t n_hashed_polys) : array1d<bigz, hashed_rlwe>(n_hashed_polys) {
+    hashed_rlwe(size_t n_hashed_polys) : array1d<bigz, hashed_rlwe>(n_hashed_polys), arr_g(n_hashed_polys) {
         ASSERT(n_hashed_polys == N_POLYS_IN_RLWE);
+        for (size_t i = 0; i < n_hashed_polys; i++) {
+            arr_g[i] = Generator * 0; // FIXME using `* 1' to be sure it's a copy
+        }
     }
-    auto& get_hashed_poly(size_t n) const {
-        return get(n);
+    G1 get_g(size_t i) const {
+        return arr_g[i];
     }
+    void set_g(size_t i, G1 val) {
+        arr_g[i] = val;
+    }
+    using int_rlwe::group_mult;
+    hashed_rlwe group_mult(const hashed_rlwe& other) const {
+        hashed_rlwe res(N_POLYS_IN_RLWE);
+        for (size_t i = 0; i < N_POLYS_IN_RLWE; i++) {
+            res.set_g(i, get_g(i) + other.get_g(i));
+        }
+        return res;
+    }
+    // This gets called when setting up keys. Raise (mult) Gen to get(i)
+    using int_rlwe::pow;
+    hashed_rlwe pow() {
+        hashed_rlwe res(N_POLYS_IN_RLWE);
+        for (size_t i = 0; i < size(); i++) {
+            res.set_g(i, pow_(arr_g[i], get(i)));
+        }
+        return res;
+        // return *this;
+    }
+    // auto& get_hashed_poly(size_t n) const {
+    //     return get(n);
+    // }
     size_t n_hashed_polys() const {
         return size();
     }
     void set_coeffs_to_one() {
         for (size_t i = 0; i < size(); i++) {
             set(i, 1);
+            set_g(i, Generator * 0);
         }
     }
 };
@@ -918,7 +1008,7 @@ public:
             hashed_rlwe& res = res_vec.get(i);
             for (size_t j = 0; j < n_hashed_a_polys(); j++) {
                 auto val = get(i).get(j).get_hash_sec(other.get(i));
-                res.set(j, val);
+                res.set_g(j, val);
             }
         }
 
@@ -962,8 +1052,8 @@ public:
             // FIXME a bit hacky - obj.pow(scalar) is scalar^obj, do we need obj^scalar???
             hashed_rlwe& res = res_vec.get(i);
             for (size_t j = 0; j < n_hashed_polys(); j++) {
-                auto val = pow_(get(i).get(j), (other.get(i)), GROUP_MODULUS);
-                res.set(j, val);
+                auto val = pow_(get(i).get_g(j), (other.get(i)));
+                res.set_g(j, val);
             }
         }
 
@@ -1429,7 +1519,6 @@ private:
         {-0.0615, -0.0492, -0.0322, -0.0077, -0.0084}
     };
 
-    // FIXME needs to be mapped from negative to [0,q)
     // ======== Scale up G, R, and H to integers ========
     array2d<bigz> scalar_mat_mult(double scalar, matrix_double& mat, bigz q, size_t rows, size_t cols) {
         array2d<bigz> result(rows, cols);
@@ -1437,11 +1526,11 @@ private:
             for (size_t j = 0; j < cols; j++) {
                 mpf_class rounded = scalar * mat[i][j];
                 rounded = mpf_round(rounded);
-                bigz modded;
+                bigz modded = (bigz)rounded; // = (rounded < 0) ? (bigz)(q + rounded) : (bigz)rounded;
                 if (rounded < 0)
                     modded = q + rounded;
-                else
-                    modded = rounded;
+                // else
+                //     modded = rounded;
                 result.set(i, j, modded);
             }
         }
@@ -1480,9 +1569,9 @@ public:
         s(10000.0),
         L(10000.0),
         r(10000.0),
-        p(GROUP_MODULUS),
+        p(42),
         q(FIELD_MODULUS),
-        g(GENERATOR),
+        g(42),
         F(F_.size(), F_.at(0).size()),
         G_bar(scalar_mat_mult(s, G, q, G.size(), G.at(0).size())),
         R_bar(scalar_mat_mult(s, R, q, R.size(), R.at(0).size())),
@@ -1542,9 +1631,6 @@ public:
         {0, 0, 0, 1, 0},
         {0, 0, 0, 0, 1}
     };
-
-
-
 
     // ======== Plant and Controller initial state ========
     vector_double x_plant_init = {

@@ -2,8 +2,7 @@
 // TODO should the buff_to_xyz funcs do the memset, or should the caller?
 #pragma once
 
-#include "shared.h"
-#include <gmpxx.h>
+// #include "shared.h"
 #include <NTL/ZZ.h>
 #include <NTL/ZZ_p.h>
 #include <gmpxx.h>
@@ -11,8 +10,8 @@
 // #include <mcl/bn.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 
-static constexpr size_t BITS_256 = 256;
-static constexpr size_t N_BYTES_256_BITS = 32;
+static constexpr size_t _256_BITS = 256;
+static constexpr size_t N_BYTES_256_BITS = _256_BITS / 8;
 static uint8_t BUF[N_BYTES_256_BITS] = { 0 };
 static constexpr int ORDER = -1; // least significant word ordering
 static constexpr int ENDIAN = -1; // little endian
@@ -87,13 +86,15 @@ void mpz_to_buff(uint8_t* buf, size_t* n_write, const mpz_class& in) {
     uint8_t* ret_ptr = nullptr;
     ret_ptr = (uint8_t*)mpz_export((void*)buf, n_write, ORDER, WORD_SIZE, ENDIAN, NAILS, in.get_mpz_t());
 
-    if (ret_ptr == nullptr)
-        std::cout << "mpz_to_buff: ret_ptr = nullptr";
-    else if (ret_ptr == BUF)
-        std::cout << "mpz_to_buff: ret_ptr points to BUF";
-    else
-        std::cout << "mpz_to_buff: ret_ptr points to something else (GMP allocator?), ret_ptr = " << ret_ptr << "\n";
-    std::cout << *n_write << " Bytes written to the buffer\n";
+    // if (ret_ptr == nullptr)
+    //     std::cout << "mpz_to_buff: ret_ptr = nullptr\n";
+    // else if (ret_ptr == BUF)
+    //     std::cout << "mpz_to_buff: ret_ptr points to BUF\n";
+    // else {
+    //     std::cout << "mpz_to_buff: ret_ptr points to something else (GMP allocator?), ret_ptr = " << ret_ptr << "\n";
+    //     throw std::runtime_error("Aborting...\n");
+    // }
+    // std::cout << *n_write << " Bytes written to the buffer\n";
 }
 
 void ntl_to_buff(uint8_t* buf, long* n_write, const ZZ& in) {
@@ -129,7 +130,7 @@ void buff_to_mpz(mpz_class& out, size_t n_read, const uint8_t* buf) {
 }
 
 void buff_to_ntl(ZZ_p& out, size_t n_read, const uint8_t* buf) {
-    static ZZ tmp(INIT_SIZE, BITS_256); // Allocate once
+    static ZZ tmp(INIT_SIZE, _256_BITS); // Allocate once
     ZZFromBytes(tmp, buf, n_read);
     conv(out, tmp);
 }

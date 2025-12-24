@@ -4,6 +4,9 @@
 #include "ntt.h"
 #include <ranges>
 #include <iomanip>
+#include "/home/jw/Projects/mcl/include/mcl/bn.hpp"
+
+using namespace mcl::bn;
 
 
 vector_bigz eval_poly_pows(size_t n, bigz base, bigz q) {
@@ -192,7 +195,7 @@ Proof compute_proof(
             hashed_rlwe hash_rl(N_POLYS_IN_RLWE);
             for (size_t j = 0; j < N_POLYS_IN_RLWE; j++) {
                 poly p = rl.get(j);
-                hash_rl.set(j, hash_a_poly.get_hash_sec(p));
+                hash_rl.set_g(j, hash_a_poly.get_hash_sec(p));
             }
             res = res.group_mult(hash_rl);
         }
@@ -292,9 +295,9 @@ void verify_with_lin_and_dyn_checks(
     // DEBUG(G_1_.print();)
     // DEBUG(std::cout << "\n";)
     for (size_t i = 0; i < 2; i++) {
-        assert(pow_(G_1.get(i), rho, GROUP_MODULUS) == G_1_.get(i));
-        assert(pow_(G_2.get(i), alpha, GROUP_MODULUS) == G_2_.get(i));
-        assert(pow_(G_3.get(i), gamma, GROUP_MODULUS) == G_3_.get(i));
+        assert(pow_(G_1.get_g(i), rho) == G_1_.get_g(i));
+        assert(pow_(G_2.get_g(i), alpha) == G_2_.get_g(i));
+        assert(pow_(G_3.get_g(i), gamma) == G_3_.get_g(i));
     }
 
     // Dynamics check
@@ -302,7 +305,7 @@ void verify_with_lin_and_dyn_checks(
     hashed_rlwe gsu = su.pow();
     hashed_rlwe rhs_u = G_3.group_mult(g_1);
     for (size_t i = 0; i < 2; i++)
-        assert(gsu.get(i) == rhs_u.get(i));
+        assert(gsu.get_g(i) == rhs_u.get_g(i));
 
     hashed_rlwe rhs = G_2.group_mult(g_1);
     hashed_rlwe rGy = vec_dot_prod_enc(rG, y, eval_pows, v, d, power);
@@ -312,7 +315,7 @@ void verify_with_lin_and_dyn_checks(
     hashed_rlwe grRu = rRu.pow();
     rhs = rhs.group_mult(grRu);
     for (size_t i = 0; i < 2; i++)
-        assert(G_1.get(i) == rhs.get(i));
+        assert(G_1.get_g(i) == rhs.get_g(i));
 }
 
 vector_double mat_vec_mult(const matrix_double& mat, const vector_double& vec) {
@@ -841,6 +844,12 @@ int main() {
     // omp_set_nested(1);
     TIMING(auto start = std::chrono::high_resolution_clock::now();)
 
+    initPairing(BN_SNARK1);
+    std::cout << "|Fp| = " << mcl::Fp::getBitSize() << "\n";
+    std::cout << "|Fr| = " << mcl::Fr::getBitSize() << "\n";
+
+    int gen_seed = 0;
+    hashAndMapToG1(Generator, std::string("P_") + std::to_string(gen_seed));
     run_control_loop(vars, timing);
 
     #ifdef TIMING_ON
