@@ -95,6 +95,7 @@ public:
     rlwe encrypt_rlwe(const poly& m) {
         poly noise = sample_noise_polynomial(N);
         poly a = sample_random_polynomial(N, q);
+        // TODO s stored in eval form, so NTT(a), res = a * s, iNTT(res)
         poly ask = a * sk;
 
         poly b = m + noise + ask;
@@ -151,11 +152,11 @@ public:
         for (size_t i = 1; i < d; i++)
             v_powers[i] = v_powers[i - 1] * v % FIELD_MODULUS;
 
-        // Build G matrix: 2d x 2, each col is [v_powers, 0...], [0..., v_powers]
+        // Build (2x2d) G matrix: with rows: [v_powers, 0...], [0..., v_powers]
         rgsw G(2 * d, N_POLYS_IN_RLWE, N);
         for (size_t i = 0; i < d; i++) {
-            G.get_rlwe(i).get_poly(0).set(0, M.get(0) * v_powers[i]);
-            G.get_rlwe(i + d).get_poly(1).set(0, M.get(0) * v_powers[i]);
+            G.get_rlwe(i).get_poly(0).set(0, mod_(M.get(0) * v_powers[i], FIELD_MODULUS));
+            G.get_rlwe(i + d).get_poly(1).set(0, mod_(M.get(0) * v_powers[i], FIELD_MODULUS));
         }
 
         // for (size_t i = 0; i < 2 * d; i++) {
@@ -178,6 +179,7 @@ public:
             encs_of_zero.set(i, encrypt_rlwe(zero_poly));
 
         rgsw res = G + encs_of_zero;
+        // res.check();
         return res;
     }
     // takes an array2d<bigz> and returns an encrypted rgsw_mat
@@ -189,7 +191,8 @@ public:
             for (size_t j = 0; j < cols; j++) {
                 poly p(N);
                 // Set only the poly's constant coeff
-                p.set(0, mod_(mat.get(i, j), FIELD_MODULUS));
+                bigz val = mat.get(i, j);
+                p.set(0, mod_(val, FIELD_MODULUS));
                 rgsw enc_rgsw = encrypt_rgsw(p);
                 res.set(i, j, enc_rgsw);
             }
@@ -198,38 +201,20 @@ public:
     }
 
     // Encodes an RGSW plaintext (not encryption, just encoding)
-    rgsw encode_rgsw(const poly& M) const {
+    flat_rgsw encode_flat_rgsw(const poly& M0, const poly& M1) const {
         // Compute v powers: v^0, v^1, ..., v^{d-1}
         vector_bigz v_powers(d);
-        for (size_t i = 0; i < d; i++) {
-            v_powers[i] = 1;
-            for (size_t j = 0; j < i; j++) {
-                v_powers[i] *= v;
-                v_powers[i] = mod_(v_powers[i], q);
-            }
-        }
-
-        // Build G matrix: 2 x 2d, each row is [v_powers, 0...], [0..., v_powers]
-        std::vector<vector_bigz> G(2, vector_bigz(2 * d, 0));
-        for (size_t i = 0; i < d; i++) {
-            G[0][i] = v_powers[i];
-            G[1][d + i] = v_powers[i];
+        v_powers[0] = 1;
+        for (size_t i = 1; i < d; i++) {
+            v_powers.at(i) = v * v_powers.at(i - 1);
+            v_powers.at(i) = mod_(v_powers.at(i), q);
         }
 
         // Create rgsw object
-        rgsw res(2 * d, 2, N);
-        for (size_t j = 0; j < 2 * d; j++) {
-            rlwe ct(2, N);
-            for (size_t row = 0; row < 2; ++row) {
-                poly p(N);
-                for (size_t i = 0; i < N; i++) {
-                    bigz val = G[row][j] * M.get(i);
-                    val = mod_(val, q);
-                    p.set(i, val);
-                }
-                ct.set(row, p);
-            }
-            res.set(j, ct);
+        flat_rgsw res(2 * d, N);
+        for (size_t j = 0; j < d; j++) {
+            res.set(j, M0 * v_powers.at(j));
+            res.set(j + d, M1 * v_powers.at(j));
         }
         return res;
     }

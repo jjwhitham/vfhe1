@@ -7,7 +7,17 @@
 #include "/home/jw/Projects/mcl/include/mcl/bn.hpp"
 
 using namespace mcl::bn;
-
+// TODO add to veri_vec
+auto vec_dot_prod = [](const vector_bigz& vec, const hashed_rlwe_vec& hvec) -> bigz {
+    ASSERT(vec.size() == 2 * hvec.size());
+    bigz sum = 0;
+    for (size_t i = 0; i < hvec.size(); i++) {
+        for (size_t j = 0; j < N_POLYS_IN_RLWE; j++) {
+            sum += hvec.get(i).get(j) * vec[2 * i + j];
+        }
+    }
+    return mod_(sum, FIELD_MODULUS);
+};
 
 vector_bigz eval_poly_pows(size_t n, bigz base, bigz q) {
     vector_bigz res(n);
@@ -49,39 +59,50 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key> compute_eval_and_veri_keys(
     std::vector<hashed_a_poly> gr_rho_0 = convert_vec_to_cyclic_a(scalar_vec_mult(rho_0, r_0, q), eval_pows); // Example for first element
     std::vector<hashed_a_poly> gr_rho_1 = convert_vec_to_cyclic_a(scalar_vec_mult(rho_1, r_1, q), eval_pows);
 
-    // Anonymous function for vector-matrix multiplication: vector_bigz * rgsw_mat
-    auto vec_mat_mult = [](const vector_bigz& vec, const rgsw_mat& mat) -> rgsw_vec {
-        size_t rows = mat.n_rows();
-        size_t cols = mat.n_cols();
-        ASSERT(vec.size() == rows);
-        rgsw_vec res(cols, mat.n_rlwes(), mat.n_polys(), mat.n_coeffs());
-        for (size_t j = 0; j < cols; j++) {
-            rgsw sum(mat.n_rlwes(), mat.n_polys(), mat.n_coeffs());
-            for (size_t i = 0; i < rows; i++) {
-                sum = sum + (mat.get(i, j) * vec[i]);
-            }
-            res.set(j, sum);
-        }
-        return res;
-    };
 
-    hashed_a_rgsw_vec rF_0 = vec_mat_mult(r_0, F_ctx).get_hash_a(eval_pows);
-    hashed_a_rgsw_vec rF_1 = vec_mat_mult(r_1, F_ctx).get_hash_a(eval_pows);
 
+    // auto get_hash_a = [](const vector_bigz& eval_pows, const flattened_rgsw_vec& flat_rgsw_vec) {
+    //     size_t n_rgsws = flat_rgsw_vec.size();
+    //     size_t n_polys = flat_rgsw_vec.at(0).size();
+    //     size_t n_coeffs = flat_rgsw_vec.at(0).at(0).n_coeffs();
+    //     hashed_a_rgsw_vec res(n_rgsws, n_polys, n_coeffs);
+    //     for (size_t i = 0; i < n_rgsws; i++) {
+    //         hashed_a_rgsw& rg = res.get(i);
+    //         for (size_t j = 0; j < n_polys; j++) {
+    //             hashed_a_poly p = flat_rgsw_vec.at(i).at(j).get_hash_a(eval_pows);
+    //             rg.set(j, p);
+    //         }
+    //     }
+    //     return res;
+    // };
+
+    hashed_a_rgsw_vec rF_0 = F_ctx.vec_mat_mult(r_0).get_hash_a(eval_pows);
+    hashed_a_rgsw_vec rF_1 = F_ctx.vec_mat_mult(r_1).get_hash_a(eval_pows);
+    ASSERT(rF_1.n_hashed_a_polys() == (size_t)(2 * d));
+    ASSERT(rF_1.n_hashed_a_rgsws() == F_ctx.n_cols());
     // Make rgsw_vec for r_0 and r_1
     size_t n_hashed_a_coeffs = eval_pows.size() / 2;
-    hashed_a_rgsw_vec r_0_rgsw(r_0.size(), N_POLYS_IN_RLWE * d, N_POLYS_IN_RLWE, n_hashed_a_coeffs);
-    hashed_a_rgsw_vec r_1_rgsw(r_1.size(), N_POLYS_IN_RLWE * d, N_POLYS_IN_RLWE, n_hashed_a_coeffs);
-    for (size_t i = 0; i < r_0.size(); i++) {
-        poly p(N);
-        p.set(0, r_0[i]);
-        r_0_rgsw.set(i, enc.encode_rgsw(p).get_hash_a(eval_pows));
+    hashed_a_rgsw_vec r_0_rgsw(r_0.size() / 2, N_POLYS_IN_RLWE * d, n_hashed_a_coeffs);
+    hashed_a_rgsw_vec r_1_rgsw(r_1.size() / 2, N_POLYS_IN_RLWE * d, n_hashed_a_coeffs);
+    for (size_t i = 0; i < r_0.size() / 2; i++) {
+        // std::cout << "r_0.size(): " << r_0.size() << "\n";
+        // for (auto& el : r_0)
+        //     std::cout << el << " ";
+        // std::cout << "\n";
+        poly p0(N);
+        poly p1(N);
+        p0.set(0, r_0[2 * i]);
+        p1.set(0, r_0[2 * i + 1]);
+        r_0_rgsw.set(i, enc.encode_flat_rgsw(p0, p1).get_hash_a(eval_pows));
     }
-    for (size_t i = 0; i < r_1.size(); i++) {
+    for (size_t i = 0; i < r_1.size() / 2; i++) {
         poly p(N);
-        p.set(0, r_1[i]);
-        r_1_rgsw.set(i, enc.encode_rgsw(p).get_hash_a(eval_pows));
+        poly p1(N);
+        p.set(0, r_1[2 * i]);
+        p1.set(0, r_1[2 * i + 1]);
+        r_1_rgsw.set(i, enc.encode_flat_rgsw(p, p1).get_hash_a(eval_pows));
     }
+    std::cout << "sizes: " << r_0_rgsw.size() << ", " << rF_0.size() << "\n";
     ASSERT(r_0_rgsw.size() == rF_0.size());
     // ASSERT(r_0_rgsw[0].rows() == rF_0[0].rows()); // FIXME
 
@@ -97,12 +118,12 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key> compute_eval_and_veri_keys(
     hashed_a_rgsw_vec grFr_alpha_0 = (rF_0_r_1 * alpha_1).pow();
     hashed_a_rgsw_vec grFr_alpha_1 = (rF_1_r_0 * alpha_0).pow();
 
-    hashed_rgsw_vec rG_0 = vec_mat_mult(r_0, G_bar_ctx).get_hash(eval_pows);
-    hashed_rgsw_vec rG_1 = vec_mat_mult(r_1, G_bar_ctx).get_hash(eval_pows);
-    hashed_rgsw_vec rR_0 = vec_mat_mult(r_0, R_bar_ctx).get_hash(eval_pows);
-    hashed_rgsw_vec rR_1 = vec_mat_mult(r_1, R_bar_ctx).get_hash(eval_pows);
+    hashed_rgsw_vec rG_0 = G_bar_ctx.vec_mat_mult(r_0).get_hash(eval_pows);
+    hashed_rgsw_vec rG_1 = G_bar_ctx.vec_mat_mult(r_1).get_hash(eval_pows);
+    hashed_rgsw_vec rR_0 = R_bar_ctx.vec_mat_mult(r_0).get_hash(eval_pows);
+    hashed_rgsw_vec rR_1 = R_bar_ctx.vec_mat_mult(r_1).get_hash(eval_pows);
 
-    hashed_a_rgsw_vec sH = vec_mat_mult(s, H_bar_ctx).get_hash_a(eval_pows);
+    hashed_a_rgsw_vec sH = H_bar_ctx.vec_mat_mult(s).get_hash_a(eval_pows);
 
     hashed_a_rgsw_vec sH_r_1(sH.size());
     hashed_a_rgsw_vec sH_r_0(sH.size());
@@ -181,34 +202,36 @@ Proof compute_proof(
     const hashed_a_rgsw_vec& grFr_alpha = ek.grFr_alpha;
     const hashed_a_rgsw_vec& gsHr_gamma = ek.gsHr_gamma;
 
-    // pow_() raises each element of the vector to the power of each element of the hashed_rlwe_decomp_vec
-    // and returns a hashed_rlwe
-    // TODO clean up
-    // TODO move to vfhe.h perhaps a new 'class hashed_a_poly_vec'
-    auto pow_ = [](const std::vector<hashed_a_poly>& vec, const rlwe_vec& rv) -> hashed_rlwe {
-        ASSERT(vec.size() == rv.size());
-        hashed_rlwe res(rv.n_polys());
-        res.set_coeffs_to_one();
-        for (size_t i = 0; i < vec.size(); i++) {
-            hashed_a_poly hash_a_poly = vec.at(i);
+    // TODO move to veri_vec
+    auto pow_ = [](const std::vector<hashed_a_poly>& veri_vec_g, const rlwe_vec& rv) -> G1 {
+        ASSERT(veri_vec_g.size() == 2 * rv.size());
+        G1 res;
+        res.clear();
+        for (size_t i = 0; i < rv.size(); i++) {
+        // for (size_t i = 0; i < veri_vec_g.size(); i++) {
             rlwe& rl = rv.get(i);
-            hashed_rlwe hash_rl(N_POLYS_IN_RLWE);
             for (size_t j = 0; j < N_POLYS_IN_RLWE; j++) {
-                poly p = rl.get(j);
-                hash_rl.set_g(j, hash_a_poly.get_hash_sec(p));
+                hashed_a_poly hash_a_poly = veri_vec_g.at(2 * i + j);
+                // hashed_a_poly hash_a_poly = veri_vec_g.at(i);
+                poly& p = rl.get(j);
+                // std::cout << p.size() << ", ";
+                res += hash_a_poly.get_hash_sec(p);
             }
-            res = res.group_mult(hash_rl);
+            std::cout << "\n";
         }
         return res;
     };
 
     rlwe_decomp_vec x_decomped = x.decompose(v, d, power);
+    std::cout << "above grx_\n";
     auto grx_ = pow_(gr, x_); // G_1
     auto grFrx = grFr.get_hash_sec(x_decomped); // G_2
     auto gsHrx = gsHr.get_hash_sec(x_decomped); // G_3
+    std::cout << "above gr_rho_x_\n";
     auto gr_rho_x_ = pow_(gr_rho, x_); // G_1_
     auto grFr_alpha_x = grFr_alpha.get_hash_sec(x_decomped); // G_2_
     auto gsHr_gamma_x = gsHr_gamma.get_hash_sec(x_decomped); // G_3_
+    std::cout << "above g_1\n";
     auto g_1 = pow_(gr, x_nega_); // g_1
 
     return Proof {
@@ -241,13 +264,13 @@ void verify_with_lin_and_dyn_checks(
     bigz gamma_1 = vk.gamma_1;
 
     // Unpack proofs
-    const hashed_rlwe& g_1 = old_proof.g_1;
-    const hashed_rlwe& G_1 = proof.grx_;
-    const hashed_rlwe& G_2 = proof.grFrx;
-    const hashed_rlwe& G_3 = proof.gsHrx;
-    const hashed_rlwe& G_1_ = proof.gr_rho_x_;
-    const hashed_rlwe& G_2_ = proof.grFr_alpha_x;
-    const hashed_rlwe& G_3_ = proof.gsHr_gamma_x;
+    const G1& g_1 = old_proof.g_1;
+    const G1& G_1 = proof.grx_;
+    const G1& G_2 = proof.grFrx;
+    const G1& G_3 = proof.gsHrx;
+    const G1& G_1_ = proof.gr_rho_x_;
+    const G1& G_2_ = proof.grFr_alpha_x;
+    const G1& G_3_ = proof.gsHr_gamma_x;
 
     // Select parameters based on k
     bigz rho, alpha, gamma;
@@ -263,25 +286,19 @@ void verify_with_lin_and_dyn_checks(
         gamma = gamma_0;
     }
 
-    auto vec_dot_prod = [](const vector_bigz& vec, const hashed_rlwe_vec& hvec) -> hashed_rlwe {
-        ASSERT(vec.size() == hvec.size());
-        hashed_rlwe sum(N_POLYS_IN_RLWE);
-        for (size_t i = 0; i < vec.size(); i++) {
-            sum = sum + hvec.get(i) * vec[i];
-        }
-        return sum;
-    };
-    auto vec_dot_prod_enc = [](const hashed_rgsw_vec& rgsw_v, const rlwe_vec& rlwe_v, const vector_bigz& eval_pows, u32 v, u32 d, u32 power) -> hashed_rlwe {
+
+    // TODO add to hashed_rgsw_vec
+    auto vec_dot_prod_enc = [](const hashed_rgsw_vec& rgsw_v, const rlwe_vec& rlwe_v, const vector_bigz& eval_pows, u32 v, u32 d, u32 power) -> bigz {
         ASSERT(rgsw_v.size() == rlwe_v.size());
-        hashed_rlwe sum(N_POLYS_IN_RLWE);
+        bigz sum = 0;
         for (size_t i = 0; i < rgsw_v.size(); i++) {
             // For each element, hash rlwe_v[i] and multiply by rgsw_v[i]
             auto hashed = rlwe_v.get(i).decompose(v, d, power).get_hash(eval_pows);
             for (size_t j = 0; j < hashed.size(); j++) {
-                sum = sum + rgsw_v.get(i).get(j) * hashed.get(j);
+                sum += rgsw_v.get(i).get(j) * hashed.get(j);
             }
         }
-        return sum;
+        return mod_(sum, FIELD_MODULUS);
     };
 
     // Linearity checks
@@ -294,28 +311,26 @@ void verify_with_lin_and_dyn_checks(
     // DEBUG(std::cout << "G_1_: ";)
     // DEBUG(G_1_.print();)
     // DEBUG(std::cout << "\n";)
-    for (size_t i = 0; i < 2; i++) {
-        assert(pow_(G_1.get_g(i), rho) == G_1_.get_g(i));
-        assert(pow_(G_2.get_g(i), alpha) == G_2_.get_g(i));
-        assert(pow_(G_3.get_g(i), gamma) == G_3_.get_g(i));
-    }
+    assert(pow_(G_1, rho) == G_1_);
+    assert(pow_(G_2, alpha) == G_2_);
+    assert(pow_(G_3, gamma) == G_3_);
 
     // Dynamics check
-    hashed_rlwe su = vec_dot_prod(s, u);
-    hashed_rlwe gsu = su.pow();
-    hashed_rlwe rhs_u = G_3.group_mult(g_1);
-    for (size_t i = 0; i < 2; i++)
-        assert(gsu.get_g(i) == rhs_u.get_g(i));
+    bigz su = vec_dot_prod(s, u);
+    std::cout << "verify: Gen: " << Generator << "\n";
+    G1 gsu = pow_(Generator, su);
+    G1 rhs_u = G_3 + g_1;
+    std::cout << "gsu: " << gsu << ", rhs_u: " << rhs_u << "\n";
+    assert(gsu == rhs_u);
 
-    hashed_rlwe rhs = G_2.group_mult(g_1);
-    hashed_rlwe rGy = vec_dot_prod_enc(rG, y, eval_pows, v, d, power);
-    hashed_rlwe grGy = rGy.pow();
-    rhs = rhs.group_mult(grGy);
-    hashed_rlwe rRu = vec_dot_prod_enc(rR, u_reenc, eval_pows, v, d, power);
-    hashed_rlwe grRu = rRu.pow();
-    rhs = rhs.group_mult(grRu);
-    for (size_t i = 0; i < 2; i++)
-        assert(G_1.get_g(i) == rhs.get_g(i));
+    G1 rhs = G_2 + g_1;
+    bigz rGy = vec_dot_prod_enc(rG, y, eval_pows, v, d, power);
+    G1 grGy = pow_(Generator, rGy);
+    rhs += grGy;
+    bigz rRu = vec_dot_prod_enc(rR, u_reenc, eval_pows, v, d, power);
+    G1 grRu = pow_(Generator, rRu);
+    rhs += grRu;
+    assert(G_1 == rhs);
 }
 
 vector_double mat_vec_mult(const matrix_double& mat, const vector_double& vec) {
@@ -386,14 +401,6 @@ void print_times_and_counts(times_and_counts& timing) {
 }
 
 void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
-    auto vec_dot_prod = [](const vector_bigz& vec, const hashed_rlwe_vec& hvec) -> hashed_rlwe {
-        ASSERT(vec.size() == hvec.size());
-        hashed_rlwe sum(N_POLYS_IN_RLWE);
-        for (size_t i = 0; i < vec.size(); i++) {
-            sum = sum + hvec.get(i) * vec[i];
-        }
-        return sum;
-    };
     // rounds half away from zero, e.g. 0.5 |-> 1 and -0.5 |-> -1
     auto round_vec = [](const vector_double& vec) -> vector_double {
         vector_double res(vec.size());
@@ -423,7 +430,6 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         }
         return res;
     };
-
 
     Params pms;
     DEBUG(std::cout << "*** START run_control_loop ***\n";)
@@ -455,8 +461,8 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     bigz gamma_1 = knowledge_exps.at(3);
     bigz rho_0 = knowledge_exps.at(4);
     bigz rho_1 = knowledge_exps.at(5);
-    size_t m = H_bar.n_rows();
-    size_t n = F.n_rows();
+    size_t m = 2 * H_bar.n_rows();
+    size_t n = 2 * F.n_rows();
     // TODO Params should sample
     auto verification_vectors = pms.sample_verification_vectors(m, n, from, to_inclusive);
     vector_bigz r_0 = verification_vectors.at(0);
@@ -486,7 +492,6 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     rgsw_mat H_bar_ctx = enc.encrypt_rgsw_mat(H_bar);
     rlwe_vec x_cont_ctx = enc.encrypt_rlwe_vec(x_cont);
     rlwe_vec x_cont_ctx_convolved(x_cont_ctx);
-
     #ifdef DEBUG1_ON
         DEBUG1(sk = vector_bigz({0, 0});)
     #endif
@@ -509,8 +514,9 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     H_bar_ctx.to_eval_form();
 
     auto x_cont_ctx_hashed = x_cont_ctx.get_hash(eval_pows);
-    auto rx_0 = vec_dot_prod(r_1, x_cont_ctx_hashed);
-    auto g1 = rx_0.pow();
+    // TODO move to veri_vec
+    bigz rx_0 = vec_dot_prod(r_1, x_cont_ctx_hashed);
+    G1 g1 = pow_(Generator, rx_0);
     Proof old_proof {};
     old_proof.g_1 = g1;
 
@@ -553,6 +559,7 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
 
 
         /* ### Controller: Compute output ### */
+        // x_cont_ctx.check();
         rlwe_decomp_vec x_cont_ctx_decomped = x_cont_ctx.decompose(v, d, power);
         // DEBUG(std::cout << "x_cont_ctx_decomped:\n";)
         // DEBUG(x_cont_ctx_decomped.print();)
@@ -844,12 +851,15 @@ int main() {
     // omp_set_nested(1);
     TIMING(auto start = std::chrono::high_resolution_clock::now();)
 
+    // std::cout << "main: Gen: " << Generator << "\n";
     initPairing(BN_SNARK1);
     std::cout << "|Fp| = " << mcl::Fp::getBitSize() << "\n";
     std::cout << "|Fr| = " << mcl::Fr::getBitSize() << "\n";
 
-    int gen_seed = 0;
+    std::cout << "main: Gen: " << Generator << "\n";
+    int gen_seed = 42;
     hashAndMapToG1(Generator, std::string("P_") + std::to_string(gen_seed));
+    std::cout << "main: Gen: " << Generator << "\n";
     run_control_loop(vars, timing);
 
     #ifdef TIMING_ON

@@ -15,7 +15,7 @@ using namespace mcl::bn;
 typedef mpz_class bigz;
 typedef long int u32; // FIXME - why signed? Rationalise usage across code
 u32 N_DECOMP = 7;
-constexpr size_t N_ = 4096;
+constexpr size_t N_ = 4096; // FIXME segfaults if not 4096
 
 #ifdef TIMING_ON
 #  define TIMING(x) x
@@ -99,6 +99,7 @@ bigz GENERATOR("4516690346444892428005324399985509466774242146852912703800039069
 // root_2nth = 197302210312744933010843010704445784068657690384188106020011018676818793232
 // root_2nth_inv = 10150407646632095964976043332470470774111901718625076075560248572110916115913
 
+// G1 Generator = getG1basePoint();
 G1 Generator;
 bigz NTH_ROU("4158865282786404163413953114870269622875596290766033564087307867933865333818");
 bigz TWO_ROU("197302210312744933010843010704445784068657690384188106020011018676818793232");
@@ -164,13 +165,13 @@ using vector_double = std::vector<mpf_class>;
 using vector_bigz = std::vector<bigz>;
 
 // FIXME make types __uint128 so that regular modding works
-bigz& mod_(bigz& val, const bigz& q) {
-    // bigz ret(val);
-    val %= q;
-    // if (val < 0) {
-    //     val += q;
-    // }
-    return val;
+bigz mod_(const bigz& val, const bigz& q) {
+    bigz ret = val;
+    ret %= q;
+    if (ret < 0) {
+        ret += q;
+    }
+    return ret;
 }
 
 std::string i128str(__uint128_t n) {
@@ -215,15 +216,17 @@ void print_vector_double_old(const std::vector<double>& vec) {
     std::cout << "\n";
 }
 
-char* mpf_str(mpf_class m) {
+std::string mpf_str(mpf_class m) {
     int size = 10000;
     char* buf = new char[size];
     buf[size - 1] = '\0';
-    int ret = gmp_sprintf(buf, "%Zd", m.get_mpf_t());
+    int ret = gmp_sprintf(buf, "%Ff", m.get_mpf_t());
     if (ret > size - 1 || ret < 0) {
         throw std::runtime_error("Buffer overflow in mpf_str");
     }
-    return buf;
+    std::string s(buf);
+    delete[] buf;
+    return s;
 }
 
 void print_vector_double(const vector_double& vec) {
@@ -233,7 +236,7 @@ void print_vector_double(const vector_double& vec) {
     std::cout << "\n";
 }
 
-char* print_to_string_mpz(bigz m) {
+std::string print_to_string_mpz(bigz m) {
     int size = 10000;
     char* buf = new char[size];
     buf[size - 1] = '\0';
@@ -241,7 +244,9 @@ char* print_to_string_mpz(bigz m) {
     if (ret > size - 1 || ret < 0) {
         throw std::runtime_error("Buffer overflow in print_to_string_mpz");
     }
-    return buf;
+    std::string s(buf);
+    delete[] buf;
+    return s;
 }
 
 void print_vector_mpz(const vector_bigz& vec) {
