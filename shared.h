@@ -14,8 +14,8 @@ using namespace mcl::bn;
 
 typedef mpz_class bigz;
 typedef long int u32; // FIXME - why signed? Rationalise usage across code
-u32 N_DECOMP = 7;
-constexpr size_t N_ = 4096;
+u32 N_DECOMP = 5;
+constexpr size_t N_ = 4096; // FIXME gsu != rhs_u if 2048
 
 #ifdef TIMING_ON
 #  define TIMING(x) x
@@ -47,6 +47,145 @@ typedef struct {
 // NOTE inline keyword for structs allows the struct to be used in multiple
 // translation units without causing linker errors
 inline times_and_counts timing = { 0 };
+
+// G1 Generator = getG1basePoint();
+G1 Generator;
+bigz NTH_ROU("4158865282786404163413953114870269622875596290766033564087307867933865333818");
+bigz TWO_ROU("197302210312744933010843010704445784068657690384188106020011018676818793232");
+
+bigz FIELD_MODULUS("\
+21888242871839275222246405745257275088548364400416034343698204186575808495617\
+");
+
+
+size_t N_POLYS_IN_RLWE = 2;
+using matrix_double = std::vector<std::vector<mpf_class>>;
+using vector_double = std::vector<mpf_class>;
+using vector_bigz = std::vector<bigz>;
+
+bigz mod_(bigz val, const bigz& q) {
+    if (val < 0 || val >= FIELD_MODULUS)
+        val %= q;
+    if (val < 0) {
+        val += q;
+    }
+    return val;
+}
+
+std::string i128str(__uint128_t n) {
+    if (n == 0) {
+        return "0";
+    }
+    // bool neg = false;
+    // if (n < 0) {
+    //     neg = true;
+    //     n = -n;
+    // }
+    std::string buf;
+    while (n > 0) {
+        buf += '0' + (n % 10);
+        n /= 10;
+    }
+    // if (neg) buf += '-';
+    std::reverse(buf.begin(), buf.end());
+    return buf;
+}
+vector_bigz scalar_vec_mult(const bigz& scalar, const vector_bigz& vec, const bigz& q) {
+    vector_bigz result(vec.size());
+    for (size_t i = 0; i < vec.size(); i++) {
+        // copy vec
+        result[i] = scalar * bigz(vec[i]);
+        result[i] = mod_(result[i], q);
+    }
+    return result;
+};
+
+void print_vector_i128(const std::vector<__uint128_t>& vec) {
+    for (const auto& val : vec) {
+        std::cout << i128str(val) << ", ";
+    }
+    std::cout << "\n";
+}
+
+void print_vector_double_old(const std::vector<double>& vec) {
+    for (const auto& val : vec) {
+        std::cout << val << ", ";
+    }
+    std::cout << "\n";
+}
+
+std::string mpf_str(mpf_class m) {
+    int size = 10000;
+    char* buf = new char[size];
+    buf[size - 1] = '\0';
+    int ret = gmp_sprintf(buf, "%Ff", m.get_mpf_t());
+    if (ret > size - 1 || ret < 0) {
+        throw std::runtime_error("Buffer overflow in mpf_str");
+    }
+    std::string s(buf);
+    delete[] buf;
+    return s;
+}
+
+void print_vector_double(const vector_double& vec) {
+    for (const auto& val : vec) {
+        std::cout << mpf_str(val) << ", ";
+    }
+    std::cout << "\n";
+}
+
+std::string print_to_string_mpz(bigz m) {
+    int size = 10000;
+    char* buf = new char[size];
+    buf[size - 1] = '\0';
+    int ret = gmp_sprintf(buf, "%Zd", m.get_mpz_t());
+    if (ret > size - 1 || ret < 0) {
+        throw std::runtime_error("Buffer overflow in print_to_string_mpz");
+    }
+    std::string s(buf);
+    delete[] buf;
+    return s;
+}
+
+void print_vector_mpz(const vector_bigz& vec) {
+    for (const auto& val : vec) {
+        std::cout << print_to_string_mpz(val) << ", ";
+    }
+    std::cout << "\n";
+}
+// TODO types and move somewhere
+// Returns floor(log2(x))
+double log2_mpz(const bigz& x) {
+    if (x == 0) return -1; // or throw/handle as needed
+    return static_cast<double>(mpz_sizeinbase(x.get_mpz_t(), 2) - 1);
+}
+
+mpf_class mpf_round(const mpf_class &x) {
+    const mpf_class half("-0.5");
+    if (x >= -1)
+        return floor(x + half);   // correct for non-negative values
+    else
+        return ceil(x - half);    // correct for negative values
+}
+
+G1 pow_(const G1& base, const bigz& power) {
+    assert(power >= 0);
+    // assert(power < FIELD_MODULUS);
+    static Fr power1;
+    power1.clear();
+    if (power > FIELD_MODULUS) {
+        std::cout << "pow_: power > FIELD_MODULUS\n";
+        mpz_to_Fr(power1, power % FIELD_MODULUS);
+    }
+    else
+        mpz_to_Fr(power1, power);
+    return base * power1;
+}
+
+
+
+
+
 
 // constexpr bigz N_ = 2;
 // constexpr bigz GROUP_MODULUS = 11; // p
@@ -99,13 +238,7 @@ bigz GENERATOR("4516690346444892428005324399985509466774242146852912703800039069
 // root_2nth = 197302210312744933010843010704445784068657690384188106020011018676818793232
 // root_2nth_inv = 10150407646632095964976043332470470774111901718625076075560248572110916115913
 
-G1 Generator;
-bigz NTH_ROU("4158865282786404163413953114870269622875596290766033564087307867933865333818");
-bigz TWO_ROU("197302210312744933010843010704445784068657690384188106020011018676818793232");
 
-bigz FIELD_MODULUS("\
-21888242871839275222246405745257275088548364400416034343698204186575808495617\
-");
 
 /*
 bigz GROUP_MODULUS("\
@@ -157,120 +290,3 @@ bigz GENERATOR("\
 4003625854903563191461961625964949673337592873574451932801584164249941551882456\
 08741421710111223106441384922396297");
 */
-
-size_t N_POLYS_IN_RLWE = 2;
-using matrix_double = std::vector<std::vector<mpf_class>>;
-using vector_double = std::vector<mpf_class>;
-using vector_bigz = std::vector<bigz>;
-
-// FIXME make types __uint128 so that regular modding works
-bigz& mod_(bigz& val, const bigz& q) {
-    // bigz ret(val);
-    val %= q;
-    // if (val < 0) {
-    //     val += q;
-    // }
-    return val;
-}
-
-std::string i128str(__uint128_t n) {
-    if (n == 0) {
-        return "0";
-    }
-    // bool neg = false;
-    // if (n < 0) {
-    //     neg = true;
-    //     n = -n;
-    // }
-    std::string buf;
-    while (n > 0) {
-        buf += '0' + (n % 10);
-        n /= 10;
-    }
-    // if (neg) buf += '-';
-    std::reverse(buf.begin(), buf.end());
-    return buf;
-}
-vector_bigz scalar_vec_mult(const bigz& scalar, const vector_bigz& vec, const bigz& q) {
-    vector_bigz result(vec.size());
-    for (size_t i = 0; i < vec.size(); i++) {
-        // copy vec
-        result[i] = scalar * bigz(vec[i]);
-        result[i] = mod_(result[i], q);
-    }
-    return result;
-};
-
-void print_vector_i128(const std::vector<__uint128_t>& vec) {
-    for (const auto& val : vec) {
-        std::cout << i128str(val) << ", ";
-    }
-    std::cout << "\n";
-}
-
-void print_vector_double_old(const std::vector<double>& vec) {
-    for (const auto& val : vec) {
-        std::cout << val << ", ";
-    }
-    std::cout << "\n";
-}
-
-char* mpf_str(mpf_class m) {
-    int size = 10000;
-    char* buf = new char[size];
-    buf[size - 1] = '\0';
-    int ret = gmp_sprintf(buf, "%Zd", m.get_mpf_t());
-    if (ret > size - 1 || ret < 0) {
-        throw std::runtime_error("Buffer overflow in mpf_str");
-    }
-    return buf;
-}
-
-void print_vector_double(const vector_double& vec) {
-    for (const auto& val : vec) {
-        std::cout << mpf_str(val) << ", ";
-    }
-    std::cout << "\n";
-}
-
-char* print_to_string_mpz(bigz m) {
-    int size = 10000;
-    char* buf = new char[size];
-    buf[size - 1] = '\0';
-    int ret = gmp_sprintf(buf, "%Zd", m.get_mpz_t());
-    if (ret > size - 1 || ret < 0) {
-        throw std::runtime_error("Buffer overflow in print_to_string_mpz");
-    }
-    return buf;
-}
-
-void print_vector_mpz(const vector_bigz& vec) {
-    for (const auto& val : vec) {
-        std::cout << print_to_string_mpz(val) << ", ";
-    }
-    std::cout << "\n";
-}
-// TODO types and move somewhere
-// Returns floor(log2(x))
-double log2_mpz(const bigz& x) {
-    if (x == 0) return -1; // or throw/handle as needed
-    return static_cast<double>(mpz_sizeinbase(x.get_mpz_t(), 2) - 1);
-}
-
-mpf_class mpf_round(const mpf_class &x) {
-    const mpf_class half("-0.5");
-    if (x >= -1)
-        return floor(x + half);   // correct for non-negative values
-    else
-        return ceil(x - half);    // correct for negative values
-}
-
-// base case binary modular exponentiation
-G1 pow_(G1 base, bigz power) { //, bigz mod) {
-    // TODO mutate me
-    G1 result = base;
-    // mpz_powm(result.get_mpz_t(), base.get_mpz_t(), power.get_mpz_t(), mod.get_mpz_t());
-    Fr power1 = mpz_to_new_Fr(power);
-    result = base * power1;
-    return result;
-}

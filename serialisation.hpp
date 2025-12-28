@@ -86,14 +86,15 @@ void mpz_to_buff(uint8_t* buf, size_t* n_write, const mpz_class& in) {
     uint8_t* ret_ptr = nullptr;
     ret_ptr = (uint8_t*)mpz_export((void*)buf, n_write, ORDER, WORD_SIZE, ENDIAN, NAILS, in.get_mpz_t());
 
-    // if (ret_ptr == nullptr)
-    //     std::cout << "mpz_to_buff: ret_ptr = nullptr\n";
-    // else if (ret_ptr == BUF)
-    //     std::cout << "mpz_to_buff: ret_ptr points to BUF\n";
-    // else {
-    //     std::cout << "mpz_to_buff: ret_ptr points to something else (GMP allocator?), ret_ptr = " << ret_ptr << "\n";
-    //     throw std::runtime_error("Aborting...\n");
-    // }
+    if (ret_ptr == nullptr)
+        std::cout << "mpz_to_buff: ret_ptr = nullptr\n";
+    else if (ret_ptr == BUF) {
+        // std::cout << "mpz_to_buff: ret_ptr points to BUF\n";
+    }
+    else {
+        std::cout << "mpz_to_buff: ret_ptr points to something else (GMP allocator?), ret_ptr = " << ret_ptr << "\n";
+        throw std::runtime_error("Aborting...\n");
+    }
     // std::cout << *n_write << " Bytes written to the buffer\n";
 }
 
