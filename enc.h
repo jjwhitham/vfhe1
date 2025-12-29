@@ -35,7 +35,7 @@ poly sample_secret_key(size_t N) {
         // if (val == 0) s[i] = -1;
         if (val == 0) s[i] = 1;
         else if (val == 1) s[i] = 0;
-        // else s[i] = FIELD_MODULUS - 1;
+        // else s[i] = FIELD_MODULUS - 1; // FIXME
         else s[i] = 1;
     }
     #ifdef DEBUG1_ON
@@ -45,8 +45,8 @@ poly sample_secret_key(size_t N) {
     return s;
 }
 // Sample a random polynomial of degree N-1 with coefficients in the range [0, q).
-poly sample_random_polynomial(size_t N, bigz q) {
-    poly poly(N);
+poly sample_random_polynomial(size_t N, const bigz& q) {
+    poly ply(N);
     // std::random_device rd;
     // std::mt19937 gen(rd());
     // std::uniform_int_distribution<bigz> dist(0, q - 1);
@@ -60,21 +60,21 @@ poly sample_random_polynomial(size_t N, bigz q) {
         // poly[i] = dist(gen);
         // mpz_urandomb(rop, state, n);
         mpz_urandomm(rop.get_mpz_t(), state, q.get_mpz_t());
-        poly[i] = bigz(rop);
+        ply[i] = bigz(rop);
     }
     gmp_randclear(state);
     #ifdef DEBUG1_ON
         for (size_t i = 0; i < N; i++)
-            poly[i] = 1;
+            ply[i] = 1;
     #endif
-    return poly;
+    return ply;
 }
 
 // Sample a noise polynomial of degree N-1 with coefficients from the discrete Gaussian distribution.
 // poly sample_noise_polynomial(size_t N, double mu = 3.2, double sigma = 19.2) {
 poly sample_noise_polynomial(size_t N) {
     // return sample_discrete_gaussian(N, mu, sigma);
-    return sample_secret_key(N);
+    return sample_secret_key(N); // FIXME
 }
 
 class Encryptor {
@@ -83,27 +83,16 @@ private:
     size_t d;
     size_t N;
     bigz q;
-
-public:
     poly sk;
+public:
     Encryptor(bigz v_, size_t d_, size_t N_, bigz q_)
-        : v(v_), d(d_), N(N_), q(q_), sk(N) {
-            poly sk_ = sample_secret_key(N);
-        }
+        : v(v_), d(d_), N(N_), q(q_), sk{sample_secret_key(N).to_eval_form(false)} { }
     // Encrypts an RLWE ciphertext of message m
     // m: message polynomial (poly), N: degree, sk: secret key, q: modulus, dth_pows: unused here
     rlwe encrypt_rlwe(const poly& m) {
         poly noise = sample_noise_polynomial(N);
         poly a = sample_random_polynomial(N, q);
-        // TODO s stored in eval form, so NTT(a), res = a * s, iNTT(res)
-        poly ask = a * sk;
-
-        poly b = m + noise + ask;
-        // for (size_t i = 0; i < N; i++) {
-        //     bigz val = m.get(i) + noise.get(i) + ask.get(i);
-        //     b.set(i, mod_(val, q));
-        // }
-
+        poly b = m + noise + a * sk;
         rlwe res(N_POLYS_IN_RLWE);
         res.set(0, b);
         res.set(1, a);
@@ -113,7 +102,7 @@ public:
     rlwe_vec encrypt_rlwe_vec(const vector_bigz& vec) {
         rlwe_vec res(vec.size());
         for (size_t i = 0; i < vec.size(); i++) {
-            poly p(N);
+            poly p{N};
             p.set(0, vec.at(i)); // set the first coefficient to the value
             rlwe r = encrypt_rlwe(p);
             res.set(i, r);
@@ -123,9 +112,8 @@ public:
 
     poly decrypt_rlwe(const rlwe& ctx) const {
         ASSERT(ctx.n_polys() == 2);
-        poly b = ctx.get_poly(0);
-        poly a = ctx.get_poly(1);
-        // Compute the plaintext polynomial
+        const poly& b = ctx.get_poly(0);
+        const poly& a = ctx.get_poly(1);
         poly m = b - a * sk;
         return m;
     }
@@ -138,15 +126,8 @@ public:
         }
         return ptxs;
     }
-    // Encrypts an RGSW ciphertext of message M (poly)
     rgsw encrypt_rgsw(const poly& M) {
         // Compute v powers: v^0, v^1, ..., v^{d-1}
-        // assert(M.get(0) < v);
-        // if (M.get(0) >= v)
-        //     throw std::out_of_range("(encrypt_rgsw) Message out of range: " + i128str(M.get(0)));
-        // if (M.get(0) > v / 2)
-        //     std::cout << "Warning: (encrypt_rgsw) Message greater than v/2: " + i128str(M.get(0)) + "\n";
-
         vector_bigz v_powers(d);
         v_powers[0] = 1;
         for (size_t i = 1; i < d; i++)
@@ -179,7 +160,6 @@ public:
             encs_of_zero.set(i, encrypt_rlwe(zero_poly));
 
         rgsw res = G + encs_of_zero;
-        // res.check();
         return res;
     }
     // takes an array2d<bigz> and returns an encrypted rgsw_mat
@@ -210,7 +190,7 @@ public:
             v_powers.at(i) = mod_(v_powers.at(i), q);
         }
 
-        // Create rgsw object
+        // Create flat_rgsw object
         flat_rgsw res(2 * d, N);
         for (size_t j = 0; j < d; j++) {
             res.set(j, M0 * v_powers.at(j));

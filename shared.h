@@ -164,14 +164,13 @@ using matrix_double = std::vector<std::vector<mpf_class>>;
 using vector_double = std::vector<mpf_class>;
 using vector_bigz = std::vector<bigz>;
 
-// FIXME make types __uint128 so that regular modding works
-bigz mod_(const bigz& val, const bigz& q) {
-    bigz ret = val;
-    ret %= q;
-    if (ret < 0) {
-        ret += q;
+bigz mod_(bigz val, const bigz& q) {
+    if (val < 0 || val >= FIELD_MODULUS)
+        val %= q;
+    if (val < 0) {
+        val += q;
     }
-    return ret;
+    return val;
 }
 
 std::string i128str(__uint128_t n) {
@@ -271,11 +270,11 @@ mpf_class mpf_round(const mpf_class &x) {
 }
 
 // base case binary modular exponentiation
-G1 pow_(G1 base, bigz power) { //, bigz mod) {
-    // TODO mutate me
-    G1 result = base;
-    // mpz_powm(result.get_mpz_t(), base.get_mpz_t(), power.get_mpz_t(), mod.get_mpz_t());
-    Fr power1 = mpz_to_new_Fr(power);
-    result = base * power1;
+G1 pow_(const G1& base, const bigz& power) { //, bigz mod) {
+    assert(power >= 0);
+    assert(power < FIELD_MODULUS);
+    static Fr power1;
+    mpz_to_Fr(power1, power);
+    G1 result = base * power1;
     return result;
 }
