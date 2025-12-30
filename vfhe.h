@@ -60,9 +60,7 @@ private:
     T* arr;
 public:
     array1d() : size_(0), arr(nullptr) {}
-    array1d(size_t size) : size_(size), arr(new T[size]()) {
-        arr = new T[size]();
-    }
+    array1d(size_t size) : size_{size}, arr{new T[size]} {}
     // Copy constructor
     array1d(const array1d& other) : size_(other.size_), arr(new T[other.size_]) {
         for (size_t i = 0; i < size_; i++) arr[i] = other.arr[i];
@@ -280,7 +278,16 @@ public:
         }
         return res;
     }
-
+    Derived& operator+=(const Derived& other) {
+        size_t N = size();
+        for (size_t i = 0; i < N; i++) {
+            T val = get(i) + other.get(i);
+            if constexpr (std::is_same_v<T, bigz>)
+                val = mod_(val, FIELD_MODULUS);
+            set(i, val);
+        }
+        return static_cast<Derived&>(*this);
+    }
     Derived operator-(const Derived& other) const {
         size_t N = size();
         Derived neg_other(N);
@@ -557,8 +564,6 @@ public:
     void set_g(size_t i, const G1& val) {
         arr_g[i] = val;
     }
-    using int_poly = array1d<bigz, hashed_a_poly>;
-    // using int_poly::pow;
     // This gets called when setting up keys. Raise (mult) Gen to get(i)
     hashed_a_poly pow() {
         hashed_a_poly res(size());
@@ -571,8 +576,8 @@ public:
         TIMING(auto start = std::chrono::high_resolution_clock::now();)
         TIMING(timing.calls_get_hash_sec += 1;)
         size_t n = other.size();
-        assert(n != 2 * N_ - 1);
-        assert(n == N_ || other.get(n - 1) == 0); // if other.size() is 2 * N_
+        assert(n != 2 * N_ - 1); // FIXME make sure no more 2 * N_ - 1 sizes exist!
+        assert(n == N_ || other.get(n - 1) == 0); // if other.size() is 2 * N_ (short circuit)
         G1 result = pow_(arr_g[0], other.get(0));
         for (size_t i = 1; i < n; i++) {
             result += pow_(arr_g[i], other.get(i));
@@ -922,21 +927,6 @@ public:
     }
 };
 
-using vvi_arr = array1d<bigz, veri_vec_inner>;
-class veri_vec_inner : public vvi_arr {
-public:
-    veri_vec_inner(size_t n_bigz) : vvi_arr(n_bigz) {
-        assert(n_bigz == N_POLYS_IN_RLWE);
-    }
-};
-
-using vv_arr = array1d<ver_vec_inner, veri_vec>;
-class veri_vec : public vv_arr {
-public:
-    veri_vec(size_t n_inner) : vv_arr(n_inner) {}
-
-};
-
 class hashed_a_rgsw : public array1d<hashed_a_poly, hashed_a_rgsw> {
 private:
 public:
@@ -1135,6 +1125,17 @@ public:
         size_t n_hashed_polys = get_hashed_rgsw(0).n_hashed_polys();
         return n_hashed_polys;
     }
+    bigz dot_prod(const hashed_rlwe_decomp_vec& rlwe_v) const {
+        ASSERT(size() == rlwe_v.size());
+        ASSERT(get(0).size() == rlwe_v.get(0).size());
+        bigz sum = 0;
+        for (size_t i = 0; i < n_hashed_rgsws(); i++) {
+            for (size_t j = 0; j < n_hashed_polys(); j++) {
+                sum += get(i).get(j) * rlwe_v.get(i).get(j);
+            }
+        }
+        return mod_(sum, FIELD_MODULUS);
+    };
 };
 
 class hashed_a_rgsw_vec : public array1d<hashed_a_rgsw, hashed_a_rgsw_vec> {
@@ -1186,7 +1187,7 @@ class flat_rgsw_vec : public array1d<flat_rgsw, flat_rgsw_vec> {
 private:
 public:
     // flat_rgsw_vec() : array1d<flat_rgsw, flat_rgsw_vec>() {}
-    // flat_rgsw_vec(size_t n_flat_rgsws) : array1d<flat_rgsw, flat_rgsw_vec>(n_flat_rgsws) {}
+    flat_rgsw_vec(size_t n_flat_rgsws) : array1d<flat_rgsw, flat_rgsw_vec>(n_flat_rgsws) {}
     flat_rgsw_vec(
         size_t n_flat_rgsws, size_t n_polys, size_t n_coeffs
     ) : array1d<flat_rgsw, flat_rgsw_vec>(n_flat_rgsws) {
@@ -1273,22 +1274,7 @@ public:
         }
         return res;
     }
-    // rlwe_vec pow(const rlwe_decomp_vec& other) const {
-    //     ASSERT(n_cols() == other.size());
 
-    //     rgsw& rg = get(0, 0);
-    //     rlwe_vec res(n_rows(), rg.n_polys(), rg.n_coeffs());
-    //     for (size_t i = 0; i < n_rows(); i++) {
-    //         rlwe sum(rg.n_polys(), rg.n_coeffs());
-    //         sum.set_coeffs_to_one();
-    //         for (size_t j = 0; j < n_cols(); j++) {
-    //             auto val = get(i, j).pow(other.get(j));
-    //             sum = sum.group_mult(val);
-    //         }
-    //         res.set(i, sum);
-    //     }
-    //     return res;
-    // }
     void to_eval_form() {
         for (size_t row = 0; row < n_rows(); row++) {
             for (size_t col = 0; col < n_cols(); col++) {
@@ -1330,57 +1316,131 @@ public:
     };
 };
 
+class hashed_a_veri_vec_inner : public array1d<hashed_a_poly, hashed_a_veri_vec_inner> {
+public:
+    using havvi = hashed_a_veri_vec_inner;
+    using havvi_arr = array1d<hashed_a_poly, hashed_a_veri_vec_inner>;
+    // hashed_a_veri_vec_inner() : array1d<hashed_a_poly, hashed_a_veri_vec_inner>() {}
+    // hashed_a_veri_vec_inner(size_t n_ha_polys) : havvi_arr{n_ha_polys} {
+    //     assert(n_ha_polys == N_POLYS_IN_RLWE);
+    // }
+    G1 get_hash_sec(const rlwe& other) const {
+        assert(size() == other.size());
+        G1 res;
+        res.clear();
+        for (size_t i = 0; i < size(); i++)
+            res += get(i).get_hash_sec(other.get(i));
+        return res;
+    }
+    havvi pow() const {
+        havvi res{size()};
+        for (size_t i = 0; i < size(); i++) {
+            res.set(i, get(i).pow());
+        }
+        return res;
+    }
+};
 
-// // TODO use this instead of vector_bigz
-// class veri_vec_scalar : public array1d<bigz, veri_vec_scalar> {
-// private:
-// public:
-//     veri_vec_scalar() : array1d<bigz, veri_vec_scalar>() {}
-//     veri_vec_scalar(size_t N) : array1d<bigz, veri_vec_scalar>(N) {}
-//     ~veri_vec_scalar() {}
-//     flat_rgsw_vec operator*(const rgsw_mat& other) const {
-//         const rgsw_mat& o = other;
-//         ASSERT(2 * o.n_rows() == size());
-//         flat_rgsw_vec res(o.n_cols(), o.n_rlwes(), o.n_coeffs());
-//         for (size_t j = 0; j < o.n_cols(); j++) {
-//             flat_rgsw& sum = res.get(j);
-//             for (size_t i = 0; i < o.n_rows(); i++) {
-//                 rgsw& val = o.get(i, j);
-//                 for (size_t k = 0; k < o.n_rlwes(); k++) {
-//                     for (size_t l = 0; l < o.n_polys(); l++) {
-//                         sum.set(k, sum.get(k) + val.get(k).get(l) * get(2 * i + l));
-//                     }
-//                 }
-//             }
-//         }
-//         return res;
-//     }
-//     poly operator*(const rlwe_vec& other) const {
-//         size_t n_rlwes = other.n_rlwes();
-//         ASSERT(2 * size() == n_rlwes);
-//         size_t n_polys = other.n_polys();
-//         size_t n_coeffs = other.n_coeffs();
-//         poly sum(n_coeffs);
-//         for (size_t i = 0; i < n_rlwes; i++)
-//             for (size_t j = 0; j < n_polys; j++)
-//                 sum = sum + other.get(i).get(j) * get(2 * i + j);
-//         return sum;
-//     }
-//     using array1d<bigz, veri_vec_scalar>::pow;
-//     rlwe pow(const rlwe_vec& other) const {
-//         size_t n = other.size();
-//         ASSERT(size() == n);
-//         size_t n_polys = other.get(0).size();
-//         size_t n_coeffs = other.get(0).get(0).size();
-//         rlwe product(n_polys, n_coeffs);
-//         product.set_coeffs_to_one();
-//         for (size_t i = 0; i < n; i++) {
-//             auto val = other.get(i).pow(get(i));
-//             product = product.group_mult(val);
-//         }
-//         return product;
-//     }
-// };
+class hashed_a_veri_vec : public array1d<hashed_a_veri_vec_inner, hashed_a_veri_vec> {
+public:
+    using havv = hashed_a_veri_vec;
+    using havv_arr = array1d<hashed_a_veri_vec_inner, hashed_a_veri_vec>;
+    // hashed_a_veri_vec(size_t n_inner) : havv_arr{n_inner} {}
+    // TODO could be array1d memb func with `Other' template param. Investigate
+    G1 get_hash_sec(const rlwe_vec& other) const {
+        assert(size() == other.size());
+        G1 res;
+        res.clear();
+        for (size_t i = 0; i < size(); i++)
+            res += get(i).get_hash_sec(other.get(i));
+        return res;
+    }
+    // TODO pow can be made a memb func on array1d again - recurse to ha_poly
+    havv pow() const {
+        havv res{size()};
+        for (size_t i = 0; i < size(); i++) {
+            res.set(i, get(i).pow());
+        }
+        return res;
+    }
+};
+
+class veri_vec_inner : public array1d<bigz, veri_vec_inner> {
+public:
+using vvi_arr = array1d<bigz, veri_vec_inner>;
+    // veri_vec_inner() : array1d<bigz, veri_vec_inner>() {}
+    // veri_vec_inner(size_t n_bigz) : vvi_arr{n_bigz} {
+    //     assert(n_bigz == N_POLYS_IN_RLWE);
+    // }
+    bigz dot_prod(const hashed_rlwe& other) const {
+        assert(size() == other.size());
+        bigz res{0};
+        for (size_t i = 0; i < size(); i++)
+            res += other.get(i) * get(i);
+        return res;
+    }
+    using vvi_arr::operator*;
+    flat_rgsw operator*(const rgsw& other) {
+        assert(size() == other.n_polys());
+        flat_rgsw res{other.n_rlwes()};
+        for (size_t i = 0; i < other.size(); i++) { // columns (rlwe's of rgsw)
+            poly a{N_};
+            for (size_t j = 0; j < size(); j++) { // 2 bigz (vvi), 2 polys (rgsw)
+                a += other.get(i).get(j) * get(j);
+            }
+            res.set(i, a);
+        }
+        return res;
+    }
+    using havvi = hashed_a_veri_vec_inner;
+    havvi get_hash_a(const vector_bigz& eval_pows) const {
+        havvi res{N_POLYS_IN_RLWE};
+        for (size_t i = 0; i < size(); i++) {
+            poly p{2 * N_}; // FIXME magic num. (size 2 * N_ for conv)
+            bigz val = get(i); // NOTE we want copy, not ref
+            p.set(i, val);
+            res.set(i, p.get_hash_a(eval_pows));
+            assert(res.get(i).get(p.size() - 1) == 0); // conv has no last elem
+        }
+        return res;
+    }
+};
+
+class veri_vec : public array1d<veri_vec_inner, veri_vec> {
+public:
+using vv_arr = array1d<veri_vec_inner, veri_vec>;
+    // veri_vec(size_t n_inner) : vv_arr{n_inner} {}
+    using vv_arr::operator*;
+    flat_rgsw_vec operator*(const rgsw_mat& other) const {
+        assert(size() == other.n_rows());
+        flat_rgsw_vec res(other.n_cols());
+        for (size_t j = 0; j < other.n_cols(); j++) {
+            // flat_rgsw el{get(0) * other.get(0, j)}; // FIXME copy ctor issue
+            flat_rgsw el = get(0) * other.get(0, j);
+            for (size_t i = 1; i < size(); i++) {
+                el += get(i) * other.get(i, j);
+            }
+            res.set(j, el);
+        }
+        return res;
+    }
+    bigz dot_prod(const hashed_rlwe_vec& other) const {
+        // does dot prod, calling inner's dot prod
+        assert(size() == other.size());
+        bigz res{0};
+        for (size_t i = 0; i < size(); i++)
+            res += get(i).dot_prod(other.get(i));
+        return res;
+    }
+    using havv = hashed_a_veri_vec;
+    havv get_hash_a(const vector_bigz& eval_pows) const {
+        havv res{size()};
+        for (size_t i = 0; i < size(); i++) {
+            res.set(i, get(i).get_hash_a(eval_pows));
+        }
+        return res;
+    }
+};
 
 bigz random_i128(bigz from, bigz to_inclusive) {
     // random int in range [from, to_inclusive]
@@ -1613,18 +1673,21 @@ public:
     }
 
     // TODO pass in gen as a param
-    std::vector<vector_bigz> sample_verification_vectors(__uint128_t m, __uint128_t n, bigz from, bigz to_inclusive) {
+    std::vector<veri_vec> sample_verification_vectors(__uint128_t m, __uint128_t n, bigz from, bigz to_inclusive) {
         size_t N = 3;
-        std::vector<vector_bigz> res(N);
+        std::vector<veri_vec> res{N};
         for (size_t i = 0; i < N - 1; i++) {
-            res.at(i) = vector_bigz(n);
+            res.at(i) = veri_vec{n};
         }
-        res.at(N - 1) = vector_bigz(m);
+        res.at(N - 1) = veri_vec{m};
 
         for (auto& x : res) {
             for (size_t i = 0; i < x.size(); i++) {
-                x.at(i) = random_i128(from, to_inclusive);
-                DEBUG1(x.at(i) = 1;)
+                x.set(i, veri_vec_inner{N_POLYS_IN_RLWE});
+                for (size_t j = 0; j < N_POLYS_IN_RLWE; j++) {
+                    x.get(i).set(j, random_i128(from, to_inclusive));
+                    DEBUG1(x.at(i) = 1;)
+                }
             }
         }
         // res <- {r_0, r_1, s}
@@ -1648,16 +1711,16 @@ public:
 };
 
 struct eval_key {
-    std::vector<hashed_a_poly> gr;
+    hashed_a_veri_vec gr;
     hashed_a_rgsw_vec grFr;
     hashed_a_rgsw_vec gsHr;
-    std::vector<hashed_a_poly> gr_rho;
+    hashed_a_veri_vec gr_rho;
     hashed_a_rgsw_vec grFr_alpha;
     hashed_a_rgsw_vec gsHr_gamma;
 };
 
 struct veri_key {
-    vector_bigz s;
+    veri_vec s;
     hashed_rgsw_vec rG_0;
     hashed_rgsw_vec rG_1;
     hashed_rgsw_vec rR_0;

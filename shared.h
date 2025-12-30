@@ -272,9 +272,12 @@ mpf_class mpf_round(const mpf_class &x) {
 // base case binary modular exponentiation
 G1 pow_(const G1& base, const bigz& power) { //, bigz mod) {
     assert(power >= 0);
-    assert(power < FIELD_MODULUS);
+    // assert(power < FIELD_MODULUS);
     static Fr power1;
-    mpz_to_Fr(power1, power);
+    if (power > FIELD_MODULUS)
+        mpz_to_Fr(power1, power % FIELD_MODULUS);
+    else
+        mpz_to_Fr(power1, power);
     G1 result = base * power1;
     return result;
 }
