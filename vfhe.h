@@ -73,6 +73,27 @@ public:
     ~array1d() {
         delete[] arr;
     }
+    // Copy assignment operator
+    array1d& operator=(const array1d& other) {
+        if (this != &other) {
+            delete[] arr;
+            size_ = other.size_;
+            arr = new T[size_];
+            for (size_t i = 0; i < size_; i++) arr[i] = other.arr[i];
+        }
+        return *this;
+    }
+    // Move assignment operator
+    array1d& operator=(array1d&& other) noexcept {
+        if (this != &other) {
+            delete[] arr;
+            size_ = other.size_;
+            arr = other.arr;
+            other.size_ = 0;
+            other.arr = nullptr;
+        }
+        return *this;
+    }
     void check_index_bounds(size_t n) const {
         if (n >= size_) {
             // std::clog << boost::current_exception_diagnostic_information() << std::endl;
@@ -138,27 +159,7 @@ public:
     #endif
         return get(i, disable_value_check, true);
     }
-    // Copy assignment operator
-    array1d& operator=(const array1d& other) {
-        if (this != &other) {
-            delete[] arr;
-            size_ = other.size_;
-            arr = new T[size_];
-            for (size_t i = 0; i < size_; i++) arr[i] = other.arr[i];
-        }
-        return *this;
-    }
-    // Move assignment operator
-    array1d& operator=(array1d&& other) noexcept {
-        if (this != &other) {
-            delete[] arr;
-            size_ = other.size_;
-            arr = other.arr;
-            other.size_ = 0;
-            other.arr = nullptr;
-        }
-        return *this;
-    }
+
     Derived operator*(const Derived& other) const {
         size_t N = size();
         Derived res(N);
