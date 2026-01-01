@@ -15,11 +15,13 @@ public:
     }
     // copy ctor
     arr(const arr& other) : n{other.n}, x{new T[other.n]} {
+        std::cout << "copy ctor called\n";
         for (size_t i = 0; i < n; i++)
             x[i] = other.x[i];
     }
     // move ctor
     arr(arr&& other) noexcept : n{other.n}, x{other.x} {
+        std::cout << "move ctor called\n";
         other.n = 0;
         other.x = nullptr;
     }
@@ -39,6 +41,8 @@ public:
                 assert(n == other.n);
             // delete[] x;
             for (size_t i = 0; i < n; i++) {
+                if constexpr (std::is_same_v<T, int>)
+                    check(x[i]);
                 x[i] = other.x[i];
             }
         }
@@ -69,13 +73,73 @@ public:
         }
         return *this;
     }
+    arr& operator+=(arr&& other) noexcept {
+        std::cout << "(move) operator+= called\n";
+        for (size_t i = 0; i < n; i++) {
+            x[i] += other.x[i];
+            if constexpr (std::is_same_v<T, int>)
+                x[i] %= 7;
+        }
+        return *this;
+    }
+    // // get type of *this as Derived
+    // arr operator+(const arr& other) {
+    //     std::cout << "operator+ called\n";
+    //     assert(n == other.n);
+    //     // get type of *this as Derived
+    //     // using Derived = std::remove_reference_t<decltype(*this)>;
+    //     arr ret{n};
+    //     for (size_t i = 0; i < n; i++) {
+    //         T val = static_cast<T>(x[i] + other.x[i]);
+    //         if constexpr (std::is_same_v<T, int>)
+    //             val %= 7;
+    //         // ret.get(i) = val;
+    //         ret.set(i, val);
+    //     }
+    //     return ret;
+    // }
     T& get(size_t i) const {
+        return x[i];
+    }
+    T& operator[](size_t i) const {
         return x[i];
     }
     void set(size_t i, const T& val) {
         x[i] = val;
     }
+    void set(size_t i, T&& val) noexcept {
+        x[i] = std::move(val);
+    }
+    size_t size() const {
+        return n;
+    }
+    void check(const T& val) const {
+        (void)val;
+    }
 };
+
+// Non-member templated operator+ that returns the derived type.
+template<typename Derived>
+Derived operator+(const Derived& a, const Derived& b) {
+    std::cout << "Derived operator+ called\n";
+    assert(a.size() == b.size());
+    Derived ret(a.size());
+    for (size_t i = 0; i < a.size(); i++) {
+        // auto tmp = a.get(i);
+        // tmp += b.get(i);
+        // ret.set(i, tmp);
+
+        ret[i] = a.get(i);
+        ret[i] += b.get(i);
+
+        // ret.set(i, std::move(a.get(i) + b.get(i))); // calls copy assgn
+        // ret.set(i, a.get(i) + b.get(i)); // calls copy assgn
+        // ret.get(i) = a.get(i) + b.get(i); // calls move assign
+
+        // ret[i] = a[i] + b[i]; // calls move assign
+    }
+    return ret;
+}
 
 class poly : public arr<int> {
 public:
@@ -96,16 +160,27 @@ int main() {
     x.set(1, 3);
     poly y{2};
     y.set(0, 3);
-    y.set(1, 4);
+    y[1] = 4;
 
 
     rlwe z{2};
     z.set(0, x);
     z.set(1, y);
+    // rlwe zz = std::move(z); // doesn't call move assignment
+    // rlwe zz{2} = z + z;
+    // rlwe zz = static_cast<rlwe>(z + z);
+
+    rlwe zz = z + z; // calls copy/move assign
+    zz[0][1] = 6;
+
+    // rlwe zz;
+    // zz = z + z; // calls move assign
+
+    // zz.get(0) = z.get(0);
     // rlwe zz{std::move(z)};
-    rlwe zz{z};
-    zz += z;
-    std::cout << "z.get(1).get(1): " << zz.get(1).get(1) << "\n";
+    // rlwe zz{z};
+    // zz += z;
+    // std::cout << "z.get(1).get(1): " << zz.get(1).get(1) << "\n";
 
     // x += y;
     // assert(x.get(0) == 5);
