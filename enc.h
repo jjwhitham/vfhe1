@@ -183,6 +183,7 @@ public:
     // Encodes an RGSW plaintext (not encryption, just encoding)
     flat_rgsw encode_flat_rgsw(const poly& M0, const poly& M1) const {
         // Compute v powers: v^0, v^1, ..., v^{d-1}
+        // TODO move into Encryptor constructor
         vector_bigz v_powers(d);
         v_powers[0] = 1;
         for (size_t i = 1; i < d; i++) {
@@ -191,7 +192,7 @@ public:
         }
 
         // Create flat_rgsw object
-        flat_rgsw res(2 * d, N);
+        flat_rgsw res(2 * d);
         for (size_t j = 0; j < d; j++) {
             res.set(j, M0 * v_powers.at(j));
             res.set(j + d, M1 * v_powers.at(j));

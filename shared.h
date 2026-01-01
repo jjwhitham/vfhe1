@@ -274,6 +274,7 @@ G1 pow_(const G1& base, const bigz& power) { //, bigz mod) {
     assert(power >= 0);
     // assert(power < FIELD_MODULUS);
     static Fr power1;
+    power1.clear();
     if (power > FIELD_MODULUS)
         mpz_to_Fr(power1, power % FIELD_MODULUS);
     else

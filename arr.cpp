@@ -116,30 +116,44 @@ public:
     void check(const T& val) const {
         (void)val;
     }
+
+    // Member templated operator+ that returns the derived type.
+    template<typename Derived>
+    Derived operator+(const Derived& b) const {
+        std::cout << "(member) Derived operator+ called\n";
+        assert(size() == b.size());
+        Derived ret(size());
+        for (size_t i = 0; i < size(); i++) {
+            ret[i] = get(i);
+            ret[i] += b.get(i);
+        }
+        return ret;
+    }
+
 };
 
-// Non-member templated operator+ that returns the derived type.
-template<typename Derived>
-Derived operator+(const Derived& a, const Derived& b) {
-    std::cout << "Derived operator+ called\n";
-    assert(a.size() == b.size());
-    Derived ret(a.size());
-    for (size_t i = 0; i < a.size(); i++) {
-        // auto tmp = a.get(i);
-        // tmp += b.get(i);
-        // ret.set(i, tmp);
+// // Non-member templated operator+ that returns the derived type.
+// template<typename Derived>
+// Derived operator+(const Derived& a, const Derived& b) {
+//     std::cout << "Derived operator+ called\n";
+//     assert(a.size() == b.size());
+//     Derived ret(a.size());
+//     for (size_t i = 0; i < a.size(); i++) {
+//         // auto tmp = a.get(i);
+//         // tmp += b.get(i);
+//         // ret.set(i, tmp);
 
-        ret[i] = a.get(i);
-        ret[i] += b.get(i);
+//         ret[i] = a.get(i);
+//         ret[i] += b.get(i);
 
-        // ret.set(i, std::move(a.get(i) + b.get(i))); // calls copy assgn
-        // ret.set(i, a.get(i) + b.get(i)); // calls copy assgn
-        // ret.get(i) = a.get(i) + b.get(i); // calls move assign
+//         // ret.set(i, std::move(a.get(i) + b.get(i))); // calls copy assgn
+//         // ret.set(i, a.get(i) + b.get(i)); // calls copy assgn
+//         // ret.get(i) = a.get(i) + b.get(i); // calls move assign
 
-        // ret[i] = a[i] + b[i]; // calls move assign
-    }
-    return ret;
-}
+//         // ret[i] = a[i] + b[i]; // calls move assign
+//     }
+//     return ret;
+// }
 
 class poly : public arr<int> {
 public:
@@ -147,10 +161,10 @@ public:
         std::cout << "hello, world!\n";
     }
 };
-// class rlwe : public arr<poly> { };
-using rlwe = arr<poly>;
+class rlwe : public arr<poly> { };
+// using rlwe = arr<poly>;
 
-
+using rgsw = arr<rlwe>;
 
 int main() {
     // TODO check that a mbrfunc that returns arr& instead of Derived& can still

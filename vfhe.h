@@ -121,8 +121,8 @@ public:
     }
     void check_value_bounds(const T& val, bool called_from_idx=false) const {
         if constexpr (std::is_same_v<T, bigz>) {
-            bigz min_val = 0;
-            bigz max_val = FIELD_MODULUS - 1;
+            static const bigz min_val = 0;
+            static const bigz max_val = FIELD_MODULUS - 1;
             if (val < min_val || val > max_val) {
                 if (called_from_idx)
                     std::cout << "operator[]: ";
@@ -282,10 +282,9 @@ public:
     Derived& operator+=(const Derived& other) {
         size_t N = size();
         for (size_t i = 0; i < N; i++) {
-            T val = get(i) + other.get(i);
+            get(i) += other.get(i);
             if constexpr (std::is_same_v<T, bigz>)
-                val = mod_(val, FIELD_MODULUS);
-            set(i, val);
+                get(i) = mod_(get(i), FIELD_MODULUS);
         }
         return static_cast<Derived&>(*this);
     }
@@ -443,11 +442,12 @@ public:
         return size();
     }
     auto get_hash(const vector_bigz& eval_pows) const {
+        std::cout << "poly::get_hash: size(): " << size() << "\n";
         bigz hash = 0;
         for (size_t i = 0; i < size(); i++) {
             hash += get(i) * eval_pows.at(i);
-            hash = mod_(hash, FIELD_MODULUS);
         }
+        hash = mod_(hash, FIELD_MODULUS);
         return hash;
     }
     // XXX See inline definition below class hashed_a_poly (avoids circular definitions)
@@ -457,8 +457,7 @@ public:
         // NOTE rgsw mats should already be converted to NTT form
         assert(isNTT);
         assert(other.isNTT);
-        size_t n = N_;
-        poly a(2 * n);
+        poly a(2 * N_);
         for (size_t i = 0; i < 2 * N_; i++) {
             bigz val = get(i) * other.get(i);
             a.set(i, mod_(val, FIELD_MODULUS));
@@ -579,8 +578,10 @@ public:
         size_t n = other.size();
         assert(n != 2 * N_ - 1); // FIXME make sure no more 2 * N_ - 1 sizes exist!
         assert(n == N_ || other.get(n - 1) == 0); // if other.size() is 2 * N_ (short circuit)
-        G1 result = pow_(arr_g[0], other.get(0));
-        for (size_t i = 1; i < n; i++) {
+        G1 result;
+        result.clear();
+        std::cout << "hashed_a_poly::get_hash_sec(): other.size(): " << n << "\n";
+        for (size_t i = 0; i < n; i++) {
             result += pow_(arr_g[i], other.get(i));
         }
 
@@ -590,6 +591,7 @@ public:
     }
 };
 
+// TODO eval_pows can be a poly of size 2 * N_
 inline auto poly::get_hash_a(const vector_bigz& eval_pows) const {
     auto hash = get_hash(eval_pows);
     auto N = size();
@@ -785,7 +787,7 @@ public:
     // TODO move all get_hash() to array1d?
     // calls poly's get_hash and returns hashed_rlwe
     auto get_hash(const vector_bigz& eval_pows) const {
-        hashed_rlwe hash(N_POLYS_IN_RLWE); // FIXME n_polys, do better (global?)
+        hashed_rlwe hash(N_POLYS_IN_RLWE);
         for (size_t i = 0; i < size(); i++) {
             hash.set(i, get(i).get_hash(eval_pows));
         }
@@ -793,18 +795,11 @@ public:
     }
     // calls poly's get_hash and returns hashed_rlwe
     auto get_hash_a(const vector_bigz& eval_pows) const {
-        hashed_a_rlwe hash_a(N_POLYS_IN_RLWE, eval_pows.size() / 2); // FIXME n_polys, do better (global?)
+        hashed_a_rlwe hash_a(N_POLYS_IN_RLWE);
         for (size_t i = 0; i < size(); i++) {
             hash_a.set(i, get(i).get_hash_a(eval_pows));
         }
         return hash_a;
-    }
-    void set_coeffs_to_one() {
-        for (auto& p : *this) {
-            for (size_t j = 0; j < p.size(); j++) {
-                p.set(j, 1);
-            }
-        }
     }
     size_t n_polys() const {
         return size();
@@ -891,7 +886,7 @@ public:
     // TODO move all get_hash() to array1d?
     // calls rlwe's get_hash and returns hashed_rlwe_vec
     auto get_hash(const vector_bigz& eval_pows) const {
-        hashed_rlwe_vec hash(size(), get(0).size()); // FIXME n_polys, do better (global?)
+        hashed_rlwe_vec hash(size());
         for (size_t i = 0; i < size(); i++) {
             hash.set(i, get(i).get_hash(eval_pows));
         }
@@ -949,10 +944,7 @@ public:
     size_t n_hashed_a_coeffs() const {
         return get(0).n_hashed_a_coeffs();
     }
-    // using array1d<hashed_a_rlwe, hashed_a_rgsw>::pow;
     G1 get_hash_sec(const rlwe_decomp& other) const {
-        // size_t n_polys_ = n_hashed_a_polys();
-        // #pragma omp parallel for num_threads(N_THREADS)
         G1 res;
         res.clear();
         for (size_t i = 0; i < n_hashed_a_polys(); i++)
@@ -960,7 +952,7 @@ public:
         return res;
     }
     hashed_a_rgsw pow() const {
-        hashed_a_rgsw x(n_hashed_a_polys(), n_hashed_a_coeffs());
+        hashed_a_rgsw x(n_hashed_a_polys());
         for (size_t i = 0; i < n_hashed_a_polys(); i++) {
             x.set(i, get_hashed_a_poly(i).pow());
         }
@@ -1024,26 +1016,10 @@ public:
     size_t n_coeffs() const {
         return get_rlwe(0).get_poly(0).n_coeffs();
     }
-    using array1d<rlwe, rgsw>::operator*;
-    rlwe operator*(const rlwe_decomp& other) const {
-        ASSERT(n_rlwes() == other.n_polys());
-        rlwe res(n_polys(), n_coeffs());
-        for (size_t i = 0; i < n_rlwes(); i++) {
-            for (size_t j = 0; j < n_polys(); j++) {
-                poly& p = res.get(j);
-                auto val = get(i).get(j) * other.get(i);
-                p = p + val;
-                // res.set(j, res.get(j) + val);
-            }
-        }
-        return res;
-    }
 
     rlwe convolve(const rlwe_decomp& other) const {
         ASSERT(n_rlwes() == other.n_polys());
         rlwe res(n_polys(), 2 * N_); // FIXME
-        // TODO need thread array to accumulate sum
-        // #pragma omp parallel for num_threads(N_THREADS)
         for (size_t i = 0; i < n_rlwes(); i++) {
             for (size_t j = 0; j < n_polys(); j++) {
                 poly& p = res.get(j);
@@ -1163,11 +1139,8 @@ public:
     size_t n_hashed_a_coeffs() const {
         return get_hashed_a_rgsw(0).get_hashed_a_poly(0).size();
     }
-
-    // using array1d<hashed_a_rgsw, hashed_a_rgsw_vec>::pow;
     G1 get_hash_sec(const rlwe_decomp_vec& other) const {
         ASSERT(n_hashed_a_rgsws() == other.n_rlwe_decomps());
-        // #pragma omp parallel for num_threads(N_THREADS)
         G1 res;
         res.clear();
         for (size_t i = 0; i < n_hashed_a_rgsws(); i++)
@@ -1175,7 +1148,7 @@ public:
         return res;
     }
     hashed_a_rgsw_vec pow() const {
-        hashed_a_rgsw_vec x(n_hashed_a_rgsws(), n_hashed_a_polys(), n_hashed_a_coeffs());
+        hashed_a_rgsw_vec x(n_hashed_a_rgsws(), n_hashed_a_polys(), n_hashed_a_coeffs()); // FIXME
         for (size_t i = 0; i < n_hashed_a_rgsws(); i++) {
             x.set(i, get_hashed_a_rgsw(i).pow());
         }
@@ -1243,28 +1216,12 @@ public:
         }
     }
 
-    rlwe_vec operator*(const rlwe_decomp_vec& other) const {
-        ASSERT(n_cols() == other.size());
-        ASSERT(n_coeffs() == other.n_coeffs());
-
-        rlwe_vec res(n_rows(), n_polys(), n_coeffs());
-        for (size_t i = 0; i < n_rows(); i++) {
-            rlwe sum(n_polys(), n_coeffs());
-            for (size_t j = 0; j < n_cols(); j++) {
-                auto val = get(i, j) * other.get(j);
-                sum = sum + val;
-            }
-            res.set(i, sum);
-        }
-        return res;
-    }
     rlwe_vec convolve(const rlwe_decomp_vec& other) const {
         ASSERT(n_cols() == other.size());
-        // ASSERT(N_ == other.n_coeffs()); // FIXME
         ASSERT(n_coeffs() == 2 * N_);
         // std::cout << "\n\nInside rgsw_mat::convolve\n  n_coeffs(): " << n_coeffs() << ", other.n_coeffs(): " << other.n_coeffs() << "\n\n";
         // exit(0);
-        rlwe_vec res(n_rows(), n_polys(), n_coeffs());
+        rlwe_vec res(n_rows(), n_polys(), n_coeffs()); // FIXME
         for (size_t i = 0; i < n_rows(); i++) {
             rlwe sum(n_polys(), 2 * N_); // FIXME
             for (size_t j = 0; j < n_cols(); j++) {
@@ -1376,8 +1333,11 @@ using vvi_arr = array1d<bigz, veri_vec_inner>;
     bigz dot_prod(const hashed_rlwe& other) const {
         assert(size() == other.size());
         bigz res{0};
-        for (size_t i = 0; i < size(); i++)
-            res += other.get(i) * get(i);
+        for (size_t i = 0; i < size(); i++) {
+            bigz val = other.get(i) * get(i);
+            val = mod_(val, FIELD_MODULUS);
+            res += val;
+        }
         return res;
     }
     using vvi_arr::operator*;
@@ -1399,9 +1359,10 @@ using vvi_arr = array1d<bigz, veri_vec_inner>;
         for (size_t i = 0; i < size(); i++) {
             poly p{2 * N_}; // FIXME magic num. (size 2 * N_ for conv)
             bigz val = get(i); // NOTE we want copy, not ref
-            p.set(i, val);
+            p.set(0, val); // XXX pretty sure this was one bug - p.set(i, val)
             res.set(i, p.get_hash_a(eval_pows));
             assert(res.get(i).get(p.size() - 1) == 0); // conv has no last elem
+            assert(res.get(i).get(p.size() - 2) != 0); // conv has a 2nd last el
         }
         return res;
     }
@@ -1504,18 +1465,9 @@ private:
         array2d<bigz> result(rows, cols);
         for (size_t i = 0; i < rows; i++) {
             for (size_t j = 0; j < cols; j++) {
-                mpf_class rounded = scalar * mat[i][j];
-                rounded = mpf_round(rounded);
-                bigz modded = (bigz)rounded; // = (rounded < 0) ? (bigz)(q + rounded) : (bigz)rounded;
-                if (rounded < 0) {
-                    // std::cout << "rounded is negative\n";
-                    // std::cout << mpf_str(rounded) << "\n";
-                    // std::cout << print_to_string_mpz(modded) << "\n";
-                    modded = q + modded;
-                    // std::cout << print_to_string_mpz(modded) << "\n";
-                }
-                // else
-                //     modded = rounded;
+                mpf_class rounded = mpf_round(scalar * mat[i][j]);
+                bigz modded = (bigz)rounded;
+                modded = mod_(modded, q);
                 result.set(i, j, modded);
             }
         }
@@ -1530,22 +1482,12 @@ private:
         ASSERT(result.capacity() == result.size());
         for (size_t i = 0; i < vec.size(); i++) {
             mpf_class rounded = mpf_round(scalar * vec[i]);
-            bigz modded;
-            if (rounded < 0)
-                modded = rounded + q;
-            else
-                modded = rounded;
+            bigz modded = (bigz)rounded;
+            modded = mod_(modded, q);
             result.at(i) = modded;
         }
         return result;
     }
-
-    // void generate_field_and_group_params() {
-    //     // TODO use NTL and add funcs from Python implementation
-    //     p = GROUP_MODULUS;
-    //     q = FIELD_MODULUS;
-    //     g = GENERATOR;
-    // }
 
 public:
     Params() :
@@ -1732,6 +1674,11 @@ struct veri_key {
     bigz alpha_1;
     bigz gamma_0;
     bigz gamma_1;
+};
+
+struct check_key {
+    flat_rgsw_vec r_1_rgsw;
+    flat_rgsw_vec r_0_rgsw;
 };
 
 struct Proof {
