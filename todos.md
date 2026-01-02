@@ -18,6 +18,10 @@
 
 
 ##### TODO
+- [ ] find BUG:
+  - [ ] check N: before/after: mod_cyclo, get_hash_a, pow, get_hash_sec
+  - [ ] check logic for operator*, dot_prod, encode_rgsw
+
 - [ ] Better array1d class
   - [ ] Use inheritance or composition for array1d?
     - [ ] See how composition would work

@@ -442,7 +442,7 @@ public:
         return size();
     }
     auto get_hash(const vector_bigz& eval_pows) const {
-        std::cout << "poly::get_hash: size(): " << size() << "\n";
+        // std::cout << "poly::get_hash: size(): " << size() << "\n";
         bigz hash = 0;
         for (size_t i = 0; i < size(); i++) {
             hash += get(i) * eval_pows.at(i);
@@ -558,9 +558,9 @@ public:
     size_t n_hashed_a_coeffs() const {
         return size();
     }
-    G1 get_g(size_t i) const {
-        return arr_g[i];
-    }
+    // G1 get_g(size_t i) const {
+    //     return arr_g[i];
+    // }
     void set_g(size_t i, const G1& val) {
         arr_g[i] = val;
     }
@@ -580,7 +580,7 @@ public:
         assert(n == N_ || other.get(n - 1) == 0); // if other.size() is 2 * N_ (short circuit)
         G1 result;
         result.clear();
-        std::cout << "hashed_a_poly::get_hash_sec(): other.size(): " << n << "\n";
+        // std::cout << "hashed_a_poly::get_hash_sec(): other.size(): " << n << "\n";
         for (size_t i = 0; i < n; i++) {
             result += pow_(arr_g[i], other.get(i));
         }
@@ -756,12 +756,12 @@ public:
             arr_g[i] = x;
         }
     }
-    G1 get_g(size_t i) const {
-        return arr_g[i];
-    }
-    void set_g(size_t i, const G1& val) {
-        arr_g[i] = val;
-    }
+    // G1 get_g(size_t i) const {
+    //     return arr_g[i];
+    // }
+    // void set_g(size_t i, const G1& val) {
+    //     arr_g[i] = val;
+    // }
     size_t n_hashed_polys() const {
         return size();
     }
@@ -1496,9 +1496,10 @@ public:
         s(10000.0),
         L(10000.0),
         r(10000.0),
-        p(42),
         q(FIELD_MODULUS),
-        g(42),
+        d{N_DECOMP},
+        power{get_decomp_power()},
+        v{0},
         F(F_.size(), F_.at(0).size()),
         G_bar(scalar_mat_mult(s, G, q, G.size(), G.at(0).size())),
         R_bar(scalar_mat_mult(s, R, q, R.size(), R.at(0).size())),
@@ -1508,8 +1509,6 @@ public:
         ASSERT(A.size() == B.size());
         ASSERT(A.size() == F_.size());
         // generate_field_and_group_params();
-        // TODO move into initialiser list
-        x_cont_init_scaled = scalar_vec_mult(r * s * L, x_cont_init, q);
         // Construct F from F_
         for (size_t i = 0; i < F_.size(); i++) {
             for (size_t j = 0; j < F_.at(0).size(); j++) {
@@ -1524,18 +1523,22 @@ public:
         }
         assert(d >= 1);
         std::cout << "power=" << power << "\n";
+        std::cout << "before v=" << v << "\n";
+        v = static_cast<u32>(1) << power; // XXX previously:1 << power. Overflow in literal!
+        std::cout << "after v=" << v << "\n";
+
+        x_cont_init_scaled = scalar_vec_mult(r * s * L, x_cont_init, q);
     }
     size_t N, iter_;
     double s, L, r;
-    bigz p, q, g;
-
-    array2d<bigz> F, G_bar, R_bar, H_bar;
+    bigz q;
     // TODO update to array1d<bigz> (add as another class?)
-    vector_bigz x_cont_init_scaled;
-    u32 d = N_DECOMP;
-    u32 power = get_decomp_power();
+    u32 d;
+    u32 power;
     // static constexpr bigz v = static_cast<bigz>(1) << power;
-    u32 v = 1 << power;
+    u32 v;
+    array2d<bigz> F, G_bar, R_bar, H_bar;
+    vector_bigz x_cont_init_scaled;
 
     // ======== Plant matrices ========
     matrix_double A = {
@@ -1577,29 +1580,25 @@ public:
     };
     void print() {
         std::cout << "*** START Params.print ***\n";
-        // print these: p, q, g, s, L, r, iter_;
-        std::cout << "N: " << i128str(N) << "\n";
-        // std::cout << "p: " << i128str(p) << "\n";
-        std::cout << "p: " << print_to_string_mpz(p) << "\n";
-        // std::cout << "q: " << i128str(q) << "\n";
+        std::cout << "N: " << N << "\n";
         std::cout << "q: " << print_to_string_mpz(q) << "\n";
-        // std::cout << "g: " << i128str(g) << "\n";
-        std::cout << "g: " << print_to_string_mpz(g) << "\n";
-        std::cout << "s: " << i128str(s) << "\n";
-        std::cout << "L: " << i128str(L) << "\n";
-        std::cout << "r: " << i128str(r) << "\n";
-        std::cout << "iter: " << i128str(iter_) << "\n";
-        std::cout << "F:\n";
-        F.print();
-        std::cout << "G_bar:\n";
-        G_bar.print();
-        std::cout << "R_bar:\n";
-        R_bar.print();
-        std::cout << "H_bar:\n";
-        H_bar.print();
-        std::cout << "x_cont_init_scaled:\n";
-        // print_vector_i128(x_cont_init_scaled);
-        print_vector_mpz(x_cont_init_scaled);
+        std::cout << "d: " << d << "\n";
+        std::cout << "v: " << v << "\n";
+        std::cout << "power: " << power << "\n";
+        std::cout << "s: " << s << "\n";
+        std::cout << "L: " << L << "\n";
+        std::cout << "r: " << r << "\n";
+        std::cout << "iter: " << iter_ << "\n";
+        // std::cout << "F:\n";
+        // F.print();
+        // std::cout << "G_bar:\n";
+        // G_bar.print();
+        // std::cout << "R_bar:\n";
+        // R_bar.print();
+        // std::cout << "H_bar:\n";
+        // H_bar.print();
+        // std::cout << "x_cont_init_scaled:\n";
+        // print_vector_mpz(x_cont_init_scaled);
         std::cout << "*** END Params.print ***\n\n\n";
     }
     // TODO pass in gen as a param

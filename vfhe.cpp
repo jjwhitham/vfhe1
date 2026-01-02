@@ -16,7 +16,7 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key, check_key> compute_eval_and
 ) {
     using ha_veri_vec = hashed_a_veri_vec;
     ha_veri_vec gr_0 = r_0.get_hash_a(eval_pows).pow();
-    ha_veri_vec gr_1 = r_1.get_hash_a(eval_pows).pow(); // XXX
+    ha_veri_vec gr_1 = r_1.get_hash_a(eval_pows).pow();
     ha_veri_vec gr_rho_0 = (r_0 * rho_0).get_hash_a(eval_pows).pow();
     ha_veri_vec gr_rho_1 = (r_1 * rho_1).get_hash_a(eval_pows).pow();
 
@@ -25,7 +25,7 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key, check_key> compute_eval_and
     ASSERT(rF_1.n_polys() == (size_t)(2 * d));
     ASSERT(rF_1.n_flat_rgsws() == F_ctx.n_cols());
     // Make rgsw_vec for r_0 and r_1
-    size_t n_hashed_a_coeffs = eval_pows.size() / 2;
+    // size_t n_hashed_a_coeffs = eval_pows.size() / 2;
     flat_rgsw_vec r_0_rgsw(r_0.size());
     flat_rgsw_vec r_1_rgsw(r_1.size());
     ASSERT(r_0.size() == r_1.size());
@@ -326,6 +326,8 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     };
 
     Params pms;
+    pms.print();
+
     DEBUG(std::cout << "*** START run_control_loop ***\n";)
     using matrix_i128 = array2d<bigz>;
 
@@ -364,8 +366,6 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     auto s = verification_vectors.at(2);
 
     size_t N = N_;
-    // TODO move to Encryptor
-    // TODO move to Params
     u32 d = pms.d;
     u32 power = pms.power;
     u32 v = pms.v;
@@ -396,7 +396,9 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     R_bar_ctx.to_eval_form();
     H_bar_ctx.to_eval_form();
 
+    std::cout << "v: " << v << ", d: " << d << ", power: " << power << "\n";
     std::cout << "\n\nx_hash:\n";
+    std::cout << "x.n_coeffs(): " << x.n_coeffs() << "\n";
     auto x_hash = x.get_hash(eval_pows); // XXX
     std::cout << "x_hash: ^^^\n\n";
     // TODO move to veri_vec
@@ -417,7 +419,7 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     std::cout <<  "g1 = " << g1 << "\n";
     std::cout <<  "g1 * -1 " << g1 * -1 << "\n";
     std::cout <<  "r1d_xd " << r1d_xd << "\n";
-    assert(g1 * -1 == r1d_xd);
+    assert(g1 == r1d_xd);
 
     Proof old_proof {};
     old_proof.g_1 = g1;
@@ -495,11 +497,11 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         rlwe_vec x_old = x;
         x = x_conv.mod_cyclo(N); // FIXME remove N
 
-        // Decrypt and capture controller state
-        vector_bigz x_ptx = enc.decrypt_rlwe_vec(x);
-        vector_double x_ptx_q2 = map_to_half_q(x_ptx);
-        vector_double x_ptx_scaled = scalar_vec_mult(1 / (rr * ss * L), x_ptx_q2);
-        vars.x_cont.push_back(x_ptx_scaled);
+        // // Decrypt and capture controller state
+        // vector_bigz x_ptx = enc.decrypt_rlwe_vec(x);
+        // vector_double x_ptx_q2 = map_to_half_q(x_ptx);
+        // vector_double x_ptx_scaled = scalar_vec_mult(1 / (rr * ss * L), x_ptx_q2);
+        // vars.x_cont.push_back(x_ptx_scaled);
 
         #ifdef TIMING_ON
             end_controller = std::chrono::high_resolution_clock::now();
@@ -699,6 +701,7 @@ int main() {
 
     int gen_seed = 42;
     hashAndMapToG1(Generator, std::string("P_") + std::to_string(gen_seed));
+    // std::cout << "sizeof (long int)=" << sizeof (long int) << "\n";
     run_control_loop(vars, timing);
 
     #ifdef TIMING_ON
