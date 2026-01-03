@@ -21,6 +21,10 @@ static constexpr size_t NAILS = 0; // no padding
 using namespace NTL;
 // using namespace mcl;
 
+#ifndef N_THREADS
+    #define N_THREADS 1
+#endif
+
 void print_bytes1(uint8_t *buf, size_t len, bool reverse=false) {
     if (reverse) {
         for (size_t i = len; i >= 1; i--)
@@ -88,7 +92,7 @@ void mpz_to_buff(uint8_t* buf, size_t* n_write, const mpz_class& in) {
 
     if (ret_ptr == nullptr)
         std::cout << "mpz_to_buff: ret_ptr = nullptr\n";
-    else if (ret_ptr == BUF) {
+    else if (ret_ptr == buf) {
         // std::cout << "mpz_to_buff: ret_ptr points to BUF\n";
     }
     else {
@@ -199,12 +203,15 @@ mcl::Fr ZZ_p_to_new_Fr(const ZZ_p& in) {
 
 // a version that's better if all Fr's are allocated ahead of time
 void mpz_to_Fr(mcl::Fr& out, const mpz_class& in) {
+    static uint8_t BUF[N_THREADS][N_BYTES_256_BITS] = { 0 };
+    int t = omp_get_thread_num();
+    // std::cout << "N_THREADS: " << N_THREADS << "\n";
     size_t n_wrote = 42; // n_wrote should never be 42;
-    mpz_to_buff(BUF, &n_wrote, in);
+    mpz_to_buff(BUF[t], &n_wrote, in);
     assert(n_wrote <= 32); // 256 bits (2^8) == 2^5 Bytes
 
-    buff_to_mcl(out, n_wrote, BUF);
-    memset((void*)BUF, 0, N_BYTES_256_BITS);
+    buff_to_mcl(out, n_wrote, BUF[t]);
+    memset((void*)BUF[t], 0, N_BYTES_256_BITS);
 }
 
 mcl::Fr mpz_to_new_Fr(const mpz_class& in) {

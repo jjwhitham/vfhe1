@@ -14,7 +14,7 @@ using namespace mcl::bn;
 
 typedef mpz_class bigz;
 typedef long int u32; // FIXME - why signed? Rationalise usage across code
-u32 N_DECOMP = 5;
+u32 N_DECOMP = 7;
 constexpr size_t N_ = 4096; // FIXME gsu != rhs_u if 2048
 
 #ifdef TIMING_ON
@@ -63,13 +63,19 @@ using matrix_double = std::vector<std::vector<mpf_class>>;
 using vector_double = std::vector<mpf_class>;
 using vector_bigz = std::vector<bigz>;
 
-bigz mod_(bigz val, const bigz& q) {
+bigz mod_(bigz& val, const bigz& q) {
     if (val < 0 || val >= FIELD_MODULUS)
         val %= q;
     if (val < 0) {
         val += q;
     }
     return val;
+}
+// TODO check correctness
+bigz mod_(bigz&& val, const bigz& q) {
+    return mod_(val, q);
+    // val = mod_(val, q);
+    // return val;
 }
 
 std::string i128str(__uint128_t n) {
@@ -171,7 +177,8 @@ mpf_class mpf_round(const mpf_class &x) {
 G1 pow_(const G1& base, const bigz& power) {
     assert(power >= 0);
     // assert(power < FIELD_MODULUS);
-    static Fr power1;
+    // static Fr power1;
+    Fr power1;
     power1.clear();
     if (power > FIELD_MODULUS) {
         std::cout << "pow_: power > FIELD_MODULUS\n";

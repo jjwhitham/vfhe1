@@ -14,18 +14,18 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key, check_key> compute_eval_and
     bigz rho_0, bigz rho_1, bigz alpha_0, bigz alpha_1, bigz gamma_0, bigz gamma_1,
     u32 d, size_t N, const vector_bigz& eval_pows, const Encryptor& enc
 ) {
-    using ha_veri_vec = hashed_a_veri_vec;
-    ha_veri_vec gr_0 = r_0.get_hash_a(eval_pows).pow();
-    ha_veri_vec gr_1 = r_1.get_hash_a(eval_pows).pow();
-    ha_veri_vec gr_rho_0 = (r_0 * rho_0).get_hash_a(eval_pows).pow();
-    ha_veri_vec gr_rho_1 = (r_1 * rho_1).get_hash_a(eval_pows).pow();
+    using ht_veri_vec = hashed_t_veri_vec;
+    ht_veri_vec gr_0 = r_0.get_hash_t(eval_pows).pow();
+    ht_veri_vec gr_1 = r_1.get_hash_t(eval_pows).pow();
+    ht_veri_vec gr_rho_0 = (r_0 * rho_0).get_hash_t(eval_pows).pow();
+    ht_veri_vec gr_rho_1 = (r_1 * rho_1).get_hash_t(eval_pows).pow();
 
     flat_rgsw_vec rF_0 = (r_0 * F_ctx);
     flat_rgsw_vec rF_1 = (r_1 * F_ctx);
     ASSERT(rF_1.n_polys() == (size_t)(2 * d));
     ASSERT(rF_1.n_flat_rgsws() == F_ctx.n_cols());
     // Make rgsw_vec for r_0 and r_1
-    // size_t n_hashed_a_coeffs = eval_pows.size() / 2;
+    // size_t n_hashed_t_coeffs = eval_pows.size() / 2;
     flat_rgsw_vec r_0_rgsw(r_0.size());
     flat_rgsw_vec r_1_rgsw(r_1.size());
     ASSERT(r_0.size() == r_1.size());
@@ -38,13 +38,13 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key, check_key> compute_eval_and
     }
     ASSERT(r_0_rgsw.size() == rF_0.size());
 
-    hashed_a_rgsw_vec rF_0_r_1 = (rF_0 - r_1_rgsw).get_hash_a(eval_pows);
-    hashed_a_rgsw_vec rF_1_r_0 = (rF_1 - r_0_rgsw).get_hash_a(eval_pows);
+    hashed_t_rgsw_vec rF_0_r_1 = (rF_0 - r_1_rgsw).get_hash_t(eval_pows);
+    hashed_t_rgsw_vec rF_1_r_0 = (rF_1 - r_0_rgsw).get_hash_t(eval_pows);
 
-    hashed_a_rgsw_vec grFr_0 = rF_0_r_1.pow();
-    hashed_a_rgsw_vec grFr_1 = rF_1_r_0.pow();
-    hashed_a_rgsw_vec grFr_alpha_0 = (rF_0_r_1 * alpha_1).pow();
-    hashed_a_rgsw_vec grFr_alpha_1 = (rF_1_r_0 * alpha_0).pow();
+    hashed_t_rgsw_vec grFr_0 = rF_0_r_1.pow();
+    hashed_t_rgsw_vec grFr_1 = rF_1_r_0.pow();
+    hashed_t_rgsw_vec grFr_alpha_0 = (rF_0_r_1 * alpha_1).pow();
+    hashed_t_rgsw_vec grFr_alpha_1 = (rF_1_r_0 * alpha_0).pow();
 
     hashed_rgsw_vec rG_0 = (r_0 * G_bar_ctx).get_hash(eval_pows);
     hashed_rgsw_vec rG_1 = (r_1 * G_bar_ctx).get_hash(eval_pows);
@@ -52,13 +52,13 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key, check_key> compute_eval_and
     hashed_rgsw_vec rR_1 = (r_1 * R_bar_ctx).get_hash(eval_pows);
 
     flat_rgsw_vec sH = (s * H_bar_ctx);
-    hashed_a_rgsw_vec sH_r_1 = (sH - r_1_rgsw).get_hash_a(eval_pows);
-    hashed_a_rgsw_vec sH_r_0 = (sH - r_0_rgsw).get_hash_a(eval_pows);
+    hashed_t_rgsw_vec sH_r_1 = (sH - r_1_rgsw).get_hash_t(eval_pows);
+    hashed_t_rgsw_vec sH_r_0 = (sH - r_0_rgsw).get_hash_t(eval_pows);
 
-    hashed_a_rgsw_vec gsHr_0 = sH_r_1.pow();
-    hashed_a_rgsw_vec gsHr_1 = sH_r_0.pow();
-    hashed_a_rgsw_vec gsHr_gamma_0 = (sH_r_1 * gamma_1).pow();
-    hashed_a_rgsw_vec gsHr_gamma_1 = (sH_r_0 * gamma_0).pow();
+    hashed_t_rgsw_vec gsHr_0 = sH_r_1.pow();
+    hashed_t_rgsw_vec gsHr_1 = sH_r_0.pow();
+    hashed_t_rgsw_vec gsHr_gamma_0 = (sH_r_1 * gamma_1).pow();
+    hashed_t_rgsw_vec gsHr_gamma_1 = (sH_r_0 * gamma_0).pow();
 
     eval_key ek0 {
         gr_0,
@@ -119,29 +119,23 @@ Proof compute_proof(
     const rlwe_vec& x_nega_,
     const rlwe_vec& x_,
     const rlwe_vec& x,
-    u32 v, u32 d, u32 power
+    bigz v, u32 d, u32 power
 ) {
-    const hashed_a_veri_vec& gr = ek.gr;
-    const hashed_a_rgsw_vec& grFr = ek.grFr;
-    const hashed_a_rgsw_vec& gsHr = ek.gsHr;
-    const hashed_a_veri_vec& gr_rho = ek.gr_rho;
-    const hashed_a_rgsw_vec& grFr_alpha = ek.grFr_alpha;
-    const hashed_a_rgsw_vec& gsHr_gamma = ek.gsHr_gamma;
+    const hashed_t_veri_vec& gr = ek.gr;
+    const hashed_t_rgsw_vec& grFr = ek.grFr;
+    const hashed_t_rgsw_vec& gsHr = ek.gsHr;
+    const hashed_t_veri_vec& gr_rho = ek.gr_rho;
+    const hashed_t_rgsw_vec& grFr_alpha = ek.grFr_alpha;
+    const hashed_t_rgsw_vec& gsHr_gamma = ek.gsHr_gamma;
 
     rlwe_decomp_vec x_decomped = x.decompose(v, d, power);
-    std::cout << "\n\n\n\ngrx_: (should be 8192) \n";
     auto grx_ = gr.get_hash_sec(x_); // G_1
-    std::cout << "\n\n\n\ngrx_: (should be 8192) \n";
     auto grFrx = grFr.get_hash_sec(x_decomped); // G_2
     auto gsHrx = gsHr.get_hash_sec(x_decomped); // G_3
-    std::cout << "\n\n\n\ngr_rho_x_: (should be 8192) \n";
     auto gr_rho_x_ = gr_rho.get_hash_sec(x_); // G_1_
-    std::cout << "\n\n\n\ngr_rho_x_: (should be 8192) \n";
     auto grFr_alpha_x = grFr_alpha.get_hash_sec(x_decomped); // G_2_
     auto gsHr_gamma_x = gsHr_gamma.get_hash_sec(x_decomped); // G_3_
-    std::cout << "\n\n\n\ng_1 (should be 4096):\n";
     auto g_1 = gr.get_hash_sec(x_nega_); // g_1
-    std::cout << "\n\n\n\n";
 
     return Proof {
         grx_,
@@ -157,7 +151,7 @@ Proof compute_proof(
 void verify_with_lin_and_dyn_checks(
     const veri_key& vk, const Proof& proof, const Proof& old_proof, size_t k,
     const rlwe_vec& y, const rlwe_vec& u_conv, const rlwe_vec& u_reenc,
-    u32 v, u32 d, u32 power, const vector_bigz& eval_pows
+    bigz v, u32 d, u32 power, const vector_bigz& eval_pows
 ) {
     // Unpack veri_key
     const veri_vec& s = vk.s;
@@ -199,9 +193,7 @@ void verify_with_lin_and_dyn_checks(
     assert(pow_(G_2, alpha) == G_2_);
     assert(pow_(G_3, gamma) == G_3_);
     // Dynamics checks: controller output
-    std::cout << "\n\n\n############ u_hash (should be 8192)\n";
     hashed_rlwe_vec u_hash = u_conv.get_hash(eval_pows);
-    std::cout << "############ u_hash (should be 8192)\n\n\n";
     bigz su = s.dot_prod(u_hash);
     G1 gsu = pow_(Generator, su);
     G1 rhs_u = G_3 + g_1;
@@ -368,7 +360,7 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     size_t N = N_;
     u32 d = pms.d;
     u32 power = pms.power;
-    u32 v = pms.v;
+    bigz v = pms.v;
 
     Encryptor enc(v, d, N, q);
     rgsw_mat F_ctx = enc.encrypt_rgsw_mat(F);
@@ -404,22 +396,23 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     // TODO move to veri_vec
     bigz rx_0 = r_1.dot_prod(x_hash); // XXX
     G1 g1 = pow_(Generator, rx_0); // XXX
-    std::cout << "\n\nx_d_hash:\n";
-    hashed_rlwe_decomp_vec x_d_hash = x.decompose(v, d, power).get_hash(eval_pows); // XXX
-    std::cout << "x_d_hash: ^^^\n\n";
-    flat_rgsw_vec r1_rgsw = ck.r_1_rgsw; // XXX
-    std::cout << "\n\nr1_rgsw_hash:\n";
-    hashed_rgsw_vec r1_rgsw_hash = r1_rgsw.get_hash(eval_pows); // XXX
-    std::cout << "r1_rgsw_hash: ^^^\n\n";
-    bigz dot_prod = r1_rgsw_hash.dot_prod(x_d_hash); // XXX
-    std::cout << "dot_prod: " << dot_prod << "\n";
-    G1 r1d_xd = pow_(Generator, dot_prod);
-    G1 res = g1 - r1d_xd;
-    std::cout <<  "g1 - r1d_xd = " << res << "\n";
-    std::cout <<  "g1 = " << g1 << "\n";
-    std::cout <<  "g1 * -1 " << g1 * -1 << "\n";
-    std::cout <<  "r1d_xd " << r1d_xd << "\n";
-    assert(g1 == r1d_xd);
+
+    // std::cout << "\n\nx_d_hash:\n";
+    // hashed_rlwe_decomp_vec x_d_hash = x.decompose(v, d, power).get_hash(eval_pows); // XXX
+    // std::cout << "x_d_hash: ^^^\n\n";
+    // flat_rgsw_vec r1_rgsw = ck.r_1_rgsw; // XXX
+    // std::cout << "\n\nr1_rgsw_hash:\n";
+    // hashed_rgsw_vec r1_rgsw_hash = r1_rgsw.get_hash(eval_pows); // XXX
+    // std::cout << "r1_rgsw_hash: ^^^\n\n";
+    // bigz dot_prod = r1_rgsw_hash.dot_prod(x_d_hash); // XXX
+    // std::cout << "dot_prod: " << dot_prod << "\n";
+    // G1 r1d_xd = pow_(Generator, dot_prod);
+    // G1 res = g1 - r1d_xd;
+    // std::cout <<  "g1 - r1d_xd = " << res << "\n";
+    // std::cout <<  "g1 = " << g1 << "\n";
+    // std::cout <<  "g1 * -1 " << g1 * -1 << "\n";
+    // std::cout <<  "r1d_xd " << r1d_xd << "\n";
+    // assert(g1 == r1d_xd);
 
     Proof old_proof {};
     old_proof.g_1 = g1;
@@ -450,6 +443,8 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         #endif
 
         /* ### Controller: Compute output ### */
+        // TODO could create a copy for passing to compute_proof() to save
+        // re-creation of x_d
         rlwe_decomp_vec x_d = x.decompose(v, d, power);
         x_d.to_eval_form();
         rlwe_vec u_conv = H_bar_ctx.convolve(x_d); // C -> P
@@ -485,14 +480,18 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         #endif
 
         /* ###  Controller: Update state ### */
-        rlwe_vec F_x = F_ctx.convolve(x_d);
-        rlwe_decomp_vec y_d = y.decompose(v, d, power);
-        y_d.to_eval_form();
-        rlwe_vec G_y = G_bar_ctx.convolve(y_d);
-        rlwe_decomp_vec u_re_d = u_re.decompose(v, d, power);
-        u_re_d.to_eval_form();
-        rlwe_vec R_u = R_bar_ctx.convolve(u_re_d);
-        rlwe_vec x_conv = F_x + G_y + R_u;
+        // rlwe_vec F_x = F_ctx.convolve(x_d);
+        // rlwe_decomp_vec y_d = y.decompose(v, d, power);
+        // y_d.to_eval_form();
+        // rlwe_vec G_y = G_bar_ctx.convolve(y_d);
+        // rlwe_decomp_vec u_re_d = u_re.decompose(v, d, power);
+        // u_re_d.to_eval_form();
+        // rlwe_vec R_u = R_bar_ctx.convolve(u_re_d);
+        // rlwe_vec x_conv = F_x + G_y + R_u;
+
+        rlwe_vec x_conv = F_ctx.convolve(x_d) \
+            + G_bar_ctx.convolve(y.decompose(v, d, power).to_eval_form()) \
+            + R_bar_ctx.convolve(u_re.decompose(v, d, power).to_eval_form());
         x_conv.to_coeff_form();
         rlwe_vec x_old = x;
         x = x_conv.mod_cyclo(N); // FIXME remove N
@@ -504,9 +503,6 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         // vars.x_cont.push_back(x_ptx_scaled);
 
         #ifdef TIMING_ON
-            end_controller = std::chrono::high_resolution_clock::now();
-            timing.controller += end_controller - start_controller;
-            start_controller = std::chrono::high_resolution_clock::now();
             auto start_proof = std::chrono::high_resolution_clock::now();
         #endif
 

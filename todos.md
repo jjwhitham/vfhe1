@@ -18,15 +18,29 @@
 
 
 ##### TODO
-- [ ] find BUG:
-  - [ ] check N: before/after: mod_cyclo, get_hash_a, pow, get_hash_sec
-  - [ ] check logic for operator*, dot_prod, encode_rgsw
+- [ ] Add invariants to counts (sec_hash calls, etc)
+- [ ] Implement pairing-based hashing:
+  - [ ] init G2 and GT
+  - [ ] replace get_hash_a().pow() with get_hash().pow() (quick hack)
+  - [ ] pow can be on the hashed types for now
+  - [ ] ctrl will compute x_d, then call msm() which will compute the msm for each
+  poly, setting its G2 val
+  - [ ] get_hash_sec will then do the pairing
+  - [ ] use aliases: hashed_t_rgsw_vec -> hashed_rgsw_vec etc to allow switching between the single group and the pairing group implementations
+
+- XXX [ ] CRT can re-use the decomp representation when decomp coeffs are smaller
+  than the CRT primes, i.e. for all q_i, v < q_i.
+
+- [x] find BUG:
+  - [x] check N: before/after: mod_cyclo, get_hash_a, pow, get_hash_sec
+  - [x] check logic for operator*, dot_prod, encode_rgsw
 
 - [ ] Better array1d class
   - [ ] Use inheritance or composition for array1d?
     - [ ] See how composition would work
   - [ ] add 'invariant_size=0'? then: if (invariant_size) assert(size == invariant_size)
   - [ ] remove CRTP: array1d<T, Derived> -> array1d<T>. Extract mbrfncs that use Derived
+    - NOTE compiler errors - need to add specialisations
 
 - [ ] Integrate MLC
   - [x] Integrate MLC in the quickest way possible: Do exps in G1
@@ -36,13 +50,14 @@
 - [ ] Write performant code
   - [x] Fix redundant NTTs: convert x, y, u_re to eval form once
     - [x] Use more distinctive names: mod_cyclo(), convert_to_eval/eval_form, coeff_form
-    - [ ] Remove excessive copying
+    - [x] Remove some excessive copying
+    - [ ] Remove more copying
   - [ ] Compare MCL against BLST and others
   - [ ] Allocate all variables upfront and mutate them across time
     - [ ] Q: How for NTL & MCL?
-  - [ ] Investigate increasing stack size and performing everything on stack
+  - [ ] Investigate increasing stack size and perform everything on stack
   - [ ] Experiment: Fastest scalars - MCL or NTL?
-  - [ ] Want bigz type that mods itself once it reaches a threshold
+  - [ ] Want bigz type that mods itself once it reaches a threshold (NTL?)
 
 - [ ] Start new codebase (called vHEctrl? vHE? VEctlr?)
   - [ ] If NTL > MCL: Use NTL ZZ for ints ZZX for polys
