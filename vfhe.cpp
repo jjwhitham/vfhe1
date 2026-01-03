@@ -129,6 +129,7 @@ Proof compute_proof(
     const hashed_t_rgsw_vec& gsHr_gamma = ek.gsHr_gamma;
 
     rlwe_decomp_vec x_decomped = x.decompose(v, d, power);
+    // TODO x_d.get_hash().pow()
     auto grx_ = gr.get_hash_sec(x_); // G_1
     auto grFrx = grFr.get_hash_sec(x_decomped); // G_2
     auto gsHrx = gsHr.get_hash_sec(x_decomped); // G_3
