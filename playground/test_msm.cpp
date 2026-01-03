@@ -3,7 +3,7 @@
 // where a_i = [a_{i,0}, ..., a_{i,N-1}]
 
 // #include <mcl/bn.hpp>
-#include "/home/jw/Projects/mcl/include/mcl/bn.hpp"
+#include "/Users/jw/Projects/mcl/include/mcl/bn.hpp"
 #include <iostream>
 #include <string>
 #include <chrono>
@@ -13,7 +13,7 @@
 using namespace mcl::bn;
 
 int main(int argc, char **argv) {
-    size_t n_threads = 16;
+    size_t n_threads = 4;
     std::cout << "n_threads = " << n_threads << "\n";
 
     // defaults

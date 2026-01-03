@@ -288,7 +288,7 @@ void ntt_iter(auto& x, const arr_u128& rou_pows) {
     ntt_iter_(x, rou_pows);
     // NOTE mod each value after NTT, due to lazy modding
     for (auto& el : x)
-        el = mod_(el, FIELD_MODULUS);
+        mod_(el, FIELD_MODULUS);
 
     TIMING(auto end = std::chrono::high_resolution_clock::now();)
     TIMING(timing.ntt += end - start;)
@@ -299,8 +299,10 @@ void intt_iter(auto& x, const arr_u128& rou_pows, bigz inv_x_len) {
 
     ntt_iter_(x, rou_pows);
     // scale by N^-1
-    for (auto& el : x)
-        el = mod_(el * inv_x_len, FIELD_MODULUS);
+    for (auto& el : x) {
+        el *= inv_x_len;
+        mod_(el, FIELD_MODULUS);
+    }
 
     TIMING(auto end = std::chrono::high_resolution_clock::now();)
     TIMING(timing.intt += end - start;)
@@ -313,7 +315,7 @@ void ntt_iter1(auto& x, const arr_u128& rou_pows) {
     ntt_iter_ct_no_bo(x, rou_pows);
     // NOTE mod each value after NTT, due to lazy modding
     for (auto& el : x)
-        el = mod_(el, FIELD_MODULUS);
+        mod_(el, FIELD_MODULUS);
 
     TIMING(auto end = std::chrono::high_resolution_clock::now();)
     TIMING(timing.ntt1 += end - start;)
@@ -325,7 +327,7 @@ void intt_iter1(auto& x, const arr_u128& rou_pows, bigz inv_x_len) {
     intt_iter_gs_bo_no(x, rou_pows);
     // scale by N^-1
     for (auto& el : x)
-        el = mod_(el * inv_x_len, FIELD_MODULUS);
+        el = mod_(el * inv_x_len, FIELD_MODULUS); // TODO check mod_ logic here
 
     TIMING(auto end = std::chrono::high_resolution_clock::now();)
     TIMING(timing.intt1 += end - start;)

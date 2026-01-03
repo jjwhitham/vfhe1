@@ -18,31 +18,57 @@
 
 
 ##### TODO
-- [ ] find BUG:
-  - [ ] check N: before/after: mod_cyclo, get_hash_a, pow, get_hash_sec
-  - [ ] check logic for operator*, dot_prod, encode_rgsw
+Tue 20th Jan 2026
+XXX
+- [x] Get asserts working
+  - [x] test ops with test_mcl_ops.cpp
+- [x] merge commit, rename branch (inc. upstream)
+
+
+- [ ] Add invariants to counts (calls to funcs, etc)
+  - [ ] Add invariant check for get_hash_sec
+- XXX [ ] Implement NTTs with NTL
+
+
+- [x] Implement pairing-based hashing:
+  - [x] init G2 and GT
+  - [x] replace get_hash_a().pow() with get_hash().pow() (quick hack)
+  - [x] pow can be on the hashed types for now
+  - [x] ctrl will compute x_d, then call msm() which will compute the msm for each
+  poly, setting its G2 val
+  - [x] get_hash_sec will then do the pairing
+  - [x] use aliases: hashed_t_rgsw_vec -> hashed_rgsw_vec etc to allow switching between the single group and the pairing group implementations
+
+- XXX [ ] CRT can re-use the decomp representation when decomp coeffs are smaller
+  than the CRT primes, i.e. for all q_i, v < q_i.
+
+- [x] find BUG:
+  - [x] check N: before/after: mod_cyclo, get_hash_a, pow, get_hash_sec
+  - [x] check logic for operator*, dot_prod, encode_rgsw
 
 - [ ] Better array1d class
   - [ ] Use inheritance or composition for array1d?
     - [ ] See how composition would work
   - [ ] add 'invariant_size=0'? then: if (invariant_size) assert(size == invariant_size)
   - [ ] remove CRTP: array1d<T, Derived> -> array1d<T>. Extract mbrfncs that use Derived
+    - NOTE compiler errors - need to add specialisations
 
 - [ ] Integrate MLC
   - [x] Integrate MLC in the quickest way possible: Do exps in G1
   - [x] Update existing code to flatten hashed RLWEs (use 2m/2n dim for r_i/s)
-    - [ ]
 
 - [ ] Write performant code
+  - [ ] Re-use x_d
   - [x] Fix redundant NTTs: convert x, y, u_re to eval form once
     - [x] Use more distinctive names: mod_cyclo(), convert_to_eval/eval_form, coeff_form
-    - [ ] Remove excessive copying
+    - [x] Remove some excessive copying
+    - [ ] Remove more copying
   - [ ] Compare MCL against BLST and others
   - [ ] Allocate all variables upfront and mutate them across time
     - [ ] Q: How for NTL & MCL?
-  - [ ] Investigate increasing stack size and performing everything on stack
+  - [ ] Investigate increasing stack size and perform everything on stack
   - [ ] Experiment: Fastest scalars - MCL or NTL?
-  - [ ] Want bigz type that mods itself once it reaches a threshold
+  - [ ] Want bigz type that mods itself once it reaches a threshold (NTL?)
 
 - [ ] Start new codebase (called vHEctrl? vHE? VEctlr?)
   - [ ] If NTL > MCL: Use NTL ZZ for ints ZZX for polys
@@ -53,4 +79,5 @@ The classes Vec<ZZ_p> (a.k.a., vec_ZZ_p), Mat<ZZ_p> (a.k.a., mat_ZZ_p), and ZZ_p
 ###### TODO future
 - [ ] Build with CMake
 - [ ] Add simple testing (Ctest? Might be from Google)
+- [ ] address santisation, valgrind and static analysis
 - [ ] Investigate hardware acceleration options

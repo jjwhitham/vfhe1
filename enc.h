@@ -145,22 +145,22 @@ public:
         for (size_t i = 0; i < 2 * d; i++)
             encs_of_zero.set(i, encrypt_rlwe(zero_poly));
 
-        rgsw res = G + encs_of_zero;
-        return res;
+        // rgsw res = G + encs_of_zero;
+        G += encs_of_zero;
+        return G;
     }
     // takes an array2d<bigz> and returns an encrypted rgsw_mat
     rgsw_mat encrypt_rgsw_mat(const array2d<bigz>& mat) {
         size_t rows = mat.n_rows();
         size_t cols = mat.n_cols();
-        rgsw_mat res(rows, cols, 2 * d, N_POLYS_IN_RLWE, N);
+        rgsw_mat res(rows, cols); //, 2 * d, N_POLYS_IN_RLWE, N);
         for (size_t i = 0; i < rows; i++) {
             for (size_t j = 0; j < cols; j++) {
                 poly p(N);
                 // Set only the poly's constant coeff
-                bigz val = mat.get(i, j);
-                p.set(0, mod_(val, FIELD_MODULUS));
-                rgsw enc_rgsw = encrypt_rgsw(p);
-                res.set(i, j, enc_rgsw);
+                // bigz val = mat.get(i, j);
+                p.set(0, mod_(mat.get(i, j), FIELD_MODULUS));
+                res.set(i, j, encrypt_rgsw(p));
             }
         }
         return res;
