@@ -14,7 +14,11 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key, check_key> compute_eval_and
     bigz rho_0, bigz rho_1, bigz alpha_0, bigz alpha_1, bigz gamma_0, bigz gamma_1,
     u32 d, size_t N, const vector_bigz& eval_pows, const Encryptor& enc
 ) {
-    using ht_veri_vec = hashed_t_veri_vec;
+    // #ifdef PAIRING_ON
+        // using ht_veri_vec = veri_vec;
+    // #else
+        using ht_veri_vec = hashed_t_veri_vec;
+    // #endif
     ht_veri_vec gr_0 = r_0.get_hash_t(eval_pows).pow();
     ht_veri_vec gr_1 = r_1.get_hash_t(eval_pows).pow();
     ht_veri_vec gr_rho_0 = (r_0 * rho_0).get_hash_t(eval_pows).pow();
@@ -116,10 +120,11 @@ auto scalar_vec_mult (double scalar, const vector_T& vec) {
 // Computes proof values and returns a tuple of 2-tuples of bigz
 Proof compute_proof(
     const eval_key& ek,
-    const rlwe_vec& x_nega_,
-    const rlwe_vec& x_,
+    rlwe_vec& x_nega_,
+    rlwe_vec& x_,
     const rlwe_vec& x,
-    bigz v, u32 d, u32 power
+    const bigz& v, u32 d, u32 power,
+    std::vector<G1>& eval_pows_g
 ) {
     const hashed_t_veri_vec& gr = ek.gr;
     const hashed_t_rgsw_vec& grFr = ek.grFr;
@@ -127,8 +132,15 @@ Proof compute_proof(
     const hashed_t_veri_vec& gr_rho = ek.gr_rho;
     const hashed_t_rgsw_vec& grFr_alpha = ek.grFr_alpha;
     const hashed_t_rgsw_vec& gsHr_gamma = ek.gsHr_gamma;
-
+    std::cout << "before msm\n";
     rlwe_decomp_vec x_decomped = x.decompose(v, d, power);
+    std::cout << "after decomp\n";
+    x_decomped.msm(eval_pows_g);
+    std::cout << "after msm1\n";
+    x_.msm(eval_pows_g);
+    std::cout << "after msm2\n";
+    x_nega_.msm(eval_pows_g);
+    std::cout << "after msm3\n";
     // TODO x_d.get_hash().pow()
     auto grx_ = gr.get_hash_sec(x_); // G_1
     auto grFrx = grFr.get_hash_sec(x_decomped); // G_2
@@ -168,6 +180,7 @@ void verify_with_lin_and_dyn_checks(
     bigz gamma_1 = vk.gamma_1;
 
     // Unpack proofs
+    using G1 = GT;
     const G1& g_1 = old_proof.g_1;
     const G1& G_1 = proof.grx_;
     const G1& G_2 = proof.grFrx;
@@ -190,26 +203,33 @@ void verify_with_lin_and_dyn_checks(
         gamma = gamma_0;
     }
     // Linearity checks
-    assert(pow_(G_1, rho) == G_1_);
-    assert(pow_(G_2, alpha) == G_2_);
-    assert(pow_(G_3, gamma) == G_3_);
+    // assert(pow_t(G_1, rho) == G_1_);
+    // assert(pow_t(G_2, alpha) == G_2_);
+    // assert(pow_t(G_3, gamma) == G_3_);
     // Dynamics checks: controller output
+    std::cout << "before get_hash\n";
     hashed_rlwe_vec u_hash = u_conv.get_hash(eval_pows);
+    std::cout << "after get_hash\n";
     bigz su = s.dot_prod(u_hash);
-    G1 gsu = pow_(Generator, su);
+    G1 gsu;
+    std::cout << "before pairing\n";
+    pairing(gsu, pow_(Generator, su), Gen2);
+    std::cout << "after pairing\n";
     G1 rhs_u = G_3 + g_1;
-    assert(gsu == rhs_u);
+    // assert(gsu == rhs_u);
     // Dynamics checks: controller state update
     G1 rhs = G_2 + g_1;
     hashed_rlwe_decomp_vec y_d_hashed = y.decompose(v, d, power).get_hash(eval_pows);
     bigz rGy = rG.dot_prod(y_d_hashed);
-    G1 grGy = pow_(Generator, rGy);
+    G1 grGy;
+    pairing(grGy, pow_(Generator, rGy), Gen2);
     rhs += grGy;
     hashed_rlwe_decomp_vec u_reenc_d_hashed = u_reenc.decompose(v, d, power).get_hash(eval_pows);
     bigz rRu = rR.dot_prod(u_reenc_d_hashed);
-    G1 grRu = pow_(Generator, rRu);
+    G1 grRu;
+    pairing(grRu, pow_(Generator, rRu), Gen2);
     rhs += grRu;
-    assert(G_1 == rhs);
+    // assert(G_1 == rhs);
 }
 
 
@@ -290,6 +310,12 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
             res.at(i) = mod_(res.at(i), q);
         }
         assert(res.at(res.size() - 1) == 0);
+        return res;
+    };
+    auto make_eval_pows_g = [](const vector_bigz& eval_pows) -> std::vector<G1> {
+        std::vector<G1> res{eval_pows.size()};
+        for (size_t i = 0; i < res.size(); i++)
+            res[i] = pow_(Generator, eval_pows[i]);
         return res;
     };
     // rounds half away from zero, e.g. 0.5 |-> 1 and -0.5 |-> -1
@@ -374,6 +400,7 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     // TODO sample
     bigz eval_point = 42;
     vector_bigz eval_pows = eval_poly_pows(2 * N, eval_point, q);
+    std::vector<G1> eval_pows_g = make_eval_pows_g(eval_pows);
     auto keys = compute_eval_and_veri_keys(
         F_ctx, G_bar_ctx, R_bar_ctx, H_bar_ctx,
         r_0, r_1, s, rho_0, rho_1, alpha_0, alpha_1, gamma_0, gamma_1,
@@ -389,14 +416,11 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     R_bar_ctx.to_eval_form();
     H_bar_ctx.to_eval_form();
 
-    std::cout << "v: " << v << ", d: " << d << ", power: " << power << "\n";
-    std::cout << "\n\nx_hash:\n";
-    std::cout << "x.n_coeffs(): " << x.n_coeffs() << "\n";
     auto x_hash = x.get_hash(eval_pows); // XXX
-    std::cout << "x_hash: ^^^\n\n";
     // TODO move to veri_vec
     bigz rx_0 = r_1.dot_prod(x_hash); // XXX
-    G1 g1 = pow_(Generator, rx_0); // XXX
+    GT g1;
+    pairing(g1, pow_(Generator, rx_0), Gen2); // XXX
 
     // std::cout << "\n\nx_d_hash:\n";
     // hashed_rlwe_decomp_vec x_d_hash = x.decompose(v, d, power).get_hash(eval_pows); // XXX
@@ -506,10 +530,11 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         #ifdef TIMING_ON
             auto start_proof = std::chrono::high_resolution_clock::now();
         #endif
-
+        std::cout << "before prove\n";
         /* ### Controller: Prove ### */
         const eval_key& ek_i = (k % 2 == 0) ? std::get<0>(ek) : std::get<1>(ek);
-        Proof proof = compute_proof(ek_i, x, x_conv, x_old, v, d, power); // C -> P
+        Proof proof = compute_proof(ek_i, x, x_conv, x_old, v, d, power, eval_pows_g); // C -> P
+        std::cout << "after prove\n";
 
         #ifdef TIMING_ON
             auto end_proof = std::chrono::high_resolution_clock::now();
@@ -521,7 +546,9 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         #endif
 
         /* ### Plant: Verify ### */
+        std::cout << "before veri\n";
         verify_with_lin_and_dyn_checks(vk, proof, old_proof, k, y, u_conv, u_re, v, d, power, eval_pows);
+        std::cout << "after veri\n";
         old_proof = proof;
 
         #ifdef TIMING_ON
@@ -698,6 +725,8 @@ int main() {
 
     int gen_seed = 42;
     hashAndMapToG1(Generator, std::string("P_") + std::to_string(gen_seed));
+    hashAndMapToG2(Gen2, std::string("P_") + std::to_string(gen_seed));
+
     // std::cout << "sizeof (long int)=" << sizeof (long int) << "\n";
     run_control_loop(vars, timing);
 

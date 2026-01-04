@@ -12,11 +12,15 @@
 
 using namespace mcl::bn;
 
+#ifndef PAIRING_OFF
+#   define PAIRING_ON
+#endif
+
 typedef mpz_class bigz;
 typedef long int u32; // FIXME - why signed? Rationalise usage across code
-u32 N_DECOMP = 7;
-// constexpr size_t N_ = 4096; // FIXME gsu != rhs_u if 2048
-constexpr size_t N_ = 8192;
+u32 N_DECOMP = 2;
+constexpr size_t N_ = 4096; // FIXME gsu != rhs_u if 2048
+// constexpr size_t N_ = 8192;
 
 #ifdef TIMING_ON
 #  define TIMING(x) x
@@ -51,14 +55,16 @@ inline times_and_counts timing = { 0 };
 
 // G1 Generator = getG1basePoint();
 G1 Generator;
+G2 Gen2;
+// GT GenT;
 
-// // for N=4096
-// bigz NTH_ROU("4158865282786404163413953114870269622875596290766033564087307867933865333818");
-// bigz TWO_ROU("197302210312744933010843010704445784068657690384188106020011018676818793232");
+// for N=4096
+bigz NTH_ROU("4158865282786404163413953114870269622875596290766033564087307867933865333818");
+bigz TWO_ROU("197302210312744933010843010704445784068657690384188106020011018676818793232");
 
-// for N=8192
-bigz NTH_ROU("197302210312744933010843010704445784068657690384188106020011018676818793232");
-bigz TWO_ROU("20619701001583904760601357484951574588621083236087856586626117568842480512645");
+// // for N=8192
+// bigz NTH_ROU("197302210312744933010843010704445784068657690384188106020011018676818793232");
+// bigz TWO_ROU("20619701001583904760601357484951574588621083236087856586626117568842480512645");
 
 bigz FIELD_MODULUS("\
 21888242871839275222246405745257275088548364400416034343698204186575808495617\
@@ -196,7 +202,38 @@ G1 pow_(const G1& base, const bigz& power) {
     return base * power1;
 }
 
+G2 pow2_(const G2& base, const bigz& power) {
+    assert(power >= 0);
+    // assert(power < FIELD_MODULUS);
+    // static Fr power1;
+    Fr power1;
+    power1.clear();
+    if (power > FIELD_MODULUS) {
+        std::cout << "pow_: power > FIELD_MODULUS\n";
+        mpz_to_Fr(power1, power % FIELD_MODULUS);
+    }
+    else
+        mpz_to_Fr(power1, power);
+    return base * power1;
+}
 
+GT pow_t(const GT& base, const bigz& power) {
+    assert(power >= 0);
+    // assert(power < FIELD_MODULUS);
+    // static Fr power1;
+    Fr power1;
+    power1.clear();
+    if (power > FIELD_MODULUS) {
+        std::cout << "pow_: power > FIELD_MODULUS\n";
+        mpz_to_Fr(power1, power % FIELD_MODULUS);
+    }
+    else
+        mpz_to_Fr(power1, power);
+    GT ret;
+    // pairing(ret, Generator, Gen2); // TODO move out into main() and call it GenT
+    GT::pow(ret, base, power1);
+    return ret;
+}
 
 
 
