@@ -10,14 +10,14 @@ TODO
 #include <iostream>
 #include <cassert>
 #include <random>
-#include "omp.h"
+#include <omp.h>
 #include "shared.h"
 #include "ntt.h"
 #include "gmpxx.h"
 
-#include <boost/stacktrace.hpp>
-#include <boost/exception/all.hpp>
-typedef boost::error_info<struct tag_stacktrace, boost::stacktrace::stacktrace> traced;
+// #include <boost/stacktrace.hpp>
+// #include <boost/exception/all.hpp>
+// typedef boost::error_info<struct tag_stacktrace, boost::stacktrace::stacktrace> traced;
 
 #include <typeinfo>
 #ifdef __GNUG__
@@ -103,12 +103,12 @@ public:
                     "Index error: accessing arr[" + std::to_string(n) + "]"
                     + " in a " + std::to_string(size_) + " element array."
                 );
-                throw boost::enable_error_info(e) << traced(boost::stacktrace::stacktrace());
+                // throw boost::enable_error_info(e) << traced(boost::stacktrace::stacktrace());
             } catch (const std::exception& e1) {
-                const boost::stacktrace::stacktrace* st = boost::get_error_info<traced>(e1);
-                if (st) {
-                    std::cerr << *st << '\n';
-                }
+                // const boost::stacktrace::stacktrace* st = boost::get_error_info<traced>(e1);
+                // if (st) {
+                //     std::cerr << *st << '\n';
+                // }
             }
         }
     }
@@ -475,7 +475,7 @@ public:
         return size();
     }
     auto get_hash(const vector_bigz& eval_pows) const {
-        std::cout << "poly::get_hash: size(): " << size() << "\n";
+        // std::cout << "poly::get_hash: size(): " << size() << "\n";
         bigz hash = 0;
         for (size_t i = 0; i < size(); i++) {
             hash += get(i) * eval_pows.at(i);
@@ -567,30 +567,33 @@ public:
         return negacyclic;
     }
     G1 msm(std::vector<G1>& eval_pows_g) {
+        TIMING(auto start = std::chrono::high_resolution_clock::now();)
+        TIMING(timing.calls_get_hash_sec += 1;)
         // std::cout << "size: " << size() << "\n";
         // std::cout << "eval_pows_g.size(): " << eval_pows_g.size() << "\n";
         // for each of the pols in rlwe_decomp
         // msm creates a vector of polys converted to Fr's
         assert(size() <= 2 * N_);
-        std::vector<G1> eval_pows_g1{size()};
+        std::vector<G1> eval_pows_g1;
+        eval_pows_g1.reserve(size());
         for (size_t i = 0; i < size(); i++)
-            eval_pows_g1.at(i) = eval_pows_g.at(i);
-        Fr scal;
-        scal.clear();
-        std::vector<Fr> scalars{size(), scal};
-        // #pragma omp parallel for schedule(static) num_threads(N_THREADS)
-        // for (size_t t = 0; t < size(); t++)
-        //     scalars[t].clear();
+            eval_pows_g1.push_back(eval_pows_g.at(i));
+
+        std::vector<Fr> scalars(size());
+        #pragma omp parallel for schedule(static) num_threads(N_THREADS)
+        for (size_t i = 0; i < size(); i++)
+            scalars.at(i).clear();
+
         #pragma omp parallel for schedule(static) num_threads(N_THREADS)
         for (size_t i = 0; i < size(); i++) {
             mpz_to_Fr(scalars[i], get(i));
         }
-        // then it does mulVecMT on them, returning a G1
+
         G1 res;
-        // #pragma omp parallel for schedule(static) num_threads(N_THREADS)
-        // for (size_t i = 0; i < size(); i++) {
         G1::mulVecMT(res, eval_pows_g1.data(), scalars.data(), size(), N_THREADS);
-        // }
+
+        TIMING(auto end = std::chrono::high_resolution_clock::now();)
+        TIMING(timing.get_hash_sec += end - start;)
         return res;
     }
 };
@@ -914,7 +917,7 @@ public:
         for (size_t i = 0; i < size(); i++) {
             g1.at(i) = get(i).msm(eval_pows_g);
         }
-        std::cout << "finished 1 rlwe\n";
+        // std::cout << "finished 1 rlwe\n";
     }
 };
 
@@ -1672,6 +1675,7 @@ public:
     vector_bigz x_cont_init_scaled;
     void print() {
         std::cout << "*** START Params.print ***\n";
+        std::cout << "N_THREADS: " << N_THREADS << "\n";
         std::cout << "N: " << N << "\n";
         std::cout << "q: " << print_to_string_mpz(q) << "\n";
         std::cout << "d: " << d << "\n";

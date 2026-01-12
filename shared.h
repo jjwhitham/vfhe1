@@ -8,7 +8,7 @@
 #include <gmpxx.h>
 
 #include "serialisation.hpp"
-#include "/home/jw/Projects/mcl/include/mcl/bn.hpp"
+#include "/Users/jw/Projects/mcl/include/mcl/bn.hpp"
 
 using namespace mcl::bn;
 
@@ -19,8 +19,9 @@ using namespace mcl::bn;
 typedef mpz_class bigz;
 typedef long int u32; // FIXME - why signed? Rationalise usage across code
 u32 N_DECOMP = 2;
-constexpr size_t N_ = 4096; // FIXME gsu != rhs_u if 2048
-// constexpr size_t N_ = 8192;
+// u32 N_DECOMP = 7;
+// constexpr size_t N_ = 4096; // FIXME gsu != rhs_u if 2048
+constexpr size_t N_ = 8192;
 
 #ifdef TIMING_ON
 #  define TIMING(x) x

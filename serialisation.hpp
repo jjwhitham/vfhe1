@@ -6,9 +6,9 @@
 #include <NTL/ZZ.h>
 #include <NTL/ZZ_p.h>
 #include <gmpxx.h>
-#include "/home/jw/Projects/mcl/include/mcl/bn.hpp"
+#include "/Users/jw/Projects/mcl/include/mcl/bn.hpp"
 // #include <mcl/bn.hpp>
-#include <boost/exception/diagnostic_information.hpp>
+// #include <boost/exception/diagnostic_information.hpp>
 
 static constexpr size_t _256_BITS = 256;
 static constexpr size_t N_BYTES_256_BITS = _256_BITS / 8;

@@ -4,7 +4,7 @@
 #include "ntt.h"
 #include <ranges>
 #include <iomanip>
-#include "/home/jw/Projects/mcl/include/mcl/bn.hpp"
+#include "/Users/jw/Projects/mcl/include/mcl/bn.hpp"
 
 using namespace mcl::bn;
 
@@ -132,15 +132,15 @@ Proof compute_proof(
     const hashed_t_veri_vec& gr_rho = ek.gr_rho;
     const hashed_t_rgsw_vec& grFr_alpha = ek.grFr_alpha;
     const hashed_t_rgsw_vec& gsHr_gamma = ek.gsHr_gamma;
-    std::cout << "before msm\n";
+    // std::cout << "before msm\n";
     rlwe_decomp_vec x_decomped = x.decompose(v, d, power);
-    std::cout << "after decomp\n";
+    // std::cout << "after decomp\n";
     x_decomped.msm(eval_pows_g);
-    std::cout << "after msm1\n";
+    // std::cout << "after msm1\n";
     x_.msm(eval_pows_g);
-    std::cout << "after msm2\n";
+    // std::cout << "after msm2\n";
     x_nega_.msm(eval_pows_g);
-    std::cout << "after msm3\n";
+    // std::cout << "after msm3\n";
     // TODO x_d.get_hash().pow()
     auto grx_ = gr.get_hash_sec(x_); // G_1
     auto grFrx = grFr.get_hash_sec(x_decomped); // G_2
@@ -207,14 +207,14 @@ void verify_with_lin_and_dyn_checks(
     // assert(pow_t(G_2, alpha) == G_2_);
     // assert(pow_t(G_3, gamma) == G_3_);
     // Dynamics checks: controller output
-    std::cout << "before get_hash\n";
+    // std::cout << "before get_hash\n";
     hashed_rlwe_vec u_hash = u_conv.get_hash(eval_pows);
-    std::cout << "after get_hash\n";
+    // std::cout << "after get_hash\n";
     bigz su = s.dot_prod(u_hash);
     G1 gsu;
-    std::cout << "before pairing\n";
+    // std::cout << "before pairing\n";
     pairing(gsu, pow_(Generator, su), Gen2);
-    std::cout << "after pairing\n";
+    // std::cout << "after pairing\n";
     G1 rhs_u = G_3 + g_1;
     // assert(gsu == rhs_u);
     // Dynamics checks: controller state update
@@ -530,11 +530,11 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         #ifdef TIMING_ON
             auto start_proof = std::chrono::high_resolution_clock::now();
         #endif
-        std::cout << "before prove\n";
+        // std::cout << "before prove\n";
         /* ### Controller: Prove ### */
         const eval_key& ek_i = (k % 2 == 0) ? std::get<0>(ek) : std::get<1>(ek);
         Proof proof = compute_proof(ek_i, x, x_conv, x_old, v, d, power, eval_pows_g); // C -> P
-        std::cout << "after prove\n";
+        // std::cout << "after prove\n";
 
         #ifdef TIMING_ON
             auto end_proof = std::chrono::high_resolution_clock::now();
@@ -546,9 +546,9 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         #endif
 
         /* ### Plant: Verify ### */
-        std::cout << "before veri\n";
+        // std::cout << "before veri\n";
         verify_with_lin_and_dyn_checks(vk, proof, old_proof, k, y, u_conv, u_re, v, d, power, eval_pows);
-        std::cout << "after veri\n";
+        // std::cout << "after veri\n";
         old_proof = proof;
 
         #ifdef TIMING_ON
