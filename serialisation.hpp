@@ -55,7 +55,7 @@ void print_byte_in_hex1(const uint8_t *_char) {
 
 void print_bytes_detailed1(const uint8_t *_char, const int n) {
     for (int i = 0; i < n; i++) {
-        printf("add: %p, val: 0b", _char);
+        printf("add: %p, val: 0b", (void*)_char);
         char sep = '\0';
         print_byte_in_binary1(*_char, sep);
         printf(" | ");
@@ -203,7 +203,7 @@ mcl::Fr ZZ_p_to_new_Fr(const ZZ_p& in) {
 
 // a version that's better if all Fr's are allocated ahead of time
 void mpz_to_Fr(mcl::Fr& out, const mpz_class& in) {
-    static uint8_t BUF[N_THREADS][N_BYTES_256_BITS] = { 0 };
+    static uint8_t BUF[N_THREADS][N_BYTES_256_BITS] = { {0} };
     int t = omp_get_thread_num();
     // std::cout << "N_THREADS: " << N_THREADS << "\n";
     size_t n_wrote = 42; // n_wrote should never be 42;

@@ -8,6 +8,7 @@ clang++ -Wall -Wextra -Wpedantic -std=gnu++23 \
   -DMCL_USE_OMP=1 \
   -Xpreprocessor -fopenmp \
   -L/opt/homebrew/opt/libomp/lib -lomp \
+  -lprofiler \
   -pthread -lntl -lgmpxx -lgmp \
   -Wl,-rpath,/opt/homebrew/opt/libomp/lib \
   -o vfhe

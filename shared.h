@@ -29,7 +29,7 @@ constexpr size_t N_ = 8192;
 #  define TIMING(x)
 #endif
 
-typedef struct {
+typedef struct times_and_counts {
     int calls_ntt = 0;
     int calls_intt = 0;
     int calls_ntt1 = 0;
@@ -210,7 +210,7 @@ G2 pow2_(const G2& base, const bigz& power) {
     Fr power1;
     power1.clear();
     if (power > FIELD_MODULUS) {
-        std::cout << "pow_: power > FIELD_MODULUS\n";
+        std::cout << "pow_2: power > FIELD_MODULUS\n";
         mpz_to_Fr(power1, power % FIELD_MODULUS);
     }
     else
@@ -225,7 +225,7 @@ GT pow_t(const GT& base, const bigz& power) {
     Fr power1;
     power1.clear();
     if (power > FIELD_MODULUS) {
-        std::cout << "pow_: power > FIELD_MODULUS\n";
+        std::cout << "pow_t: power > FIELD_MODULUS\n";
         mpz_to_Fr(power1, power % FIELD_MODULUS);
     }
     else

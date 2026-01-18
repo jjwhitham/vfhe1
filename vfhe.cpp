@@ -12,17 +12,13 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key, check_key> compute_eval_and
     const rgsw_mat& F_ctx, const rgsw_mat& G_bar_ctx, const rgsw_mat& R_bar_ctx, const rgsw_mat& H_bar_ctx,
     const veri_vec& r_0, const veri_vec& r_1, const veri_vec& s,
     bigz rho_0, bigz rho_1, bigz alpha_0, bigz alpha_1, bigz gamma_0, bigz gamma_1,
-    u32 d, size_t N, const vector_bigz& eval_pows, const Encryptor& enc
+    size_t N, const vector_bigz& eval_pows, const Encryptor& enc
 ) {
-    // #ifdef PAIRING_ON
-        // using ht_veri_vec = veri_vec;
-    // #else
-        using ht_veri_vec = hashed_t_veri_vec;
-    // #endif
-    ht_veri_vec gr_0 = r_0.get_hash_t(eval_pows).pow();
-    ht_veri_vec gr_1 = r_1.get_hash_t(eval_pows).pow();
-    ht_veri_vec gr_rho_0 = (r_0 * rho_0).get_hash_t(eval_pows).pow();
-    ht_veri_vec gr_rho_1 = (r_1 * rho_1).get_hash_t(eval_pows).pow();
+    using ht_veri_vec = hashed_t_veri_vec;
+    ht_veri_vec gr_0 = r_0.get_hash_t().pow();
+    ht_veri_vec gr_1 = r_1.get_hash_t().pow();
+    ht_veri_vec gr_rho_0 = (r_0 * rho_0).get_hash_t().pow();
+    ht_veri_vec gr_rho_1 = (r_1 * rho_1).get_hash_t().pow();
 
     flat_rgsw_vec rF_0 = (r_0 * F_ctx);
     flat_rgsw_vec rF_1 = (r_1 * F_ctx);
@@ -180,14 +176,13 @@ void verify_with_lin_and_dyn_checks(
     bigz gamma_1 = vk.gamma_1;
 
     // Unpack proofs
-    using G1 = GT;
-    const G1& g_1 = old_proof.g_1;
-    const G1& G_1 = proof.grx_;
-    const G1& G_2 = proof.grFrx;
-    const G1& G_3 = proof.gsHrx;
-    const G1& G_1_ = proof.gr_rho_x_;
-    const G1& G_2_ = proof.grFr_alpha_x;
-    const G1& G_3_ = proof.gsHr_gamma_x;
+    const GT& g_1 = old_proof.g_1;
+    const GT& G_1 = proof.grx_;
+    const GT& G_2 = proof.grFrx;
+    const GT& G_3 = proof.gsHrx;
+    const GT& G_1_ = proof.gr_rho_x_;
+    const GT& G_2_ = proof.grFr_alpha_x;
+    const GT& G_3_ = proof.gsHr_gamma_x;
 
     // Select parameters based on k
     bigz rho, alpha, gamma;
@@ -211,22 +206,22 @@ void verify_with_lin_and_dyn_checks(
     hashed_rlwe_vec u_hash = u_conv.get_hash(eval_pows);
     // std::cout << "after get_hash\n";
     bigz su = s.dot_prod(u_hash);
-    G1 gsu;
+    GT gsu;
     // std::cout << "before pairing\n";
     pairing(gsu, pow_(Generator, su), Gen2);
     // std::cout << "after pairing\n";
-    G1 rhs_u = G_3 + g_1;
+    GT rhs_u = G_3 + g_1;
     // assert(gsu == rhs_u);
     // Dynamics checks: controller state update
-    G1 rhs = G_2 + g_1;
+    GT rhs = G_2 + g_1;
     hashed_rlwe_decomp_vec y_d_hashed = y.decompose(v, d, power).get_hash(eval_pows);
     bigz rGy = rG.dot_prod(y_d_hashed);
-    G1 grGy;
+    GT grGy;
     pairing(grGy, pow_(Generator, rGy), Gen2);
     rhs += grGy;
     hashed_rlwe_decomp_vec u_reenc_d_hashed = u_reenc.decompose(v, d, power).get_hash(eval_pows);
     bigz rRu = rR.dot_prod(u_reenc_d_hashed);
-    G1 grRu;
+    GT grRu;
     pairing(grRu, pow_(Generator, rRu), Gen2);
     rhs += grRu;
     // assert(G_1 == rhs);
@@ -404,7 +399,7 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     auto keys = compute_eval_and_veri_keys(
         F_ctx, G_bar_ctx, R_bar_ctx, H_bar_ctx,
         r_0, r_1, s, rho_0, rho_1, alpha_0, alpha_1, gamma_0, gamma_1,
-        d, N, eval_pows, enc
+        N, eval_pows, enc
     );
     auto ek = std::get<0>(keys);
     veri_key vk = std::get<1>(keys);
@@ -716,6 +711,7 @@ void print_vars_diff(control_law_vars& vars, control_law_vars& vars_unenc) {
 }
 
 int main() {
+    // sleep(20);
     control_law_vars vars;
     control_law_vars vars_unenc;
     // omp_set_nested(1);

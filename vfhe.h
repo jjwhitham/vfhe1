@@ -159,17 +159,6 @@ public:
         return get(i, disable_value_check);
     }
 
-    Derived operator*(const Derived& other) const {
-        size_t N = size();
-        Derived res(N);
-        for (size_t i = 0; i < N; i++) {
-            auto val = (get(i) * other.get(i));
-            if constexpr (std::is_same_v<T, bigz>)
-                val = mod_(val, FIELD_MODULUS);
-            res.set(i, val);
-        }
-        return res;
-    }
     Derived operator*(const bigz& scalar) const {
         size_t N = size();
         Derived res(N);
@@ -508,6 +497,7 @@ public:
         // TODO should be in ntt.h
         static const arr_u128 psi_pows = get_rou_pows(TWO_ROU);
         ntt_iter1(a, psi_pows);
+        #pragma omp parallel for schedule(static) num_threads(N_THREADS)
         for (size_t i = 0; i < N_; i++) {
             // TODO consider using * as pointwise mult and call nega_ntt explicitly
             a[i] = mod_(a[i] * other[i], FIELD_MODULUS);
@@ -1047,7 +1037,6 @@ public:
 };
 
 class hashed_rgsw : public array1d<bigz, hashed_rgsw> {
-    // using int_rlwe = array1d<bigz, hashed_rlwe>;
     using grp_rgsw = std::vector<G1>;
 private:
     grp_rgsw arr_g;
@@ -1330,7 +1319,7 @@ public:
         return get_rgsw(0, 0).n_coeffs();
     }
 };
-// using hashed_t_poly = bigz;
+
 class hashed_t_veri_vec_inner : public array1d<bigz, hashed_t_veri_vec_inner> {
 private:
     G2 g2[2];
@@ -1338,7 +1327,6 @@ public:
     using htvvi = hashed_t_veri_vec_inner;
     using htvvi_arr = array1d<bigz, hashed_t_veri_vec_inner>;
     hashed_t_veri_vec_inner() : htvvi_arr() {}
-    // hashed_t_veri_vec_inner() : array1d<hashed_t_poly, hashed_t_veri_vec_inner>() {}
     hashed_t_veri_vec_inner(size_t n_ha_polys) : htvvi_arr{n_ha_polys} {
         assert(n_ha_polys == N_POLYS_IN_RLWE);
     }
@@ -1390,15 +1378,6 @@ public:
     using htvv_arr = array1d<hashed_t_veri_vec_inner, hashed_t_veri_vec>;
     hashed_t_veri_vec() : htvv_arr() {}
     hashed_t_veri_vec(size_t n_inner) : htvv_arr(n_inner) {}
-    // TODO could be array1d memb func with `Other' template param. Investigate
-    // G1 get_hash_sec(const rlwe_vec& other) const {
-    //     assert(size() == other.size());
-    //     G1 res;
-    //     res.clear();
-    //     for (size_t i = 0; i < size(); i++)
-    //         res += get(i).get_hash_sec(other.get(i));
-    //     return res;
-    // }
 
     GT get_hash_sec(const rlwe_vec& other) const {
         assert(size() == other.size());
@@ -1422,10 +1401,6 @@ public:
 class veri_vec_inner : public array1d<bigz, veri_vec_inner> {
 public:
 using vvi_arr = array1d<bigz, veri_vec_inner>;
-    // veri_vec_inner() : array1d<bigz, veri_vec_inner>() {}
-    // veri_vec_inner(size_t n_bigz) : vvi_arr{n_bigz} {
-    //     assert(n_bigz == N_POLYS_IN_RLWE);
-    // }
     bigz dot_prod(const hashed_rlwe& other) const {
         assert(size() == other.size());
         bigz res{0};
@@ -1450,27 +1425,10 @@ using vvi_arr = array1d<bigz, veri_vec_inner>;
         return res;
     }
     using htvvi = hashed_t_veri_vec_inner;
-    // htvvi get_hash_t(const vector_bigz& eval_pows) const {
-    //     htvvi res{N_POLYS_IN_RLWE};
-    //     for (size_t i = 0; i < size(); i++) {
-    //         poly p{2 * N_}; // FIXME magic num. (size 2 * N_ for conv)
-    //         bigz val = get(i); // NOTE we want copy, not ref
-    //         p.set(0, val); // XXX pretty sure this was one bug - p.set(i, val)
-    //         res.set(i, p.get_hash_t(eval_pows));
-    //         assert(res.get(i).get(p.size() - 1) == 0); // conv has no last elem
-    //         assert(res.get(i).get(p.size() - 2) != 0); // conv has a 2nd last el
-    //     }
-    //     return res;
-    // }
-    htvvi get_hash_t(const vector_bigz& eval_pows) const {
+
+    htvvi get_hash_t() const {
         htvvi res{N_POLYS_IN_RLWE};
         for (size_t i = 0; i < size(); i++) {
-            // poly p{2 * N_}; // FIXME magic num. (size 2 * N_ for conv)
-            // bigz val = get(i); // NOTE we want copy, not ref
-            // p.set(0, val); // XXX pretty sure this was one bug - p.set(i, val)
-            // res.set(i, p.get_hash_t(eval_pows));
-            // assert(res.get(i).get(p.size() - 1) == 0); // conv has no last elem
-            // assert(res.get(i).get(p.size() - 2) != 0); // conv has a 2nd last el
             res[i] = get(i);
         }
         return res;
@@ -1480,7 +1438,6 @@ using vvi_arr = array1d<bigz, veri_vec_inner>;
 class veri_vec : public array1d<veri_vec_inner, veri_vec> {
 public:
 using vv_arr = array1d<veri_vec_inner, veri_vec>;
-    // veri_vec(size_t n_inner) : vv_arr{n_inner} {}
     using vv_arr::operator*;
     flat_rgsw_vec operator*(const rgsw_mat& other) const {
         assert(size() == other.n_rows());
@@ -1504,19 +1461,13 @@ using vv_arr = array1d<veri_vec_inner, veri_vec>;
         return res;
     }
     using htvv = hashed_t_veri_vec;
-    htvv get_hash_t(const vector_bigz& eval_pows) const {
+    htvv get_hash_t() const {
         htvv res{size()};
         for (size_t i = 0; i < size(); i++) {
-            res.set(i, get(i).get_hash_t(eval_pows));
+            res.set(i, get(i).get_hash_t());
         }
         return res;
     }
-
-    // // XXX no-op if using pairing
-    // using htvv = veri_vec;
-    // htvv get_hash_t(const vector_bigz& eval_pows) const {
-    //     return *this;
-    // }
 };
 
 bigz random_i128(bigz from, bigz to_inclusive) {
@@ -1607,7 +1558,7 @@ private:
 public:
     Params() :
         N(N_),
-        iter_(3),
+        iter_(10),
         s(10000.0),
         L(10000.0),
         r(10000.0),
@@ -1777,13 +1728,12 @@ struct check_key {
 };
 
 struct Proof {
-    using G1 = GT;
-    G1 grx_;
-    G1 grFrx;
-    G1 gsHrx;
+    GT grx_;
+    GT grFrx;
+    GT gsHrx;
 
-    G1 gr_rho_x_;
-    G1 grFr_alpha_x;
-    G1 gsHr_gamma_x;
-    G1 g_1;
+    GT gr_rho_x_;
+    GT grFr_alpha_x;
+    GT gsHr_gamma_x;
+    GT g_1;
 };

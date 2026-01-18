@@ -18,15 +18,20 @@
 
 
 ##### TODO
-- [ ] Add invariants to counts (sec_hash calls, etc)
-- [ ] Implement pairing-based hashing:
-  - [ ] init G2 and GT
-  - [ ] replace get_hash_a().pow() with get_hash().pow() (quick hack)
-  - [ ] pow can be on the hashed types for now
-  - [ ] ctrl will compute x_d, then call msm() which will compute the msm for each
+- [ ] Add invariants to counts (calls to funcs, etc)
+  - [ ] Add invariant check for get_hash_sec
+- XXX [ ] Get asserts working
+- XXX [ ] Implement NTTs with NTL
+
+
+- [x] Implement pairing-based hashing:
+  - [x] init G2 and GT
+  - [x] replace get_hash_a().pow() with get_hash().pow() (quick hack)
+  - [x] pow can be on the hashed types for now
+  - [x] ctrl will compute x_d, then call msm() which will compute the msm for each
   poly, setting its G2 val
-  - [ ] get_hash_sec will then do the pairing
-  - [ ] use aliases: hashed_t_rgsw_vec -> hashed_rgsw_vec etc to allow switching between the single group and the pairing group implementations
+  - [x] get_hash_sec will then do the pairing
+  - [x] use aliases: hashed_t_rgsw_vec -> hashed_rgsw_vec etc to allow switching between the single group and the pairing group implementations
 
 - XXX [ ] CRT can re-use the decomp representation when decomp coeffs are smaller
   than the CRT primes, i.e. for all q_i, v < q_i.
@@ -45,7 +50,6 @@
 - [ ] Integrate MLC
   - [x] Integrate MLC in the quickest way possible: Do exps in G1
   - [x] Update existing code to flatten hashed RLWEs (use 2m/2n dim for r_i/s)
-    - [ ]
 
 - [ ] Write performant code
   - [x] Fix redundant NTTs: convert x, y, u_re to eval form once
@@ -68,4 +72,5 @@ The classes Vec<ZZ_p> (a.k.a., vec_ZZ_p), Mat<ZZ_p> (a.k.a., mat_ZZ_p), and ZZ_p
 ###### TODO future
 - [ ] Build with CMake
 - [ ] Add simple testing (Ctest? Might be from Google)
+- [ ] address santisation, valgrind and static analysis
 - [ ] Investigate hardware acceleration options
