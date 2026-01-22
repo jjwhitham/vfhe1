@@ -554,6 +554,7 @@ public:
         static const arr_u128 psi_inv_pows = get_rou_pows(INV_2ROU);
         static const bigz INV_N = pow_constexpr(N_, FIELD_MODULUS - 2, FIELD_MODULUS);
         static const bigz INV_2N = pow_constexpr(2 * N_, FIELD_MODULUS - 2, FIELD_MODULUS);
+        // TODO could use intt_iter1 here? Try
         is_conv ? intt_iter(a, psi_inv_pows, INV_2N) : intt_iter1(a, psi_inv_pows, INV_N);
         a.isNTT = false;
         if (is_conv)
@@ -1510,7 +1511,7 @@ private:
 public:
     Params() :
         N(N_),
-        iter_(10),
+        iter_(3),
         s(10000.0),
         L(10000.0),
         r(10000.0),
@@ -1680,11 +1681,13 @@ struct check_key {
 };
 
 struct Proof {
-    GT g_1;
+    // GT g_1;
     GT grx_;
+    GT grx_hi;
     GT grFrx;
     GT gsHrx;
     GT gr_rho_x_;
+    GT gr_rho_x_hi;
     GT grFr_alpha_x;
     GT gsHr_gamma_x;
 };

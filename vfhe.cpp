@@ -113,8 +113,8 @@ auto scalar_vec_mult (double scalar, const vector_T& vec) {
 // Computes proof values and returns a tuple of 2-tuples of bigz
 Proof compute_proof(
     const eval_key& ek,
-    rlwe_vec& x_nega_,
-    rlwe_vec& x_,
+    rlwe_vec& x_nega_lhs,
+    rlwe_vec& x_hi,
     const rlwe_vec& x,
     const bigz& v, u32 d, u32 power,
     std::vector<G1>& eval_pows_g
@@ -128,23 +128,28 @@ Proof compute_proof(
 
     rlwe_decomp_vec x_decomped = x.decompose(v, d, power);
     x_decomped.msm(eval_pows_g);
-    x_.msm(eval_pows_g);
-    x_nega_.msm(eval_pows_g);
+    x_hi.msm(eval_pows_g);
+    x_nega_lhs.msm(eval_pows_g);
 
-    auto g_1 = gr.get_hash_sec(x_nega_); // XXX g_1
-    auto grx_ = gr.get_hash_sec(x_); // XXX G_1
+    // auto g_1 = gr.get_hash_sec(x_nega_); // XXX g_1
+    // TODO change from x_conv to x_hi
+    auto grx_ = gr.get_hash_sec(x_nega_lhs); // XXX G_1
+    auto grx_hi = gr.get_hash_sec(x_hi); // XXX G_1_hi
     auto grFrx = grFr.get_hash_sec(x_decomped); // G_2
     auto gsHrx = gsHr.get_hash_sec(x_decomped); // G_3
-    auto gr_rho_x_ = gr_rho.get_hash_sec(x_); // XXX G_1_
+    auto gr_rho_x_ = gr_rho.get_hash_sec(x_nega_lhs); // XXX G_1_
+    auto gr_rho_x_hi = gr_rho.get_hash_sec(x_hi); // XXX G_1_
     auto grFr_alpha_x = grFr_alpha.get_hash_sec(x_decomped); // G_2_
     auto gsHr_gamma_x = gsHr_gamma.get_hash_sec(x_decomped); // G_3_
 
     return Proof {
-        g_1,
+        // g_1,
         grx_,
+        grx_hi,
         grFrx,
         gsHrx,
         gr_rho_x_,
+        gr_rho_x_hi,
         grFr_alpha_x,
         gsHr_gamma_x,
     };
@@ -178,11 +183,13 @@ void verify_with_lin_and_dyn_checks(
     bigz gamma_1 = vk.gamma_1;
 
     // Unpack proofs
-    const GT& g_1 = old_proof.g_1;
+    const GT& g_1 = old_proof.grx_;
     const GT& G_1 = proof.grx_;
+    const GT& G_hi = proof.grx_hi;
     const GT& G_2 = proof.grFrx;
     const GT& G_3 = proof.gsHrx;
     const GT& G_1_ = proof.gr_rho_x_;
+    const GT& G_hi_ = proof.gr_rho_x_hi;
     const GT& G_2_ = proof.grFr_alpha_x;
     const GT& G_3_ = proof.gsHr_gamma_x;
 
@@ -203,6 +210,8 @@ void verify_with_lin_and_dyn_checks(
     assert(pow_t(G_1, rho) == G_1_);
     // std::cout << "assert(pow_t(G_1, rho) == G_1_):\n";
     // check_assert(pow_t(G_1, rho) == G_1_);
+
+    assert(pow_t(G_hi, rho) == G_hi_);
 
     assert(pow_t(G_2, alpha) == G_2_);
     // std::cout << "assert(pow_t(G_2, alpha) == G_2_):\n";
@@ -237,7 +246,16 @@ void verify_with_lin_and_dyn_checks(
     // GT grRu = pow_t(genT, rRu);
     // rhs *= grRu;
     rhs *= pow_t(genT, rR.dot_prod(u_reenc.decompose(v, d, power).get_hash(eval_pows)));
-    assert(G_1 == rhs);
+
+    // TODO create t^N + 1
+    // TODO make static
+    bigz tN_1_ = eval_pows.at(N_) + 1;
+    std::cout << "\ntN_1_: " << print_to_string_mpz(tN_1_) << "\n\n";
+    GT G_tN1_hi = pow_t(G_hi, tN_1_);
+
+    GT lhs = G_1 * G_tN1_hi;
+    // assert(G_1 == rhs);
+    assert(lhs == rhs);
     // std::cout << "assert(G_1 == rhs):\n";
     // check_assert(G_1 == rhs);
 }
@@ -436,14 +454,16 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     H_bar_ctx.to_eval_form();
     std::cout << "end eval\n";
 
-
+    // create initial proof
     auto x_hash = x.get_hash(eval_pows); // XXX
     // TODO move to veri_vec
     bigz rx_0 = r_1.dot_prod(x_hash); // XXX
     GT g1 = pow_t(genT, rx_0);
 
     Proof old_proof {};
-    old_proof.g_1 = g1;
+    // old_proof.g_1 = g1;
+    old_proof.grx_ = g1;
+    // old_proof.gr_rho_x_ = g1;
 
     TIMING(timing.iter_ = 1;)
     TIMING(print_times_and_counts(timing);)
@@ -524,6 +544,17 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         rlwe_vec x_old = x;
         x = x_conv.mod_cyclo(N); // FIXME remove N
 
+        // TODO create x_hi
+        rlwe_vec x_hi{x_conv.n_rlwes(), x_conv.n_polys(), N_};
+        for (size_t i = 0; i < x_hi.n_rlwes(); i++) {
+            for (size_t j = 0; j < x_hi.n_polys(); j++) {
+                for (size_t k = 0; k < N_; k++) {
+                    x_hi[i][j][k] = x_conv[i][j][k + N_];
+                }
+            }
+        }
+        // std::cout << "x_hi[3][1][N_ - 1]: " << x_hi[3][1][N_ - 1] << "\n";
+
         // // Decrypt and capture controller state
         // vector_bigz x_ptx = enc.decrypt_rlwe_vec(x);
         // vector_double x_ptx_q2 = map_to_half_q(x_ptx);
@@ -536,7 +567,9 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         // std::cout << "before prove\n";
         /* ### Controller: Prove ### */
         const eval_key& ek_i = (k % 2 == 0) ? std::get<0>(ek) : std::get<1>(ek);
-        Proof proof = compute_proof(ek_i, x, x_conv, x_old, v, d, power, eval_pows_g); // C -> P
+        // TODO x_conv->x_hi
+        // Proof proof = compute_proof(ek_i, x, x_conv, x_old, v, d, power, eval_pows_g); // C -> P
+        Proof proof = compute_proof(ek_i, x, x_hi, x_old, v, d, power, eval_pows_g); // C -> P
         // std::cout << "after prove\n";
 
         #ifdef TIMING_ON
