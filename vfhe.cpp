@@ -206,58 +206,56 @@ void verify_with_lin_and_dyn_checks(
         alpha = alpha_0;
         gamma = gamma_0;
     }
+
+    static bigz tN_1_ = eval_pows.at(N_) + 1;
+    static GT lhs;
+    static GT rhs;
+    static GT rhs1;
     // Linearity checks
-    assert(pow_t(G_1, rho) == G_1_);
-    // std::cout << "assert(pow_t(G_1, rho) == G_1_):\n";
-    // check_assert(pow_t(G_1, rho) == G_1_);
-
-    assert(pow_t(G_hi, rho) == G_hi_);
-
-    assert(pow_t(G_2, alpha) == G_2_);
-    // std::cout << "assert(pow_t(G_2, alpha) == G_2_):\n";
-    // check_assert(pow_t(G_2, alpha) == G_2_);
-
-    assert(pow_t(G_3, gamma) == G_3_);
-    // std::cout << "assert(pow_t(G_3, gamma) == G_3_):\n";
-    // check_assert(pow_t(G_3, gamma) == G_3_);
-
     // Dynamics checks: controller output
-    // hashed_rlwe_vec u_hash = u_conv.get_hash(eval_pows);
-    // bigz su = s.dot_prod(u_hash);
-    // GT gsu = pow_t(genT, su);
-    GT gsu = pow_t(genT, s.dot_prod(u_conv.get_hash(eval_pows)));
-
-    GT rhs_u = G_3 * g_1;
-    assert(gsu == rhs_u);
-    // std::cout << "assert(gsu == rhs_u):\n";
-    // check_assert(gsu == rhs_u);
-
-
     // Dynamics checks: controller state update
-    GT rhs = G_2 * g_1;
-    // hashed_rlwe_decomp_vec y_d_hashed = y.decompose(v, d, power).get_hash(eval_pows);
-    // bigz rGy = rG.dot_prod(y_d_hashed);
-    // GT grGy = pow_t(genT, rGy);
-    // rhs *= grGy;
-    rhs *= pow_t(genT, rG.dot_prod(y.decompose(v, d, power).get_hash(eval_pows)));
 
-    // hashed_rlwe_decomp_vec u_reenc_d_hashed = u_reenc.decompose(v, d, power).get_hash(eval_pows);
-    // bigz rRu = rR.dot_prod(u_reenc_d_hashed);
-    // GT grRu = pow_t(genT, rRu);
-    // rhs *= grRu;
-    rhs *= pow_t(genT, rR.dot_prod(u_reenc.decompose(v, d, power).get_hash(eval_pows)));
-
-    // TODO create t^N + 1
-    // TODO make static
-    bigz tN_1_ = eval_pows.at(N_) + 1;
-    std::cout << "\ntN_1_: " << print_to_string_mpz(tN_1_) << "\n\n";
-    GT G_tN1_hi = pow_t(G_hi, tN_1_);
-
-    GT lhs = G_1 * G_tN1_hi;
-    // assert(G_1 == rhs);
-    assert(lhs == rhs);
-    // std::cout << "assert(G_1 == rhs):\n";
-    // check_assert(G_1 == rhs);
+    static std::chrono::duration<double, std::milli> times[4];
+    #pragma omp parallel sections
+    {
+        #pragma omp section
+        {
+            TIMING(auto start = std::chrono::high_resolution_clock::now();)
+            GT gsu = pow_t(genT, s.dot_prod(u_conv.get_hash(eval_pows)));
+            GT rhs_u = G_3 * g_1;
+            assert(gsu == rhs_u);
+            TIMING(auto end = std::chrono::high_resolution_clock::now();)
+            times[0] += end - start;
+        }
+        #pragma omp section
+        {
+            TIMING(auto start = std::chrono::high_resolution_clock::now();)
+            rhs = G_2 * pow_t(genT, rG.dot_prod(y.decompose(v, d, power).get_hash(eval_pows)));
+            TIMING(auto end = std::chrono::high_resolution_clock::now();)
+            times[1] += end - start;
+        }
+        #pragma omp section
+        {
+            TIMING(auto start = std::chrono::high_resolution_clock::now();)
+            rhs1 = g_1 * pow_t(genT, rR.dot_prod(u_reenc.decompose(v, d, power).get_hash(eval_pows)));
+            TIMING(auto end = std::chrono::high_resolution_clock::now();)
+            times[2] += end - start;
+        }
+        #pragma omp section
+        {
+            TIMING(auto start = std::chrono::high_resolution_clock::now();)
+            assert(pow_t(G_1, rho) == G_1_);
+            assert(pow_t(G_hi, rho) == G_hi_);
+            assert(pow_t(G_2, alpha) == G_2_);
+            assert(pow_t(G_3, gamma) == G_3_);
+            lhs = G_1 * pow_t(G_hi, tN_1_);
+            TIMING(auto end = std::chrono::high_resolution_clock::now();)
+            times[3] += end - start;
+        }
+    }
+    assert(lhs == rhs * rhs1);
+    for (size_t i = 0; i < 4; i++)
+        std::cout << "veri_thread" << i << ": " << times[i].count() << "\n";
 }
 
 
@@ -344,13 +342,14 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     };
     auto make_eval_pows_g = [](const vector_bigz& eval_pows) -> std::vector<G1> {
         // TODO parallelise by constructing res{eval_pows.size()}
-        std::vector<G1> res;
-        res.reserve(eval_pows.size());
-        assert(res.size() == 0);
+        std::vector<G1> res{eval_pows.size()};
+        // res.reserve(eval_pows.size());
+        // assert(res.size() == 0);
         assert(res.capacity() == 2 * N_);
-        // #pragma omp parallel for schedule(static) num_threads(N_THREADS)
-        for (size_t i = 0; i < res.capacity(); i++)
-            res.push_back(pow_(gen1, eval_pows[i]));
+        assert(res.size() == 2 * N_);
+        #pragma omp parallel for schedule(static) num_threads(N_THREADS)
+        for (size_t i = 0; i < res.size(); i++)
+            res.at(i) = pow_(gen1, eval_pows[i]);
         assert(res.size() == 2 * N_);
         assert(res.capacity() == 2 * N_);
         return res;
@@ -548,9 +547,9 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         rlwe_vec x_hi{x_conv.n_rlwes(), x_conv.n_polys(), N_};
         for (size_t i = 0; i < x_hi.n_rlwes(); i++) {
             for (size_t j = 0; j < x_hi.n_polys(); j++) {
-                for (size_t k = 0; k < N_; k++) {
+                #pragma omp parallel for schedule(static) num_threads(N_THREADS)
+                for (size_t k = 0; k < N_; k++)
                     x_hi[i][j][k] = x_conv[i][j][k + N_];
-                }
             }
         }
         // std::cout << "x_hi[3][1][N_ - 1]: " << x_hi[3][1][N_ - 1] << "\n";

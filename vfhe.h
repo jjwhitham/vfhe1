@@ -487,6 +487,7 @@ public:
     auto get_hash(const vector_bigz& eval_pows) const {
         // std::cout << "poly::get_hash: size(): " << size() << "\n";
         bigz hash = 0;
+        // TODO parallelise
         for (size_t i = 0; i < size(); i++) {
             hash += get(i) * eval_pows.at(i);
         }
@@ -574,13 +575,15 @@ public:
         ASSERT(n_coeffs() == 2 * N);
         assert(get(2 * N - 1) == 0);
         poly negacyclic{N};
+        #pragma omp parallel for schedule(static) num_threads(N_THREADS)
         for (size_t i = 0; i < N; i++)
             negacyclic.set(i, mod_sub(get_coeff(i), get_coeff(i + N)));
         return negacyclic;
     }
     G1 msm(std::vector<G1>& eval_pows_g) {
         TIMING(timing.calls_msm += 1;)
-        assert(size() == 2 * N_ || size() == N_);
+        // assert(size() == 2 * N_ || size() == N_);
+        assert(size() ==  N_);
 
         // convert bigz poly coeffs to Fr scalars
         TIMING(auto start = std::chrono::high_resolution_clock::now();)
@@ -1511,7 +1514,7 @@ private:
 public:
     Params() :
         N(N_),
-        iter_(3),
+        iter_(10),
         s(10000.0),
         L(10000.0),
         r(10000.0),
