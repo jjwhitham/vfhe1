@@ -14,7 +14,7 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key, check_key> compute_eval_and
     bigz rho_0, bigz rho_1, bigz alpha_0, bigz alpha_1, bigz gamma_0, bigz gamma_1,
     size_t N, const vector_bigz& eval_pows, const Encryptor& enc
 ) {
-
+    // TODO can try hash rgsw's first, then subtract r_0/r_1
     ASSERT(r_0.size() == r_1.size());
     flat_rgsw_vec rF_0 = (r_0 * F_ctx);
     flat_rgsw_vec rF_1 = (r_1 * F_ctx);
@@ -500,7 +500,7 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         vector_bigz u_ptx = enc.decrypt_rlwe_vec(u);
         vector_double u_ptx_q2 = map_to_half_q(u_ptx);
         vector_double u_in = scalar_vec_mult(1.0 / (rr * ss * ss * L), u_ptx_q2);
-        vars.u.push_back(u_in);
+        // vars.u.push_back(u_in); // XXX 
         vector_double u_in_scaled = round_vec(scalar_vec_mult(rr, u_in));
         u_in_scaled = round_vec(scalar_vec_mult(L, u_in_scaled));
         vector_bigz u_in_q = map_to_q(u_in_scaled);
@@ -510,7 +510,7 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         vector_double B_u = mat_vec_mult(B, u_in);
         for (size_t i = 0; i < B_u.size(); i++)
             x_pl.at(i) += B_u.at(i);
-        vars.x_plant.push_back(x_pl);
+        // vars.x_plant.push_back(x_pl); // XXX
 
         #ifdef TIMING_ON
             end_plant = std::chrono::high_resolution_clock::now();

@@ -37,7 +37,7 @@ void test_optimised_conv() {
     assert(q % (2 * N) == 1);
 
     // long num_polys = 10000;
-    long num_polys = 280;
+    long num_polys = 168;
     Vec<ZZ_pX> polys1;
     Vec<ZZ_pX> polys2;
     polys1.SetLength(num_polys);
@@ -60,14 +60,10 @@ void test_optimised_conv() {
     // NTT of all poly1s
     long k = 14;
     Vec<FFTRep> polys1_ntt;
-    std::cout << "got to here1\n";
     polys1_ntt.SetLength(num_polys);
-    std::cout << "got to here2\n";
     for (long i = 0; i < num_polys; i++) {
-        std::cout << "got to here3\n";
         FFTRep x(INIT_SIZE, k);
         polys1_ntt[i] = x;
-        std::cout << "got to here4\n";
     }
 
     ZZ_pContext context;

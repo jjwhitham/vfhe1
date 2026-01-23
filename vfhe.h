@@ -489,7 +489,7 @@ public:
     auto get_hash(const vector_bigz& eval_pows) const {
         // TODO tune this. Parallel not faster yet
         bigz hash[N_THREADS]{};
-        #pragma omp parallel for schedule(auto) num_threads(N_THREADS)
+        #pragma omp parallel for schedule(static) num_threads(N_THREADS)
         for (size_t i = 0; i < size(); i++) {
             int t = omp_get_thread_num();
             hash[t] += get(i) * eval_pows.at(i);
@@ -544,7 +544,7 @@ public:
         poly a{n};
         // NOTE don't use copy constructor, as conv requires zero-padding to 2n
         // TODO check timing improvement
-        #pragma omp parallel for schedule(static) num_threads(N_THREADS)
+        // #pragma omp parallel for schedule(static) num_threads(N_THREADS)
         for (size_t i = 0; i < n_coeffs(); i++) {
             a.set(i, get(i));
         }
@@ -690,6 +690,7 @@ public:
         return get_poly(0).size();
     }
     void to_eval_form() {
+        #pragma omp parallel for schedule(dynamic) num_threads(N_THREADS)
         for (size_t i = 0; i < n_polys(); i++) {
             set(i, get_poly(i).to_eval_form());
         }
@@ -755,8 +756,12 @@ public:
         return hash;
     }
     rlwe_decomp_vec to_eval_form() {
+        #pragma omp parallel for collapse(2) schedule(dynamic) num_threads(N_THREADS)
         for (size_t i = 0; i < n_rlwe_decomps(); i++)
-            get_rlwe_decomp(i).to_eval_form();
+            for (size_t j = 0; j < n_polys(); j++) {
+                get_rlwe_decomp(i).set(j, get_rlwe_decomp(i).get_poly(j).to_eval_form());
+                // get_rlwe_decomp(i).set(j, get_rlwe_decomp(i).get_poly(j).to_eval_form());
+            }
         return *this;
     }
     void msm(std::vector<G1>& eval_pows_g) {
@@ -879,7 +884,6 @@ public:
         for (size_t i = 0; i < size(); i++) {
             g1.at(i) = get(i).msm(eval_pows_g);
         }
-        // std::cout << "finished 1 rlwe\n";
     }
 };
 
@@ -1252,9 +1256,13 @@ public:
         return convolve(other);
     }
     void to_eval_form() {
+        #pragma omp parallel for collapse(3) schedule(dynamic) num_threads(N_THREADS)
         for (size_t row = 0; row < n_rows(); row++) {
             for (size_t col = 0; col < n_cols(); col++) {
-                get_rgsw(row, col).to_eval_form();
+                for (size_t i = 0 ; i < n_rlwes(); i++) {
+                    // get_rgsw(row, col).to_eval_form();
+                    get_rgsw(row, col).get_rlwe(i).to_eval_form();;
+                }
             }
         }
     }
@@ -1494,7 +1502,7 @@ private:
 public:
     Params() :
         N(N_),
-        iter_(3),
+        iter_(10),
         s(10000.0),
         L(10000.0),
         r(10000.0),
