@@ -131,8 +131,6 @@ Proof compute_proof(
     x_hi.msm(eval_pows_g);
     x_nega_lhs.msm(eval_pows_g);
 
-    // auto g_1 = gr.get_hash_sec(x_nega_); // XXX g_1
-    // TODO change from x_conv to x_hi
     auto grx_ = gr.get_hash_sec(x_nega_lhs); // XXX G_1
     auto grx_hi = gr.get_hash_sec(x_hi); // XXX G_1_hi
     auto grFrx = grFr.get_hash_sec(x_decomped); // G_2
@@ -143,7 +141,6 @@ Proof compute_proof(
     auto gsHr_gamma_x = gsHr_gamma.get_hash_sec(x_decomped); // G_3_
 
     return Proof {
-        // g_1,
         grx_,
         grx_hi,
         grFrx,
@@ -216,9 +213,9 @@ void verify_with_lin_and_dyn_checks(
     // Dynamics checks: controller state update
 
     static std::chrono::duration<double, std::milli> times[4];
-    #pragma omp parallel sections
+    // #pragma omp parallel sections
     {
-        #pragma omp section
+        // #pragma omp section
         {
             TIMING(auto start = std::chrono::high_resolution_clock::now();)
             GT gsu = pow_t(genT, s.dot_prod(u_conv.get_hash(eval_pows)));
@@ -227,21 +224,21 @@ void verify_with_lin_and_dyn_checks(
             TIMING(auto end = std::chrono::high_resolution_clock::now();)
             times[0] += end - start;
         }
-        #pragma omp section
+        // #pragma omp section
         {
             TIMING(auto start = std::chrono::high_resolution_clock::now();)
             rhs = G_2 * pow_t(genT, rG.dot_prod(y.decompose(v, d, power).get_hash(eval_pows)));
             TIMING(auto end = std::chrono::high_resolution_clock::now();)
             times[1] += end - start;
         }
-        #pragma omp section
+        // #pragma omp section
         {
             TIMING(auto start = std::chrono::high_resolution_clock::now();)
             rhs1 = g_1 * pow_t(genT, rR.dot_prod(u_reenc.decompose(v, d, power).get_hash(eval_pows)));
             TIMING(auto end = std::chrono::high_resolution_clock::now();)
             times[2] += end - start;
         }
-        #pragma omp section
+        // #pragma omp section
         {
             TIMING(auto start = std::chrono::high_resolution_clock::now();)
             assert(pow_t(G_1, rho) == G_1_);
@@ -343,8 +340,6 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     auto make_eval_pows_g = [](const vector_bigz& eval_pows) -> std::vector<G1> {
         // TODO parallelise by constructing res{eval_pows.size()}
         std::vector<G1> res{eval_pows.size()};
-        // res.reserve(eval_pows.size());
-        // assert(res.size() == 0);
         assert(res.capacity() == 2 * N_);
         assert(res.size() == 2 * N_);
         #pragma omp parallel for schedule(static) num_threads(N_THREADS)
@@ -458,11 +453,8 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     // TODO move to veri_vec
     bigz rx_0 = r_1.dot_prod(x_hash); // XXX
     GT g1 = pow_t(genT, rx_0);
-
     Proof old_proof {};
-    // old_proof.g_1 = g1;
     old_proof.grx_ = g1;
-    // old_proof.gr_rho_x_ = g1;
 
     TIMING(timing.iter_ = 1;)
     TIMING(print_times_and_counts(timing);)
