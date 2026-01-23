@@ -61,20 +61,22 @@ private:
 public:
     array1d() : size_(0), arr(nullptr) {}
     array1d(size_t size) : size_{size}, arr{new T[size]} {}
-    // Copy constructor
+    // FIXME use {} or () consistently through code
+    // 1. Copy constructor
     array1d(const array1d& other) : size_(other.size_), arr(new T[other.size_]) {
         for (size_t i = 0; i < size_; i++)
             arr[i] = other.arr[i];
     }
-    // Move constructor
+    // 2. Move constructor
     array1d(array1d&& other) noexcept : size_(other.size_), arr(other.arr) {
         other.size_ = 0;
         other.arr = nullptr;
     }
+    // 3. Destructor
     ~array1d() {
         delete[] arr;
     }
-    // Copy assignment operator
+    // 4. Copy assignment operator
     array1d& operator=(const array1d& other) {
         if (this != &other) {
             delete[] arr;
@@ -84,7 +86,7 @@ public:
         }
         return *this;
     }
-    // Move assignment operator
+    // 5. Move assignment operator
     array1d& operator=(array1d&& other) noexcept {
         if (this != &other) {
             delete[] arr;
@@ -134,7 +136,6 @@ public:
             }
         }
     }
-    // void set(int n, T val, bool disable_value_check = false) { // FIXME should be T& ?
     // TODO check that const ref is most appropriate
     void set(int n, const T& val) {
         CHECK(check_index_bounds(n);)
@@ -159,16 +160,7 @@ public:
         return get(i, disable_value_check);
     }
     Derived operator*(const bigz& scalar) const {
-        // size_t N = size();
-        // Derived res(N);
-        // for (size_t i = 0; i < N; i++) {
-        //     T val = get(i) * scalar;
-        //     if constexpr (std::is_same_v<T, bigz>)
-        //         val = mod_(val, FIELD_MODULUS);
-        //     res.set(i, val);
-        // }
-        // return res;
-
+        // FIXME checking T==bigz when param scalar is bigz explicitly
         size_t N = size();
         Derived res(N);
         if constexpr (std::is_same_v<T, bigz>) {
@@ -316,17 +308,6 @@ public:
         return static_cast<Derived&>(*this);
     }
     Derived operator-(const Derived& other) const {
-        // size_t N = size();
-        // Derived neg_other(N);
-        // for (size_t i = 0; i < N; i++) {
-        //     T val;
-        //     if constexpr (std::is_same_v<T, bigz>)
-        //         val = mod_sub(get(i), other.get(i));
-        //     else
-        //         val = get(i) - other.get(i);
-        //     neg_other.set(i, val);
-        // }
-        // return neg_other;
         size_t N = size();
         Derived res(N);
         if constexpr (std::is_same_v<T, bigz>) {
@@ -384,10 +365,11 @@ public:
             arr[i] = &data[i * cols];
         }
     }
+    // FIXME
     ~array2d() {
         // delete[] data;
         // delete[] arr;
-    } // FIXME
+    }
     void check_index_bounds(size_t row, size_t col) const {
         if (row >= rows_ || col >= cols_) {
             throw std::out_of_range(
@@ -486,7 +468,15 @@ public:
     size_t n_coeffs() const {
         return size();
     }
-    auto get_hash(const vector_bigz& eval_pows) const {
+    auto get_hash_serial(const vector_bigz& eval_pows) const {
+        bigz hash = 0;
+        for (size_t i = 0; i < size(); i++) {
+            hash += get(i) * eval_pows.at(i);
+        }
+        mod_(hash, FIELD_MODULUS);
+        return hash;
+    }
+    auto get_hash_parallel(const vector_bigz& eval_pows) const {
         // TODO tune this. Parallel not faster yet
         bigz hash[N_THREADS]{};
         #pragma omp parallel for schedule(static) num_threads(N_THREADS)
@@ -499,6 +489,10 @@ public:
             hash1 += hash[i];
         mod_(hash1, FIELD_MODULUS);
         return hash1;
+    }
+    auto get_hash(const vector_bigz& eval_pows) const {
+        // return get_hash_parallel(eval_pows);
+        return get_hash_serial(eval_pows);
     }
 
     poly convolve(const poly& other) const {
@@ -535,7 +529,7 @@ public:
         return a;
     }
 
-    // TODO should mutate
+    // NOTE mutates
     poly to_eval_form(bool is_conv=true) const {
         ASSERT(isNTT == false);
         size_t n = n_coeffs();
@@ -588,7 +582,6 @@ public:
     }
     G1 msm(std::vector<G1>& eval_pows_g) {
         TIMING(timing.calls_msm += 1;)
-        // assert(size() == 2 * N_ || size() == N_);
         assert(size() ==  N_);
 
         // convert bigz poly coeffs to Fr scalars
@@ -613,18 +606,12 @@ public:
 
 
 class hashed_t_poly : public array1d<bigz, hashed_t_poly> {
-    // using grp_poly = std::vector<G1>;
-private:
-    // grp_poly arr_g; // TODO need to overload array1d destructor?
 public:
     hashed_t_poly() : array1d<bigz, hashed_t_poly>() {}
-    hashed_t_poly(size_t n_hashed_t_coeffs) : array1d<bigz, hashed_t_poly>(n_hashed_t_coeffs) { //}, arr_g(n_hashed_t_coeffs) {
+    hashed_t_poly(size_t n_hashed_t_coeffs) : array1d<bigz, hashed_t_poly>(n_hashed_t_coeffs) {
         #pragma omp parallel for schedule(static) num_threads(N_THREADS)
         for (size_t i = 0; i < n_hashed_t_coeffs; i++) {
             set(i, 0);
-            // G1 x;
-            // x.clear();
-            // arr_g[i] = x;
         }
     }
     auto& get_hashed_t_coeff(size_t n) const {
@@ -633,18 +620,6 @@ public:
     size_t n_hashed_t_coeffs() const {
         return size();
     }
-    // void set_g(size_t i, G1&& val) {
-    //     arr_g[i] = val;
-    // }
-    // This gets called when setting up keys. Raise (mult) Gen to get(i)
-    // hashed_t_poly pow() {
-    //     hashed_t_poly res(size());
-    //     #pragma omp parallel for schedule(static) num_threads(N_THREADS)
-    //     for (size_t i = 0; i < size(); i++) {
-    //         res.set_g(i, pow_(gen1, get(i)));
-    //     }
-    //     return res;
-    // }
 };
 
 class hashed_rlwe_decomp : public array1d<bigz, hashed_rlwe_decomp> {
@@ -678,6 +653,7 @@ public:
     // calls poly's get_hash and returns hashed_rlwe_decomp
     auto get_hash(const vector_bigz& eval_pows) const {
         hashed_rlwe_decomp hash(size()); // FIXME n_polys, do better
+        #pragma omp parallel for schedule(static) num_threads(N_THREADS)
         for (size_t i = 0; i < size(); i++) {
             hash.set(i, get(i).get_hash(eval_pows));
         }
@@ -748,8 +724,9 @@ public:
         return get_rlwe_decomp(0).get_poly(0).size();
     }
     // calls rlwe_decomp's get_hash and returns hashed_rlwe_decomp_vec
+    // TODO parallelise
     auto get_hash(const vector_bigz& eval_pows) const {
-        hashed_rlwe_decomp_vec hash(n_rlwe_decomps()); // get(0).size()); // FIXME n_polys, do better (global?)
+        hashed_rlwe_decomp_vec hash(n_rlwe_decomps());
         for (size_t i = 0; i < size(); i++) {
             hash.set(i, get(i).get_hash(eval_pows));
         }
@@ -760,7 +737,6 @@ public:
         for (size_t i = 0; i < n_rlwe_decomps(); i++)
             for (size_t j = 0; j < n_polys(); j++) {
                 get_rlwe_decomp(i).set(j, get_rlwe_decomp(i).get_poly(j).to_eval_form());
-                // get_rlwe_decomp(i).set(j, get_rlwe_decomp(i).get_poly(j).to_eval_form());
             }
         return *this;
     }
@@ -791,19 +767,11 @@ public:
 
 class hashed_rlwe : public array1d<bigz, hashed_rlwe> {
     using int_rlwe = array1d<bigz, hashed_rlwe>;
-//     using grp_rlwe = std::vector<G1>;
-// private:
-//     grp_rlwe arr_g;
 public:
     // NOTE hashed_rlwe always has two hashed_polys
     hashed_rlwe() : array1d<bigz, hashed_rlwe>() {}
-    hashed_rlwe(size_t n_hashed_polys) : array1d<bigz, hashed_rlwe>(n_hashed_polys) {//} arr_g(n_hashed_polys) {
+    hashed_rlwe(size_t n_hashed_polys) : array1d<bigz, hashed_rlwe>(n_hashed_polys) {
         ASSERT(n_hashed_polys == N_POLYS_IN_RLWE);
-        // for (size_t i = 0; i < n_hashed_polys; i++) {
-        //     G1 x;
-        //     x.clear();
-        //     arr_g[i] = x;
-        // }
     }
     size_t n_hashed_polys() const {
         return size();
@@ -811,7 +779,6 @@ public:
 };
 
 class rlwe : public array1d<poly, rlwe> {
-private:
 public:
     std::vector<G1> g1;
     // NOTE rlwe always has two polys
@@ -831,7 +798,9 @@ public:
     // TODO move all get_hash() to array1d?
     // calls poly's get_hash and returns hashed_rlwe
     auto get_hash(const vector_bigz& eval_pows) const {
+        int n_threads = 2;
         hashed_rlwe hash(N_POLYS_IN_RLWE);
+        #pragma omp parallel for schedule(static) num_threads(n_threads)
         for (size_t i = 0; i < size(); i++) {
             hash.set(i, get(i).get_hash(eval_pows));
         }
@@ -855,7 +824,8 @@ public:
                     bigz decomped_coeff = (v - 1) & (pol.get_coeff(i) >> (power * j));
                     // std::cout << "decomped_coeff: " << print_to_string_mpz(decomped_coeff) << "\n";
                     ASSERT(decomped_coeff < v);
-                    // polys.get_poly(d * k + j).set(i, std::move(decomped_coeff)); // XXX move doesn't make a difference here
+                    // XXX move doesn't make a difference here
+                    // polys.get_poly(d * k + j).set(i, std::move(decomped_coeff));
                     polys.get_poly(d * k + j).set(i, decomped_coeff);
                 }
             }
@@ -888,7 +858,6 @@ public:
 };
 
 class hashed_rlwe_vec : public array1d<hashed_rlwe, hashed_rlwe_vec> {
-private:
 public:
     hashed_rlwe_vec() : array1d<hashed_rlwe, hashed_rlwe_vec>() {}
     hashed_rlwe_vec(size_t n_hashed_rlwes) : array1d<hashed_rlwe, hashed_rlwe_vec>(n_hashed_rlwes) {}
@@ -912,7 +881,6 @@ public:
 };
 
 class rlwe_vec : public array1d<rlwe, rlwe_vec> {
-private:
 public:
     rlwe_vec() : array1d<rlwe, rlwe_vec>() {}
     rlwe_vec(size_t n_rlwes) : array1d<rlwe, rlwe_vec>(n_rlwes) {}
@@ -929,6 +897,8 @@ public:
     // calls rlwe's get_hash and returns hashed_rlwe_vec
     auto get_hash(const vector_bigz& eval_pows) const {
         hashed_rlwe_vec hash(size());
+        int n_threads = N_THREADS / 2;
+        #pragma omp parallel for schedule(static) num_threads(n_threads)
         for (size_t i = 0; i < size(); i++) {
             hash.set(i, get(i).get_hash(eval_pows));
         }
@@ -945,7 +915,7 @@ public:
     }
     // calls rlwe's decompose on each rlwe element and returns a rlwe_decomp_vec
     auto decompose(const bigz& v, u32 d, u32 power) const {
-        rlwe_decomp_vec decomps(size());//, 2 * d, n_coeffs());
+        rlwe_decomp_vec decomps(size());
         for (size_t i = 0; i < size(); i++)
             decomps.set(i, get_rlwe(i).decompose(v, d, power));
         return decomps;
@@ -1004,28 +974,14 @@ public:
 };
 
 class hashed_rgsw : public array1d<bigz, hashed_rgsw> {
-//     using grp_rgsw = std::vector<G1>;
-// private:
-//     grp_rgsw arr_g;
 public:
     hashed_rgsw() : array1d<bigz, hashed_rgsw>() {}
     hashed_rgsw(
         size_t n_hashed_polys
-    ) : array1d<bigz, hashed_rgsw>(n_hashed_polys) {//} arr_g(n_hashed_polys) {
-        for (size_t i = 0; i < n_hashed_polys; i++) {
+    ) : array1d<bigz, hashed_rgsw>(n_hashed_polys) {
+        for (size_t i = 0; i < n_hashed_polys; i++)
             set(i, 0);
-            // G1 x;
-            // x.clear();
-            // arr_g[i] = x;
-        }
     }
-    // G1 get_g(size_t i) const {
-    //     return arr_g[i];
-    // }
-    // void set_g(size_t i, G1 val) {
-    //     arr_g[i] = val;
-    // }
-
     auto& get_hashed_poly(size_t n) const {
         return get(n);
     }
@@ -1035,7 +991,6 @@ public:
 };
 
 class rgsw : public array1d<rlwe, rgsw> {
-private:
 public:
     rgsw() : array1d<rlwe, rgsw>() {}
     rgsw(size_t n_rlwes) : array1d<rlwe, rgsw>(n_rlwes) {}
@@ -1057,7 +1012,6 @@ public:
     size_t n_coeffs() const {
         return get_rlwe(0).get_poly(0).n_coeffs();
     }
-
     rlwe convolve(const rlwe_decomp& other) const {
         ASSERT(n_rlwes() == other.n_polys());
         rlwe res(n_polys(), 2 * N_); // XXX 2 * N_ zero-inits polys for += later
@@ -1068,7 +1022,6 @@ public:
         }
         return res;
     }
-
     void to_eval_form() {
         for (size_t i = 0 ; i < n_rlwes(); i++)
             get_rlwe(i).to_eval_form();
@@ -1077,7 +1030,6 @@ public:
 
 
 class flat_rgsw : public array1d<poly, flat_rgsw> {
-private:
 public:
     flat_rgsw() : array1d<poly, flat_rgsw>() {}
     flat_rgsw(size_t n_polys) : array1d<poly, flat_rgsw>(n_polys) {}
@@ -1102,7 +1054,8 @@ public:
 
     // calls rlwe's get_hash for all the rlwe's in (*this)
     auto get_hash(const vector_bigz& eval_pows) const {
-        hashed_rgsw hash(n_polys()); // FIXME n_polys, do better (global?)
+        hashed_rgsw hash(n_polys());
+        #pragma omp parallel for schedule(static) num_threads(N_THREADS)
         for (size_t i = 0; i < n_polys(); i++) {
             hash.set(i, get(i).get_hash(eval_pows));
         }
@@ -1110,7 +1063,8 @@ public:
     }
     // calls rlwe's get_hash_t for all the rlwe's in (*this)
     auto get_hash_t(const vector_bigz& eval_pows) const {
-        hashed_t_rgsw hash(n_polys()); // , n_coeffs()); // FIXME n_polys, do better (global?)
+        hashed_t_rgsw hash(n_polys());
+        #pragma omp parallel for schedule(static) num_threads(N_THREADS)
         for (size_t i = 0; i < size(); i++) {
             hash.set(i, get(i).get_hash(eval_pows));
         }
@@ -1119,7 +1073,6 @@ public:
 };
 
 class hashed_rgsw_vec : public array1d<hashed_rgsw, hashed_rgsw_vec> {
-private:
 public:
     hashed_rgsw_vec() : array1d<hashed_rgsw, hashed_rgsw_vec>() {}
     hashed_rgsw_vec(size_t n_hashed_rgsws) : array1d<hashed_rgsw, hashed_rgsw_vec>(n_hashed_rgsws) {}
@@ -1153,7 +1106,6 @@ public:
 };
 
 class hashed_t_rgsw_vec : public array1d<hashed_t_rgsw, hashed_t_rgsw_vec> {
-private:
 public:
     hashed_t_rgsw_vec() : array1d<hashed_t_rgsw, hashed_t_rgsw_vec>() {}
     hashed_t_rgsw_vec(size_t n_hashed_t_rgsws) : array1d<hashed_t_rgsw, hashed_t_rgsw_vec>(n_hashed_t_rgsws) {}
@@ -1184,7 +1136,6 @@ public:
 
 
 class flat_rgsw_vec : public array1d<flat_rgsw, flat_rgsw_vec> {
-private:
 public:
     flat_rgsw_vec(size_t n_flat_rgsws) : array1d<flat_rgsw, flat_rgsw_vec>(n_flat_rgsws) {}
     flat_rgsw_vec(
@@ -1214,6 +1165,7 @@ public:
         return hash;
     }
     // calls flat_rgsw's get_hash_t
+    // TODO replace with hashed_rgsw_vec in vfhe.cpp
     auto get_hash_t(const vector_bigz& eval_pows) const {
         hashed_t_rgsw_vec hash(n_flat_rgsws());
         for (size_t i = 0; i < size(); i++) {
@@ -1224,7 +1176,6 @@ public:
 };
 
 class rgsw_mat : public array2d<rgsw> {
-private:
 public:
     rgsw_mat() : array2d<rgsw>() {}
     rgsw_mat(size_t rows, size_t cols) : array2d<rgsw>(rows, cols) {}
@@ -1238,13 +1189,12 @@ public:
             }
         }
     }
-
     rlwe_vec convolve(const rlwe_decomp_vec& other) const {
         ASSERT(n_cols() == other.size());
         ASSERT(n_coeffs() == 2 * N_);
         rlwe_vec res(n_rows());
         for (size_t i = 0; i < n_rows(); i++) {
-            rlwe sum(n_polys(), 2 * N_); // FIXME
+            rlwe sum(n_polys(), 2 * N_); // FIXME better init of 2 * N_?
             for (size_t j = 0; j < n_cols(); j++) {
                 sum += get(i, j).convolve(other.get(j));
             }
@@ -1290,7 +1240,6 @@ public:
     hashed_t_veri_vec_inner(size_t n_ha_polys) : htvvi_arr{n_ha_polys} {
         assert(n_ha_polys == N_POLYS_IN_RLWE);
     }
-
     // XXX pairing
     GT get_hash_sec(const rlwe& other) const {
         assert(size() == other.size());
@@ -1302,7 +1251,6 @@ public:
         }
         return res;
     }
-
     // XXX
     htvvi pow() const {
         htvvi res{size()};
@@ -1366,7 +1314,6 @@ using vvi_arr = array1d<bigz, veri_vec_inner>;
         return res;
     }
     using htvvi = hashed_t_veri_vec_inner;
-
     // TODO remove, should be copy
     htvvi get_hash_t() const {
         htvvi res{N_POLYS_IN_RLWE};
@@ -1405,8 +1352,7 @@ using vv_arr = array1d<veri_vec_inner, veri_vec>;
     using htvv = hashed_t_veri_vec;
     // TODO remove, should be copy
     htvv get_hash_t() const {
-        htvv res{size()}; // FIXME use {} or ()?
-        // std::cout << "htvv::size(): " << res.size() << "\n";
+        htvv res{size()};
         for (size_t i = 0; i < size(); i++) {
             res.set(i, get(i).get_hash_t());
         }
