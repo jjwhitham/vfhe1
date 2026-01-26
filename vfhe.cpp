@@ -8,10 +8,10 @@
 
 using namespace mcl::bn;
 
-std::tuple<std::tuple<eval_key, eval_key>, veri_key, check_key> compute_eval_and_veri_keys(
+std::tuple<std::tuple<eval_key, eval_key>, veri_key> compute_eval_and_veri_keys(
     const rgsw_mat& F_ctx, const rgsw_mat& G_bar_ctx, const rgsw_mat& R_bar_ctx, const rgsw_mat& H_bar_ctx,
     const veri_vec& r_0, const veri_vec& r_1, const veri_vec& s,
-    bigz rho_0, bigz rho_1, bigz alpha_0, bigz alpha_1, bigz gamma_0, bigz gamma_1,
+    bigz& rho_0, bigz& rho_1, bigz& alpha_0, bigz& alpha_1, bigz& gamma_0, bigz& gamma_1,
     size_t N, const vector_bigz& eval_pows, const Encryptor& enc
 ) {
     // TODO can try hash rgsw's first, then subtract r_0/r_1
@@ -46,10 +46,10 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key, check_key> compute_eval_and
 
 
     using g2_veri_vec = g2_veri_vec;
-    g2_veri_vec gr_0 = r_0.pow();
-    g2_veri_vec gr_1 = r_1.pow();
-    g2_veri_vec gr_rho_0 = (r_0 * rho_0).pow();
-    g2_veri_vec gr_rho_1 = (r_1 * rho_1).pow();
+    g2_veri_vec gr_0 = r_0.pow_g2();
+    g2_veri_vec gr_1 = r_1.pow_g2();
+    g2_veri_vec gr_rho_0 = (r_0 * rho_0).pow_g2();
+    g2_veri_vec gr_rho_1 = (r_1 * rho_1).pow_g2();
 
     eval_key ek0 {
         gr_0,
@@ -90,12 +90,7 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key, check_key> compute_eval_and
         gamma_1
     };
 
-    check_key ck {
-        r_1_rgsw,
-        r_0_rgsw
-    };
-
-    return std::make_tuple(ek, vk, ck);
+    return std::make_tuple(ek, vk);
 }
 
 
@@ -324,7 +319,8 @@ vector_double mat_vec_mult(const matrix_double& mat, const vector_double& vec) {
     return result;
 }
 
-void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
+// void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
+void run_control_loop(times_and_counts& timing) {
 
     auto eval_poly_pows = [](size_t n, const bigz& eval_point_t, const bigz& q) -> vector_bigz {
         vector_bigz res(n);
@@ -337,7 +333,6 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         return res;
     };
     auto make_eval_pows_g = [](const vector_bigz& eval_pows) -> std::vector<G1> {
-        // TODO parallelise by constructing res{eval_pows.size()}
         std::vector<G1> res{eval_pows.size()};
         assert(res.capacity() == 2 * N_);
         assert(res.size() == 2 * N_);
@@ -380,16 +375,16 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     DEBUG(std::cout << "*** START run_control_loop ***\n";)
     using matrix_i128 = array2d<bigz>;
 
-    bigz q = pms.q;
-    matrix_double A = pms.A;
-    matrix_double B = pms.B;
-    matrix_double C = pms.C;
-    matrix_i128 F = pms.F;
-    matrix_i128 G_bar = pms.G_bar;
-    matrix_i128 H_bar = pms.H_bar;
-    matrix_i128 R_bar = pms.R_bar;
-    vector_double x_pl = pms.x_plant_init;
-    vector_bigz x_cont = pms.x_cont_init_scaled;
+    bigz& q = pms.q;
+    matrix_double& A = pms.A;
+    matrix_double& B = pms.B;
+    matrix_double& C = pms.C;
+    matrix_i128& F = pms.F;
+    matrix_i128& G_bar = pms.G_bar;
+    matrix_i128& H_bar = pms.H_bar;
+    matrix_i128& R_bar = pms.R_bar;
+    vector_double& x_pl = pms.x_plant_init;
+    vector_bigz& x_cont = pms.x_cont_init_scaled;
     double rr = pms.r;
     double ss = pms.s;
     double L = pms.L;
@@ -400,24 +395,24 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     bigz to_inclusive = q - 1;
     // TODO Params should sample
     auto knowledge_exps = pms.sample_knowledge_exponents(from, to_inclusive);
-    bigz alpha_0 = knowledge_exps.at(0);
-    bigz alpha_1 = knowledge_exps.at(1);
-    bigz gamma_0 = knowledge_exps.at(2);
-    bigz gamma_1 = knowledge_exps.at(3);
-    bigz rho_0 = knowledge_exps.at(4);
-    bigz rho_1 = knowledge_exps.at(5);
+    bigz& alpha_0 = knowledge_exps.at(0);
+    bigz& alpha_1 = knowledge_exps.at(1);
+    bigz& gamma_0 = knowledge_exps.at(2);
+    bigz& gamma_1 = knowledge_exps.at(3);
+    bigz& rho_0 = knowledge_exps.at(4);
+    bigz& rho_1 = knowledge_exps.at(5);
     size_t m = H_bar.n_rows();
     size_t n = F.n_rows();
     // TODO Params should sample
     auto verification_vectors = pms.sample_verification_vectors(m, n, from, to_inclusive);
-    auto r_0 = verification_vectors.at(0);
-    auto r_1 = verification_vectors.at(1);
-    auto s = verification_vectors.at(2);
+    auto& r_0 = verification_vectors.at(0);
+    auto& r_1 = verification_vectors.at(1);
+    auto& s = verification_vectors.at(2);
 
     size_t N = N_;
     u32 d = pms.d;
     u32 power = pms.power;
-    bigz v = pms.v;
+    bigz& v = pms.v;
 
     Encryptor enc(v, d, N, q);
     rgsw_mat F_ctx = enc.encrypt_rgsw_mat(F);
@@ -429,15 +424,14 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     // TODO sample
     bigz eval_point = 42;
     vector_bigz eval_pows = eval_poly_pows(2 * N, eval_point, q);
-    std::vector<G1> eval_pows_g = make_eval_pows_g(eval_pows);
+    vector_G1 eval_pows_g = make_eval_pows_g(eval_pows);
     auto keys = compute_eval_and_veri_keys(
         F_ctx, G_bar_ctx, R_bar_ctx, H_bar_ctx,
         r_0, r_1, s, rho_0, rho_1, alpha_0, alpha_1, gamma_0, gamma_1,
         N, eval_pows, enc
     );
-    auto ek = std::get<0>(keys);
-    veri_key vk = std::get<1>(keys);
-    check_key ck = std::get<2>(keys);
+    auto& ek = std::get<0>(keys);
+    veri_key& vk = std::get<1>(keys);
 
     // convert rgsw mats to ntt/eval form
     std::cout << "start eval\n";
@@ -466,7 +460,7 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
 
         /*  ### Plant: Compute output ### */
         vector_double y_out = mat_vec_mult(C, x_pl);
-        vars.y.push_back(y_out);
+        // vars.y.push_back(y_out); // XXX
         vector_double y_out_scaled = scalar_vec_mult(rr, y_out);
         vector_double y_out_rounded = round_vec(y_out_scaled);
         y_out_scaled = scalar_vec_mult(L, y_out_rounded);
@@ -518,15 +512,6 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         #endif
 
         /* ###  Controller: Update state ### */
-        // rlwe_vec F_x = F_ctx.convolve(x_d);
-        // rlwe_decomp_vec y_d = y.decompose(v, d, power);
-        // y_d.to_eval_form();
-        // rlwe_vec G_y = G_bar_ctx.convolve(y_d);
-        // rlwe_decomp_vec u_re_d = u_re.decompose(v, d, power);
-        // u_re_d.to_eval_form();
-        // rlwe_vec R_u = R_bar_ctx.convolve(u_re_d);
-        // rlwe_vec x_conv = F_x + G_y + R_u;
-
         rlwe_vec x_conv = F_ctx.convolve(x_d) \
             + G_bar_ctx.convolve(y.decompose(v, d, power).to_eval_form()) \
             + R_bar_ctx.convolve(u_re.decompose(v, d, power).to_eval_form());
@@ -543,24 +528,19 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
                     x_hi[i][j][k] = x_conv[i][j][k + N_];
             }
         }
-        // std::cout << "x_hi[3][1][N_ - 1]: " << x_hi[3][1][N_ - 1] << "\n";
-
         // // Decrypt and capture controller state
         // vector_bigz x_ptx = enc.decrypt_rlwe_vec(x);
         // vector_double x_ptx_q2 = map_to_half_q(x_ptx);
         // vector_double x_ptx_scaled = scalar_vec_mult(1 / (rr * ss * L), x_ptx_q2);
-        // vars.x_cont.push_back(x_ptx_scaled);
+        // vars.x_cont.push_back(x_ptx_scaled); // XXX
 
         #ifdef TIMING_ON
             auto start_proof = std::chrono::high_resolution_clock::now();
         #endif
-        // std::cout << "before prove\n";
+
         /* ### Controller: Prove ### */
         const eval_key& ek_i = (k % 2 == 0) ? std::get<0>(ek) : std::get<1>(ek);
-        // TODO x_conv->x_hi
-        // Proof proof = compute_proof(ek_i, x, x_conv, x_old, v, d, power, eval_pows_g); // C -> P
         Proof proof = compute_proof(ek_i, x, x_hi, x_old, v, d, power, eval_pows_g); // C -> P
-        // std::cout << "after prove\n";
 
         #ifdef TIMING_ON
             auto end_proof = std::chrono::high_resolution_clock::now();
@@ -572,9 +552,7 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         #endif
 
         /* ### Plant: Verify ### */
-        // std::cout << "before veri\n";
         verify_with_lin_and_dyn_checks(vk, proof, old_proof, k, y, u_conv, u_re, v, d, power, eval_pows);
-        // std::cout << "after veri\n";
         old_proof = proof;
 
         #ifdef TIMING_ON
@@ -589,6 +567,7 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
     TIMING(auto end = std::chrono::high_resolution_clock::now();)
     TIMING(timing.loop = end - start;)
 }
+
 void run_control_loop_unencrypted(control_law_vars& vars) {
     Params pms;
     // DEBUG(pms.print();)
@@ -651,8 +630,6 @@ void run_control_loop_unencrypted(control_law_vars& vars) {
         // Controller outputs u = Hx
         vector_double u = mat_vec_mult(H, x_cont);
         vars.u.push_back(u);
-        DEBUG(std::cout << "u:\n";)
-        DEBUG(print_vector_double(u);)
 
         // Plant updates state x' = Ax + Bu
         vector_double Ax = mat_vec_mult(A, x_plant);
@@ -662,8 +639,6 @@ void run_control_loop_unencrypted(control_law_vars& vars) {
         for (size_t i = 0; i < x_plant.size(); i++)
             x_plant.at(i) = Ax.at(i) + Bu.at(i);
         vars.x_plant.push_back(x_plant);
-        // DEBUG(std::cout << "x_plant:\n";)
-        // DEBUG(print_vector_double(x_plant);)
 
         // Controller updates state x' = Fx + Gy
         vector_double Fx = mat_vec_mult(F, x_cont);
@@ -675,8 +650,6 @@ void run_control_loop_unencrypted(control_law_vars& vars) {
         for (size_t i = 0; i < x_cont.size(); i++)
             x_cont.at(i) = Fx.at(i) + Gy.at(i) + Ru.at(i);
         vars.x_cont.push_back(x_cont);
-        // DEBUG(std::cout << "x_cont:\n";)
-        DEBUG(print_vector_double(x_cont);)
 
         DEBUG(std::cout << "\n\n*** END k: " << k << ", run_control_loop_unenc ***\n\n";)
     }
@@ -748,15 +721,15 @@ int main() {
     // omp_set_nested(1);
     TIMING(auto start = std::chrono::high_resolution_clock::now();)
 
+    // init pairing and create G1, G2 and GT generators
     initPairing(BN_SNARK1);
-
     int gen_seed = 42;
     hashAndMapToG1(gen1, std::string("P_") + std::to_string(gen_seed));
     hashAndMapToG2(gen2, std::string("P_") + std::to_string(gen_seed));
     pairing(genT, gen1, gen2);
 
-    // std::cout << "sizeof (long int)=" << sizeof (long int) << "\n";
-    run_control_loop(vars, timing);
+    // run_control_loop(vars, timing);
+    run_control_loop(timing);
 
     #ifdef TIMING_ON
         auto end = std::chrono::high_resolution_clock::now();

@@ -1258,7 +1258,7 @@ using vvi_arr = array1d<bigz, veri_vec_inner>;
     }
     using g2vvi = g2_veri_vec_inner;
     // TODO pow can be made a memb func on array1d again - recurse to ha_poly
-    g2vvi pow() const {
+    g2vvi pow_g2() const {
         g2vvi res{size()};
         for (size_t i = 0; i < size(); i++) {
             res[i] = pow2_(gen2, get(i));
@@ -1293,10 +1293,10 @@ using vv_arr = array1d<veri_vec_inner, veri_vec>;
         return res;
     }
     using g2vv = g2_veri_vec;
-    g2vv pow() const {
+    g2vv pow_g2() const {
         g2vv res{size()};
         for (size_t i = 0; i < size(); i++) {
-            res.set(i, get(i).pow());
+            res.set(i, get(i).pow_g2());
         }
         return res;
     }
@@ -1552,11 +1552,6 @@ struct veri_key {
     bigz alpha_1;
     bigz gamma_0;
     bigz gamma_1;
-};
-
-struct check_key {
-    flat_rgsw_vec r_1_rgsw;
-    flat_rgsw_vec r_0_rgsw;
 };
 
 struct Proof {

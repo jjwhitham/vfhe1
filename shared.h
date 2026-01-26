@@ -76,6 +76,7 @@ size_t N_POLYS_IN_RLWE = 2;
 using matrix_double = std::vector<std::vector<mpf_class>>;
 using vector_double = std::vector<mpf_class>;
 using vector_bigz = std::vector<bigz>;
+using vector_G1 = std::vector<G1>;
 
 bigz mod_(bigz& val, const bigz& q) {
     if (val < 0 || val >= FIELD_MODULUS)
