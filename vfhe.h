@@ -1230,12 +1230,10 @@ public:
     }
 };
 
-class hashed_t_veri_vec_inner : public array1d<bigz, hashed_t_veri_vec_inner> {
-private:
-    G2 g2[2];
+class hashed_t_veri_vec_inner : public array1d<G2, hashed_t_veri_vec_inner> {
 public:
     using htvvi = hashed_t_veri_vec_inner;
-    using htvvi_arr = array1d<bigz, hashed_t_veri_vec_inner>;
+    using htvvi_arr = array1d<G2, hashed_t_veri_vec_inner>;
     hashed_t_veri_vec_inner() : htvvi_arr() {}
     hashed_t_veri_vec_inner(size_t n_ha_polys) : htvvi_arr{n_ha_polys} {
         assert(n_ha_polys == N_POLYS_IN_RLWE);
@@ -1246,16 +1244,9 @@ public:
         GT res{1};
         for (size_t i = 0; i < size(); i++) {
             GT tmp;
-            pairing(tmp, other.g1.at(i), g2[i]);
+            // pairing(tmp, other.g1.at(i), g2[i]);
+            pairing(tmp, other.g1.at(i), get(i));
             res *= tmp;
-        }
-        return res;
-    }
-    // XXX
-    htvvi pow() const {
-        htvvi res{size()};
-        for (size_t i = 0; i < size(); i++) {
-            res.g2[i] = pow2_(gen2, get(i));
         }
         return res;
     }
@@ -1273,14 +1264,6 @@ public:
         GT res{1};
         for (size_t i = 0; i < size(); i++) {
             res *= get(i).get_hash_sec(other.get(i));
-        }
-        return res;
-    }
-    // TODO pow can be made a memb func on array1d again - recurse to ha_poly
-    htvv pow() const {
-        htvv res{size()};
-        for (size_t i = 0; i < size(); i++) {
-            res.set(i, get(i).pow());
         }
         return res;
     }
@@ -1314,11 +1297,11 @@ using vvi_arr = array1d<bigz, veri_vec_inner>;
         return res;
     }
     using htvvi = hashed_t_veri_vec_inner;
-    // TODO remove, should be copy
-    htvvi get_hash_t() const {
-        htvvi res{N_POLYS_IN_RLWE};
+    // TODO pow can be made a memb func on array1d again - recurse to ha_poly
+    htvvi pow() const {
+        htvvi res{size()};
         for (size_t i = 0; i < size(); i++) {
-            res[i] = get(i);
+            res[i] = pow2_(gen2, get(i));
         }
         return res;
     }
@@ -1350,11 +1333,10 @@ using vv_arr = array1d<veri_vec_inner, veri_vec>;
         return res;
     }
     using htvv = hashed_t_veri_vec;
-    // TODO remove, should be copy
-    htvv get_hash_t() const {
+    htvv pow() const {
         htvv res{size()};
         for (size_t i = 0; i < size(); i++) {
-            res.set(i, get(i).get_hash_t());
+            res.set(i, get(i).pow());
         }
         return res;
     }

@@ -1,4 +1,5 @@
 clang++ -Wall -Wextra -Wpedantic -std=gnu++23 \
+  -fsanitize=address \
   -fno-omit-frame-pointer \
   -Og -g3 -march=armv8.6-a -mtune=apple-m3 \
   -I/Users/jw/Projects/mcl/include \

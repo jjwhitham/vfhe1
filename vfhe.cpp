@@ -47,10 +47,10 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key, check_key> compute_eval_and
 
 
     using ht_veri_vec = hashed_t_veri_vec;
-    ht_veri_vec gr_0 = r_0.get_hash_t().pow(); // TODO change get_hash_t to copy
-    ht_veri_vec gr_1 = r_1.get_hash_t().pow();
-    ht_veri_vec gr_rho_0 = (r_0 * rho_0).get_hash_t().pow();
-    ht_veri_vec gr_rho_1 = (r_1 * rho_1).get_hash_t().pow();
+    ht_veri_vec gr_0 = r_0.pow(); // TODO change get_hash_t to copy
+    ht_veri_vec gr_1 = r_1.pow();
+    ht_veri_vec gr_rho_0 = (r_0 * rho_0).pow();
+    ht_veri_vec gr_rho_1 = (r_1 * rho_1).pow();
 
     eval_key ek0 {
         gr_0,
@@ -500,7 +500,7 @@ void run_control_loop(control_law_vars& vars, times_and_counts& timing) {
         vector_bigz u_ptx = enc.decrypt_rlwe_vec(u);
         vector_double u_ptx_q2 = map_to_half_q(u_ptx);
         vector_double u_in = scalar_vec_mult(1.0 / (rr * ss * ss * L), u_ptx_q2);
-        // vars.u.push_back(u_in); // XXX 
+        // vars.u.push_back(u_in); // XXX
         vector_double u_in_scaled = round_vec(scalar_vec_mult(rr, u_in));
         u_in_scaled = round_vec(scalar_vec_mult(L, u_in_scaled));
         vector_bigz u_in_q = map_to_q(u_in_scaled);
