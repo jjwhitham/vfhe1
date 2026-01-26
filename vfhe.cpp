@@ -16,11 +16,11 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key> compute_eval_and_veri_keys(
 ) {
     // TODO can try hash rgsw's first, then subtract r_0/r_1
     ASSERT(r_0.size() == r_1.size());
-    flat_rgsw_vec rF_0 = (r_0 * F_ctx);
-    flat_rgsw_vec rF_1 = (r_1 * F_ctx);
-    ASSERT(r_0.size() == rF_0.size());
+    // flat_rgsw_vec rF_0 = (r_0 * F_ctx);
+    // flat_rgsw_vec rF_1 = (r_1 * F_ctx);
+    // ASSERT(r_0.size() == rF_0.size());
     // ASSERT(rF_1.n_polys() == (size_t)(2 * d)); // XXX
-    ASSERT(rF_1.n_flat_rgsws() == F_ctx.n_cols());
+    // ASSERT(rF_1.n_flat_rgsws() == F_ctx.n_cols());
     flat_rgsw_vec r_0_rgsw(r_0.size());
     flat_rgsw_vec r_1_rgsw(r_1.size());
     poly p{N};
@@ -29,8 +29,8 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key> compute_eval_and_veri_keys(
         r_0_rgsw.set(i, enc.encode_flat_rgsw(p * r_0.get(i).get(0), p * r_0.get(i).get(1)));
         r_1_rgsw.set(i, enc.encode_flat_rgsw(p * r_1.get(i).get(0), p * r_1.get(i).get(1)));
     }
-    hashed_rgsw_vec rF_0_r_1 = (rF_0 - r_1_rgsw).get_hash(eval_pows);
-    hashed_rgsw_vec rF_1_r_0 = (rF_1 - r_0_rgsw).get_hash(eval_pows);
+    hashed_rgsw_vec rF_0_r_1 = (r_0 * F_ctx - r_1_rgsw).get_hash(eval_pows);
+    hashed_rgsw_vec rF_1_r_0 = (r_1 * F_ctx - r_0_rgsw).get_hash(eval_pows);
     hashed_g2_rgsw_vec grFr_0 = rF_0_r_1.pow_g2();
     hashed_g2_rgsw_vec grFr_1 = rF_1_r_0.pow_g2();
     hashed_g2_rgsw_vec grFr_alpha_0 = (rF_0_r_1 * alpha_1).pow_g2();
@@ -120,10 +120,10 @@ Proof compute_proof(
     const hashed_g2_rgsw_vec& grFr_alpha = ek.grFr_alpha;
     const hashed_g2_rgsw_vec& gsHr_gamma = ek.gsHr_gamma;
 
-    rlwe_decomp_vec x_decomped = x.decompose(v, d, power);
+    rlwe_decomp_vec x_decomped = x.decompose(v, d, power); // #=2dn
     x_decomped.msm(eval_pows_g);
-    x_hi.msm(eval_pows_g);
-    x_nega_lhs.msm(eval_pows_g);
+    x_hi.msm(eval_pows_g); // #=2n
+    x_nega_lhs.msm(eval_pows_g); // #=2n
 
     auto grx_ = gr.get_hash_sec(x_nega_lhs); // XXX G_1
     auto grx_hi = gr.get_hash_sec(x_hi); // XXX G_1_hi
@@ -266,6 +266,14 @@ void print_times_and_counts(times_and_counts& timing) {
     std::cout << timing.total.count() << "\n";
     std::cout << "Setup: ";
     std::cout << timing.total.count() - timing.loop.count() << "\n";
+    std::cout << "  v_pows: ";
+    std::cout << timing.v_pows.count() << "\n";
+    std::cout << "  g_mat: ";
+    std::cout << timing.g_mat.count() << "\n";
+    std::cout << "  enc_zero: ";
+    std::cout << timing.enc_zero.count() << "\n";
+    std::cout << "  enc_rgsw_add: ";
+    std::cout << timing.enc_rgsw_add.count() << "\n";
     std::cout << "Per Loop: ";
     std::cout << timing.loop.count() / iter_ << "\n";
     std::cout << "  Controller: ";
@@ -333,6 +341,7 @@ void run_control_loop(times_and_counts& timing) {
         return res;
     };
     auto make_eval_pows_g = [](const vector_bigz& eval_pows) -> std::vector<G1> {
+        // TODO make just length N_
         std::vector<G1> res{eval_pows.size()};
         assert(res.capacity() == 2 * N_);
         assert(res.size() == 2 * N_);
@@ -369,8 +378,16 @@ void run_control_loop(times_and_counts& timing) {
         return res;
     };
 
+    TIMING(auto start_setup = std::chrono::high_resolution_clock::now();)
     Params pms;
+    TIMING(auto end_setup = std::chrono::high_resolution_clock::now();)
     pms.print();
+    std::chrono::duration<double, std::milli> time_setup = end_setup - start_setup;
+    int n_decimals = 0;
+    std::cout << std::fixed << std::setprecision(n_decimals);
+    std::cout << "\nSetup times (new):\n";
+    std::cout << "  Params: ";
+    std::cout << time_setup.count() << "\n";
 
     DEBUG(std::cout << "*** START run_control_loop ***\n";)
     using matrix_i128 = array2d<bigz>;
@@ -391,6 +408,7 @@ void run_control_loop(times_and_counts& timing) {
     size_t iter_ = pms.iter_;
     DEBUG(iter_ = 3;)
 
+    TIMING(start_setup = std::chrono::high_resolution_clock::now();)
     bigz from = 1;
     bigz to_inclusive = q - 1;
     // TODO Params should sample
@@ -408,20 +426,30 @@ void run_control_loop(times_and_counts& timing) {
     auto& r_0 = verification_vectors.at(0);
     auto& r_1 = verification_vectors.at(1);
     auto& s = verification_vectors.at(2);
+    TIMING(end_setup = std::chrono::high_resolution_clock::now();)
+    time_setup = end_setup - start_setup;
+    std::cout << "  sampling: ";
+    std::cout << time_setup.count() << "\n";
 
     size_t N = N_;
     u32 d = pms.d;
     u32 power = pms.power;
     bigz& v = pms.v;
 
+    TIMING(start_setup = std::chrono::high_resolution_clock::now();)
     Encryptor enc(v, d, N, q);
     rgsw_mat F_ctx = enc.encrypt_rgsw_mat(F);
     rgsw_mat G_bar_ctx = enc.encrypt_rgsw_mat(G_bar);
     rgsw_mat R_bar_ctx = enc.encrypt_rgsw_mat(R_bar);
     rgsw_mat H_bar_ctx = enc.encrypt_rgsw_mat(H_bar);
     rlwe_vec x = enc.encrypt_rlwe_vec(x_cont);
+    TIMING(end_setup = std::chrono::high_resolution_clock::now();)
+    time_setup = end_setup - start_setup;
+    std::cout << "  encrypting: ";
+    std::cout << time_setup.count() << "\n";
 
     // TODO sample
+    TIMING(start_setup = std::chrono::high_resolution_clock::now();)
     bigz eval_point = 42;
     vector_bigz eval_pows = eval_poly_pows(2 * N, eval_point, q);
     vector_G1 eval_pows_g = make_eval_pows_g(eval_pows);
@@ -432,22 +460,34 @@ void run_control_loop(times_and_counts& timing) {
     );
     auto& ek = std::get<0>(keys);
     veri_key& vk = std::get<1>(keys);
+    TIMING(end_setup = std::chrono::high_resolution_clock::now();)
+    time_setup = end_setup - start_setup;
+    std::cout << "  computing keys: ";
+    std::cout << time_setup.count() << "\n";
 
     // convert rgsw mats to ntt/eval form
-    std::cout << "start eval\n";
+    TIMING(start_setup = std::chrono::high_resolution_clock::now();)
     F_ctx.to_eval_form();
     G_bar_ctx.to_eval_form();
     R_bar_ctx.to_eval_form();
     H_bar_ctx.to_eval_form();
-    std::cout << "end eval\n";
+    TIMING(end_setup = std::chrono::high_resolution_clock::now();)
+    time_setup = end_setup - start_setup;
+    std::cout << "  to eval form: ";
+    std::cout << time_setup.count() << "\n";
 
     // create initial proof
+    TIMING(start_setup = std::chrono::high_resolution_clock::now();)
     auto x_hash = x.get_hash(eval_pows); // XXX
     // TODO move to veri_vec
     bigz rx_0 = r_1.dot_prod(x_hash); // XXX
     GT g1 = pow_t(genT, rx_0);
     Proof old_proof {};
     old_proof.grx_ = g1;
+    TIMING(end_setup = std::chrono::high_resolution_clock::now();)
+    time_setup = end_setup - start_setup;
+    std::cout << "  init proof: ";
+    std::cout << time_setup.count() << "\n\n\n";
 
     TIMING(timing.iter_ = 1;)
     TIMING(print_times_and_counts(timing);)

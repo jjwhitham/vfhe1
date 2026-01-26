@@ -18,6 +18,10 @@
 
 
 ##### TODO
+Mon 26 Jan
+- [ ] add msm cache test
+- [ ] Add invariant: num_pairings
+
 Tue 20th Jan 2026
 XXX
 - [x] Get asserts working

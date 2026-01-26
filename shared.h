@@ -61,6 +61,10 @@ typedef struct times_and_counts {
     std::chrono::duration<double, std::milli> intt1{};
     std::chrono::duration<double, std::milli> msm{};
     std::chrono::duration<double, std::milli> msm1{};
+    std::chrono::duration<double, std::milli> v_pows{};
+    std::chrono::duration<double, std::milli> g_mat{};
+    std::chrono::duration<double, std::milli> enc_zero{};
+    std::chrono::duration<double, std::milli> enc_rgsw_add{};
 } times_and_counts;
 
 // NOTE inline keyword for structs allows the struct to be used in multiple

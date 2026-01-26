@@ -101,6 +101,7 @@ public:
 
     rlwe_vec encrypt_rlwe_vec(const vector_bigz& vec) {
         rlwe_vec res(vec.size());
+        #pragma omp parallel for schedule(static) num_threads(N_THREADS)
         for (size_t i = 0; i < vec.size(); i++) {
             poly p{N};
             p.set(0, vec.at(i)); // set the first coefficient to the value
@@ -128,25 +129,40 @@ public:
     }
     rgsw encrypt_rgsw(const poly& M) {
         // Compute v powers: v^0, v^1, ..., v^{d-1}
+        // TODO move into constructor
+        TIMING(static auto start = std::chrono::high_resolution_clock::now();)
         vector_bigz v_powers(d);
         v_powers[0] = 1;
         for (size_t i = 1; i < d; i++)
             v_powers[i] = v_powers[i - 1] * v % FIELD_MODULUS;
+        TIMING(static auto end = std::chrono::high_resolution_clock::now();)
+        TIMING(timing.v_pows += end - start;)
 
         // Build (2x2d) G matrix: with rows: [v_powers, 0...], [0..., v_powers]
+        TIMING(start = std::chrono::high_resolution_clock::now();)
         rgsw G(2 * d, N_POLYS_IN_RLWE, N);
         for (size_t i = 0; i < d; i++) {
             G.get_rlwe(i).get_poly(0).set(0, mod_(M.get(0) * v_powers[i], FIELD_MODULUS));
             G.get_rlwe(i + d).get_poly(1).set(0, mod_(M.get(0) * v_powers[i], FIELD_MODULUS));
         }
+        TIMING(end = std::chrono::high_resolution_clock::now();)
+        TIMING(timing.g_mat += end - start;)
+
         // Encryptions of zero
+        TIMING(start = std::chrono::high_resolution_clock::now();)
         rgsw encs_of_zero(2 * d);
         poly zero_poly(N);
+        #pragma omp parallel for schedule(static) num_threads(N_THREADS)
         for (size_t i = 0; i < 2 * d; i++)
             encs_of_zero.set(i, encrypt_rlwe(zero_poly));
+        TIMING(end = std::chrono::high_resolution_clock::now();)
+        TIMING(timing.enc_zero += end - start;)
 
         // rgsw res = G + encs_of_zero;
+        TIMING(start = std::chrono::high_resolution_clock::now();)
         G += encs_of_zero;
+        TIMING(end = std::chrono::high_resolution_clock::now();)
+        TIMING(timing.enc_rgsw_add += end - start;)
         return G;
     }
     // takes an array2d<bigz> and returns an encrypted rgsw_mat
