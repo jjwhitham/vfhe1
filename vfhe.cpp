@@ -30,16 +30,20 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key, check_key> compute_eval_and
         // XXX
         r_1_rgsw.set(i, enc.encode_flat_rgsw(p * r_1.get(i).get(0), p * r_1.get(i).get(1)));
     }
-    hashed_t_rgsw_vec rF_0_r_1 = (rF_0 - r_1_rgsw).get_hash_t(eval_pows);
-    hashed_t_rgsw_vec rF_1_r_0 = (rF_1 - r_0_rgsw).get_hash_t(eval_pows);
+    // hashed_t_rgsw_vec rF_0_r_1 = (rF_0 - r_1_rgsw).get_hash_t(eval_pows);
+    hashed_rgsw_vec rF_0_r_1 = (rF_0 - r_1_rgsw).get_hash(eval_pows);
+    // hashed_t_rgsw_vec rF_1_r_0 = (rF_1 - r_0_rgsw).get_hash_t(eval_pows);
+    hashed_rgsw_vec rF_1_r_0 = (rF_1 - r_0_rgsw).get_hash(eval_pows);
     hashed_t_rgsw_vec grFr_0 = rF_0_r_1.pow();
     hashed_t_rgsw_vec grFr_1 = rF_1_r_0.pow();
     hashed_t_rgsw_vec grFr_alpha_0 = (rF_0_r_1 * alpha_1).pow();
     hashed_t_rgsw_vec grFr_alpha_1 = (rF_1_r_0 * alpha_0).pow();
 
     flat_rgsw_vec sH = s * H_bar_ctx;
-    hashed_t_rgsw_vec sH_r_1 = (sH - r_1_rgsw).get_hash_t(eval_pows);
-    hashed_t_rgsw_vec sH_r_0 = (sH - r_0_rgsw).get_hash_t(eval_pows);
+    // hashed_t_rgsw_vec sH_r_1 = (sH - r_1_rgsw).get_hash_t(eval_pows);
+    hashed_rgsw_vec sH_r_1 = (sH - r_1_rgsw).get_hash(eval_pows);
+    // hashed_t_rgsw_vec sH_r_0 = (sH - r_0_rgsw).get_hash_t(eval_pows);
+    hashed_rgsw_vec sH_r_0 = (sH - r_0_rgsw).get_hash(eval_pows);
     hashed_t_rgsw_vec gsHr_0 = sH_r_1.pow();
     hashed_t_rgsw_vec gsHr_1 = sH_r_0.pow();
     hashed_t_rgsw_vec gsHr_gamma_0 = (sH_r_1 * gamma_1).pow();

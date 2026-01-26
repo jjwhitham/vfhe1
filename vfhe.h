@@ -940,13 +940,11 @@ public:
     }
 };
 
-class hashed_t_rgsw : public array1d<bigz, hashed_t_rgsw> {
-private:
-std::vector<G2> g2;
+class hashed_t_rgsw : public array1d<G2, hashed_t_rgsw> {
 public:
-    using hashed_t_poly = bigz;
+    using hashed_t_poly = G2;
     hashed_t_rgsw() : array1d<hashed_t_poly, hashed_t_rgsw>() {}
-    hashed_t_rgsw(size_t n_hashed_t_polys) : array1d<hashed_t_poly, hashed_t_rgsw>(n_hashed_t_polys), g2{n_hashed_t_polys} {
+    hashed_t_rgsw(size_t n_hashed_t_polys) : array1d<hashed_t_poly, hashed_t_rgsw>(n_hashed_t_polys) {
     }
     auto& get_hashed_t_poly(size_t n) const {
         return get(n);
@@ -959,17 +957,10 @@ public:
         GT res{1};
         for (size_t i = 0; i < n_hashed_t_polys(); i++) {
             GT tmp;
-            pairing(tmp, other.g1[i], g2[i]);
+            pairing(tmp, other.g1[i], get(i));
             res *= tmp;
         }
         return res;
-    }
-    hashed_t_rgsw pow() const {
-        hashed_t_rgsw x(n_hashed_t_polys());
-        for (size_t i = 0; i < n_hashed_t_polys(); i++) {
-            x.g2[i] = pow2_(gen2, get(i));
-        }
-        return x;
     }
 };
 
@@ -987,6 +978,14 @@ public:
     }
     size_t n_hashed_polys() const {
         return size();
+    }
+    hashed_t_rgsw pow() const {
+        hashed_t_rgsw x(n_hashed_polys());
+        for (size_t i = 0; i < n_hashed_polys(); i++) {
+            // x.g2[i] = pow2_(gen2, get(i));
+            x[i] = pow2_(gen2, get(i));
+        }
+        return x;
     }
 };
 
@@ -1061,14 +1060,28 @@ public:
         }
         return hash;
     }
-    // calls rlwe's get_hash_t for all the rlwe's in (*this)
-    auto get_hash_t(const vector_bigz& eval_pows) const {
-        hashed_t_rgsw hash(n_polys());
-        #pragma omp parallel for schedule(static) num_threads(N_THREADS)
-        for (size_t i = 0; i < size(); i++) {
-            hash.set(i, get(i).get_hash(eval_pows));
-        }
-        return hash;
+};
+
+
+class hashed_t_rgsw_vec : public array1d<hashed_t_rgsw, hashed_t_rgsw_vec> {
+public:
+    hashed_t_rgsw_vec() : array1d<hashed_t_rgsw, hashed_t_rgsw_vec>() {}
+    hashed_t_rgsw_vec(size_t n_hashed_t_rgsws) : array1d<hashed_t_rgsw, hashed_t_rgsw_vec>(n_hashed_t_rgsws) {}
+    hashed_t_rgsw& get_hashed_t_rgsw(size_t n) const {
+        return get(n);
+    }
+    size_t n_hashed_t_rgsws() const {
+        return size();
+    }
+    size_t n_hashed_t_polys() const {
+        return get_hashed_t_rgsw(0).size();
+    }
+    GT get_hash_sec(const rlwe_decomp_vec& other) const {
+        ASSERT(n_hashed_t_rgsws() == other.n_rlwe_decomps());
+        GT res{1};
+        for (size_t i = 0; i < n_hashed_t_rgsws(); i++)
+            res *= get(i).get_hash_sec(other.get(i));
+        return res;
     }
 };
 
@@ -1103,37 +1116,14 @@ public:
         }
         return mod_(sum, FIELD_MODULUS);
     };
-};
-
-class hashed_t_rgsw_vec : public array1d<hashed_t_rgsw, hashed_t_rgsw_vec> {
-public:
-    hashed_t_rgsw_vec() : array1d<hashed_t_rgsw, hashed_t_rgsw_vec>() {}
-    hashed_t_rgsw_vec(size_t n_hashed_t_rgsws) : array1d<hashed_t_rgsw, hashed_t_rgsw_vec>(n_hashed_t_rgsws) {}
-    hashed_t_rgsw& get_hashed_t_rgsw(size_t n) const {
-        return get(n);
-    }
-    size_t n_hashed_t_rgsws() const {
-        return size();
-    }
-    size_t n_hashed_t_polys() const {
-        return get_hashed_t_rgsw(0).size();
-    }
-    GT get_hash_sec(const rlwe_decomp_vec& other) const {
-        ASSERT(n_hashed_t_rgsws() == other.n_rlwe_decomps());
-        GT res{1};
-        for (size_t i = 0; i < n_hashed_t_rgsws(); i++)
-            res *= get(i).get_hash_sec(other.get(i));
-        return res;
-    }
     hashed_t_rgsw_vec pow() const {
-        hashed_t_rgsw_vec x(n_hashed_t_rgsws());
-        for (size_t i = 0; i < n_hashed_t_rgsws(); i++) {
-            x.set(i, get_hashed_t_rgsw(i).pow());
+        hashed_t_rgsw_vec x(n_hashed_rgsws());
+        for (size_t i = 0; i < n_hashed_rgsws(); i++) {
+            x.set(i, get_hashed_rgsw(i).pow());
         }
         return x;
     }
 };
-
 
 class flat_rgsw_vec : public array1d<flat_rgsw, flat_rgsw_vec> {
 public:
@@ -1161,15 +1151,6 @@ public:
         hashed_rgsw_vec hash(n_flat_rgsws());
         for (size_t i = 0; i < n_flat_rgsws(); i++) {
             hash.set(i, get(i).get_hash(eval_pows));
-        }
-        return hash;
-    }
-    // calls flat_rgsw's get_hash_t
-    // TODO replace with hashed_rgsw_vec in vfhe.cpp
-    auto get_hash_t(const vector_bigz& eval_pows) const {
-        hashed_t_rgsw_vec hash(n_flat_rgsws());
-        for (size_t i = 0; i < size(); i++) {
-            hash.set(i, get(i).get_hash_t(eval_pows));
         }
         return hash;
     }
