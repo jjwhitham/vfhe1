@@ -159,6 +159,17 @@ public:
     #endif
         return get(i, disable_value_check);
     }
+    // TODO update
+    /**
+     *  @brief Group multiplication.
+     *  Multiplies two group elements pointwise and recursively
+     *
+     *  @param other The other array1d of the same concrete type
+     *
+     *  @return An array1d of the same type as `this` and `other`
+     *
+     *  @note Deprecated...
+     */
     Derived operator*(const bigz& scalar) const {
         // FIXME checking T==bigz when param scalar is bigz explicitly
         size_t N = size();
@@ -172,35 +183,6 @@ public:
             for (size_t i = 0; i < N; i++) {
                 res[i] = (*this)[i] * scalar;
             }
-        }
-        return res;
-    }
-    G1 group_mult_(G1& a, const G1& b) const {
-        return a + b;
-    }
-    /**
-     *  @brief Group multiplication.
-     *  Multiplies two group elements pointwise and recursively
-     *
-     *  @param other The other array1d of the same concrete type
-     *
-     *  @return An array1d of the same type as `this` and `other`
-     *
-     *  @note Deprecated...
-     */
-    Derived group_mult(const Derived& other) const {
-        size_t N = size();
-        Derived res(N);
-        for (size_t i = 0; i < N; i++) {
-            T val;
-            if constexpr (std::is_same_v<T, bigz>) {
-                throw std::runtime_error("Derived group_mult(Derived): Received a bigz arg!\n");
-            } else if constexpr (std::is_same_v<T, G1>) {
-                val = group_mult_(get(i), other.get(i));
-            } else {
-                val = get(i).group_mult(other.get(i));
-            }
-            res.set(i, val);
         }
         return res;
     }
@@ -940,22 +922,21 @@ public:
     }
 };
 
-class hashed_t_rgsw : public array1d<G2, hashed_t_rgsw> {
+class hashed_g2_rgsw : public array1d<G2, hashed_g2_rgsw> {
 public:
-    using hashed_t_poly = G2;
-    hashed_t_rgsw() : array1d<hashed_t_poly, hashed_t_rgsw>() {}
-    hashed_t_rgsw(size_t n_hashed_t_polys) : array1d<hashed_t_poly, hashed_t_rgsw>(n_hashed_t_polys) {
+    hashed_g2_rgsw() : array1d<G2, hashed_g2_rgsw>() {}
+    hashed_g2_rgsw(size_t n_hashed_t_polys) : array1d<G2, hashed_g2_rgsw>(n_hashed_t_polys) {
     }
-    auto& get_hashed_t_poly(size_t n) const {
+    auto& get_hashed_g2_poly(size_t n) const {
         return get(n);
     }
-    size_t n_hashed_t_polys() const {
+    size_t n_hashed_g2_polys() const {
         return size();
     }
     GT get_hash_sec(const rlwe_decomp& other) const {
         assert(size() == other.size());
         GT res{1};
-        for (size_t i = 0; i < n_hashed_t_polys(); i++) {
+        for (size_t i = 0; i < n_hashed_g2_polys(); i++) {
             GT tmp;
             pairing(tmp, other.g1[i], get(i));
             res *= tmp;
@@ -979,10 +960,9 @@ public:
     size_t n_hashed_polys() const {
         return size();
     }
-    hashed_t_rgsw pow() const {
-        hashed_t_rgsw x(n_hashed_polys());
+    hashed_g2_rgsw pow_g2() const {
+        hashed_g2_rgsw x(n_hashed_polys());
         for (size_t i = 0; i < n_hashed_polys(); i++) {
-            // x.g2[i] = pow2_(gen2, get(i));
             x[i] = pow2_(gen2, get(i));
         }
         return x;
@@ -1063,23 +1043,23 @@ public:
 };
 
 
-class hashed_t_rgsw_vec : public array1d<hashed_t_rgsw, hashed_t_rgsw_vec> {
+class hashed_g2_rgsw_vec : public array1d<hashed_g2_rgsw, hashed_g2_rgsw_vec> {
 public:
-    hashed_t_rgsw_vec() : array1d<hashed_t_rgsw, hashed_t_rgsw_vec>() {}
-    hashed_t_rgsw_vec(size_t n_hashed_t_rgsws) : array1d<hashed_t_rgsw, hashed_t_rgsw_vec>(n_hashed_t_rgsws) {}
-    hashed_t_rgsw& get_hashed_t_rgsw(size_t n) const {
+    hashed_g2_rgsw_vec() : array1d<hashed_g2_rgsw, hashed_g2_rgsw_vec>() {}
+    hashed_g2_rgsw_vec(size_t n_hashed_g2_rgsws) : array1d<hashed_g2_rgsw, hashed_g2_rgsw_vec>(n_hashed_g2_rgsws) {}
+    hashed_g2_rgsw& get_hashed_g2_rgsw(size_t n) const {
         return get(n);
     }
-    size_t n_hashed_t_rgsws() const {
+    size_t n_hashed_g2_rgsws() const {
         return size();
     }
-    size_t n_hashed_t_polys() const {
-        return get_hashed_t_rgsw(0).size();
+    size_t n_hashed_g2_polys() const {
+        return get_hashed_g2_rgsw(0).size();
     }
     GT get_hash_sec(const rlwe_decomp_vec& other) const {
-        ASSERT(n_hashed_t_rgsws() == other.n_rlwe_decomps());
+        ASSERT(n_hashed_g2_rgsws() == other.n_rlwe_decomps());
         GT res{1};
-        for (size_t i = 0; i < n_hashed_t_rgsws(); i++)
+        for (size_t i = 0; i < n_hashed_g2_rgsws(); i++)
             res *= get(i).get_hash_sec(other.get(i));
         return res;
     }
@@ -1116,10 +1096,10 @@ public:
         }
         return mod_(sum, FIELD_MODULUS);
     };
-    hashed_t_rgsw_vec pow() const {
-        hashed_t_rgsw_vec x(n_hashed_rgsws());
+    hashed_g2_rgsw_vec pow_g2() const {
+        hashed_g2_rgsw_vec x(n_hashed_rgsws());
         for (size_t i = 0; i < n_hashed_rgsws(); i++) {
-            x.set(i, get_hashed_rgsw(i).pow());
+            x.set(i, get_hashed_rgsw(i).pow_g2());
         }
         return x;
     }
@@ -1211,13 +1191,13 @@ public:
     }
 };
 
-class hashed_t_veri_vec_inner : public array1d<G2, hashed_t_veri_vec_inner> {
+class g2_veri_vec_inner : public array1d<G2, g2_veri_vec_inner> {
 public:
-    using htvvi = hashed_t_veri_vec_inner;
-    using htvvi_arr = array1d<G2, hashed_t_veri_vec_inner>;
-    hashed_t_veri_vec_inner() : htvvi_arr() {}
-    hashed_t_veri_vec_inner(size_t n_ha_polys) : htvvi_arr{n_ha_polys} {
-        assert(n_ha_polys == N_POLYS_IN_RLWE);
+    using g2vvi = g2_veri_vec_inner;
+    using g2vvi_arr = array1d<G2, g2_veri_vec_inner>;
+    g2_veri_vec_inner() : g2vvi_arr() {}
+    g2_veri_vec_inner(size_t n_g2_polys) : g2vvi_arr{n_g2_polys} {
+        assert(n_g2_polys == N_POLYS_IN_RLWE);
     }
     // XXX pairing
     GT get_hash_sec(const rlwe& other) const {
@@ -1225,7 +1205,6 @@ public:
         GT res{1};
         for (size_t i = 0; i < size(); i++) {
             GT tmp;
-            // pairing(tmp, other.g1.at(i), g2[i]);
             pairing(tmp, other.g1.at(i), get(i));
             res *= tmp;
         }
@@ -1233,12 +1212,12 @@ public:
     }
 };
 
-class hashed_t_veri_vec : public array1d<hashed_t_veri_vec_inner, hashed_t_veri_vec> {
+class g2_veri_vec : public array1d<g2_veri_vec_inner, g2_veri_vec> {
 public:
-    using htvv = hashed_t_veri_vec;
-    using htvv_arr = array1d<hashed_t_veri_vec_inner, hashed_t_veri_vec>;
-    hashed_t_veri_vec() : htvv_arr() {}
-    hashed_t_veri_vec(size_t n_inner) : htvv_arr(n_inner) {}
+    using g2vv = g2_veri_vec;
+    using g2vv_arr = array1d<g2_veri_vec_inner, g2_veri_vec>;
+    g2_veri_vec() : g2vv_arr() {}
+    g2_veri_vec(size_t n_inner) : g2vv_arr(n_inner) {}
 
     GT get_hash_sec(const rlwe_vec& other) const {
         assert(size() == other.size());
@@ -1277,10 +1256,10 @@ using vvi_arr = array1d<bigz, veri_vec_inner>;
         }
         return res;
     }
-    using htvvi = hashed_t_veri_vec_inner;
+    using g2vvi = g2_veri_vec_inner;
     // TODO pow can be made a memb func on array1d again - recurse to ha_poly
-    htvvi pow() const {
-        htvvi res{size()};
+    g2vvi pow() const {
+        g2vvi res{size()};
         for (size_t i = 0; i < size(); i++) {
             res[i] = pow2_(gen2, get(i));
         }
@@ -1313,9 +1292,9 @@ using vv_arr = array1d<veri_vec_inner, veri_vec>;
             res += get(i).dot_prod(other.get(i));
         return res;
     }
-    using htvv = hashed_t_veri_vec;
-    htvv pow() const {
-        htvv res{size()};
+    using g2vv = g2_veri_vec;
+    g2vv pow() const {
+        g2vv res{size()};
         for (size_t i = 0; i < size(); i++) {
             res.set(i, get(i).pow());
         }
@@ -1553,12 +1532,12 @@ public:
 };
 
 struct eval_key {
-    hashed_t_veri_vec gr;
-    hashed_t_rgsw_vec grFr;
-    hashed_t_rgsw_vec gsHr;
-    hashed_t_veri_vec gr_rho;
-    hashed_t_rgsw_vec grFr_alpha;
-    hashed_t_rgsw_vec gsHr_gamma;
+    g2_veri_vec gr;
+    hashed_g2_rgsw_vec grFr;
+    hashed_g2_rgsw_vec gsHr;
+    g2_veri_vec gr_rho;
+    hashed_g2_rgsw_vec grFr_alpha;
+    hashed_g2_rgsw_vec gsHr_gamma;
 };
 
 struct veri_key {

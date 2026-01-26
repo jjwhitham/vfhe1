@@ -27,34 +27,29 @@ std::tuple<std::tuple<eval_key, eval_key>, veri_key, check_key> compute_eval_and
     p.set(0, bigz{1});
     for (size_t i = 0; i < r_0.size(); i++) {
         r_0_rgsw.set(i, enc.encode_flat_rgsw(p * r_0.get(i).get(0), p * r_0.get(i).get(1)));
-        // XXX
         r_1_rgsw.set(i, enc.encode_flat_rgsw(p * r_1.get(i).get(0), p * r_1.get(i).get(1)));
     }
-    // hashed_t_rgsw_vec rF_0_r_1 = (rF_0 - r_1_rgsw).get_hash_t(eval_pows);
     hashed_rgsw_vec rF_0_r_1 = (rF_0 - r_1_rgsw).get_hash(eval_pows);
-    // hashed_t_rgsw_vec rF_1_r_0 = (rF_1 - r_0_rgsw).get_hash_t(eval_pows);
     hashed_rgsw_vec rF_1_r_0 = (rF_1 - r_0_rgsw).get_hash(eval_pows);
-    hashed_t_rgsw_vec grFr_0 = rF_0_r_1.pow();
-    hashed_t_rgsw_vec grFr_1 = rF_1_r_0.pow();
-    hashed_t_rgsw_vec grFr_alpha_0 = (rF_0_r_1 * alpha_1).pow();
-    hashed_t_rgsw_vec grFr_alpha_1 = (rF_1_r_0 * alpha_0).pow();
+    hashed_g2_rgsw_vec grFr_0 = rF_0_r_1.pow_g2();
+    hashed_g2_rgsw_vec grFr_1 = rF_1_r_0.pow_g2();
+    hashed_g2_rgsw_vec grFr_alpha_0 = (rF_0_r_1 * alpha_1).pow_g2();
+    hashed_g2_rgsw_vec grFr_alpha_1 = (rF_1_r_0 * alpha_0).pow_g2();
 
     flat_rgsw_vec sH = s * H_bar_ctx;
-    // hashed_t_rgsw_vec sH_r_1 = (sH - r_1_rgsw).get_hash_t(eval_pows);
     hashed_rgsw_vec sH_r_1 = (sH - r_1_rgsw).get_hash(eval_pows);
-    // hashed_t_rgsw_vec sH_r_0 = (sH - r_0_rgsw).get_hash_t(eval_pows);
     hashed_rgsw_vec sH_r_0 = (sH - r_0_rgsw).get_hash(eval_pows);
-    hashed_t_rgsw_vec gsHr_0 = sH_r_1.pow();
-    hashed_t_rgsw_vec gsHr_1 = sH_r_0.pow();
-    hashed_t_rgsw_vec gsHr_gamma_0 = (sH_r_1 * gamma_1).pow();
-    hashed_t_rgsw_vec gsHr_gamma_1 = (sH_r_0 * gamma_0).pow();
+    hashed_g2_rgsw_vec gsHr_0 = sH_r_1.pow_g2();
+    hashed_g2_rgsw_vec gsHr_1 = sH_r_0.pow_g2();
+    hashed_g2_rgsw_vec gsHr_gamma_0 = (sH_r_1 * gamma_1).pow_g2();
+    hashed_g2_rgsw_vec gsHr_gamma_1 = (sH_r_0 * gamma_0).pow_g2();
 
 
-    using ht_veri_vec = hashed_t_veri_vec;
-    ht_veri_vec gr_0 = r_0.pow(); // TODO change get_hash_t to copy
-    ht_veri_vec gr_1 = r_1.pow();
-    ht_veri_vec gr_rho_0 = (r_0 * rho_0).pow();
-    ht_veri_vec gr_rho_1 = (r_1 * rho_1).pow();
+    using g2_veri_vec = g2_veri_vec;
+    g2_veri_vec gr_0 = r_0.pow();
+    g2_veri_vec gr_1 = r_1.pow();
+    g2_veri_vec gr_rho_0 = (r_0 * rho_0).pow();
+    g2_veri_vec gr_rho_1 = (r_1 * rho_1).pow();
 
     eval_key ek0 {
         gr_0,
@@ -123,12 +118,12 @@ Proof compute_proof(
     const bigz& v, u32 d, u32 power,
     std::vector<G1>& eval_pows_g
 ) {
-    const hashed_t_veri_vec& gr = ek.gr;
-    const hashed_t_rgsw_vec& grFr = ek.grFr;
-    const hashed_t_rgsw_vec& gsHr = ek.gsHr;
-    const hashed_t_veri_vec& gr_rho = ek.gr_rho;
-    const hashed_t_rgsw_vec& grFr_alpha = ek.grFr_alpha;
-    const hashed_t_rgsw_vec& gsHr_gamma = ek.gsHr_gamma;
+    const g2_veri_vec& gr = ek.gr;
+    const hashed_g2_rgsw_vec& grFr = ek.grFr;
+    const hashed_g2_rgsw_vec& gsHr = ek.gsHr;
+    const g2_veri_vec& gr_rho = ek.gr_rho;
+    const hashed_g2_rgsw_vec& grFr_alpha = ek.grFr_alpha;
+    const hashed_g2_rgsw_vec& gsHr_gamma = ek.gsHr_gamma;
 
     rlwe_decomp_vec x_decomped = x.decompose(v, d, power);
     x_decomped.msm(eval_pows_g);
