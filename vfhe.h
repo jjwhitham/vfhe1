@@ -15,6 +15,13 @@ TODO
 #include "ntt.h"
 #include "gmpxx.h"
 
+#include <NTL/ZZ_pX.h>
+#include <NTL/ZZ.h>
+#include <NTL/BasicThreadPool.h>
+#include <thread>
+
+using namespace NTL;
+
 // #include <boost/stacktrace.hpp>
 // #include <boost/exception/all.hpp>
 // typedef boost::error_info<struct tag_stacktrace, boost::stacktrace::stacktrace> traced;
@@ -427,10 +434,10 @@ public:
     }
 };
 
+
 class poly : public array1d<bigz, poly> {
-private:
-    bool isNTT = false;
 public:
+    bool isNTT = false;
     poly() : array1d<bigz, poly>() {}
     poly(size_t N) : array1d<bigz, poly>(N) {
         // TODO check timing improvement
@@ -529,6 +536,7 @@ public:
         a.isNTT = true;
         return a;
     }
+    auto to_eval_form_ntl() const;
     poly to_coeff_form(bool is_conv=true) const {
         ASSERT(isNTT == true);
         size_t n = n_coeffs();
@@ -586,6 +594,81 @@ public:
     }
 };
 
+// TODO create a rgsw_mat_eval class that has ZZ_pX instead of polys
+// TODO requirements:
+// TODO - read docs on NTL_EXEC_RANGE and figure out:
+// TODO   - if I only get MT benefits from using NTL_EXEC_RANGE
+// TODO - should have
+
+
+// class poly_eval : public FFTRep {
+// TODO consider just adding FFTRep to poly class...
+// TODO consider making operator* etc. on poly class and then checking is_ntt
+//      to choose which overload to use
+class poly_eval {
+    long k = 14;
+    FFTRep p; // TODO should be a ptr?
+public:
+    // poly_eval(size_t n_coeffs) : FFTRep {
+    // poly_eval(size_t n_coeffs) : p(INIT_SIZE, k) {
+    poly_eval() { // TODO review this
+    }
+    poly_eval(FFTRep& p_) : p(p_) { // TODO review this
+    }
+    poly_eval(poly& p_) { // TODO review this
+        ToFFTRep(p, poly_to_ZZ_pX(p_), k);
+    }
+    ZZ_pX poly_to_ZZ_pX(poly& p) {
+        ZZ_pX p_ret;
+        p_ret.SetLength(p.n_coeffs());
+        for (size_t j = 0; j < p.n_coeffs(); j++) {
+            // TODO replace with a buffer init'd at construction
+            p_ret[j] = mpz_to_new_ZZ_p(p[j]);
+        }
+        return p_ret;
+    }
+    size_t n_coeffs() {
+        return p.len;
+    }
+    // TODO requirements:
+    // TODO  - returns a new FFTRep
+    // TODO  - find a way to init all polys once at for x_conv etc. and mutate per loop
+    poly_eval& operator*=(poly_eval& other) {
+        mul((*this).p, (*this).p, other.p);
+        return *this;
+    }
+    poly_eval operator*(poly_eval& other) const {
+        assert(p.len == other.p.len);
+        assert(p.len == 2 * N_);
+        poly_eval res(*this);
+        res *= other;
+        return res;
+    }
+    poly_eval& operator+=(poly_eval& other) {
+        add((*this).p, (*this).p, other.p);
+        return *this;
+    }
+    poly_eval operator+(poly_eval& other) const {
+        assert(p.len == other.p.len);
+        assert(p.len == 2 * N_);
+        poly_eval res(*this);
+        res += other;
+        return res;
+    }
+};
+
+// XXX to avoid circular reference
+inline auto poly::to_eval_form_ntl() const {
+    ASSERT(isNTT == false);
+    size_t n = n_coeffs();
+    n *= 2;
+    poly a{n};
+    for (size_t i = 0; i < n_coeffs(); i++) {
+        a.set(i, get(i));
+    }
+    poly_eval res{a};
+    return res;
+}
 
 class hashed_t_poly : public array1d<bigz, hashed_t_poly> {
 public:
@@ -647,12 +730,12 @@ public:
     size_t n_coeffs() const {
         return get_poly(0).size();
     }
-    void to_eval_form() {
-        #pragma omp parallel for schedule(dynamic) num_threads(N_THREADS)
-        for (size_t i = 0; i < n_polys(); i++) {
-            set(i, get_poly(i).to_eval_form());
-        }
-    }
+    // void to_eval_form() {
+    //     #pragma omp parallel for schedule(dynamic) num_threads(N_THREADS)
+    //     for (size_t i = 0; i < n_polys(); i++) {
+    //         set(i, get_poly(i).to_eval_form());
+    //     }
+    // }
     void msm(std::vector<G1>& eval_pows_g) {
         for (size_t i = 0; i < size(); i++)
             g1.at(i) = get(i).msm(eval_pows_g);
@@ -714,13 +797,23 @@ public:
         }
         return hash;
     }
-    rlwe_decomp_vec to_eval_form() {
+    rlwe_decomp_vec to_eval_form_() {
         #pragma omp parallel for collapse(2) schedule(dynamic) num_threads(N_THREADS)
         for (size_t i = 0; i < n_rlwe_decomps(); i++)
             for (size_t j = 0; j < n_polys(); j++) {
-                get_rlwe_decomp(i).set(j, get_rlwe_decomp(i).get_poly(j).to_eval_form());
+                // get_rlwe_decomp(i).set(j, get_rlwe_decomp(i).get_poly(j).to_eval_form());
+                poly& p = get_rlwe_decomp(i).get_poly(j);
+                p = p.to_eval_form();
             }
         return *this;
+    }
+    rlwe_decomp_vec_eval to_eval_form_ntl() {
+        // TODO
+        return *this;
+    }
+    rlwe_decomp_vec to_eval_form() {
+        return to_eval_form_();
+        // return to_eval_form_ntl();
     }
     void msm(std::vector<G1>& eval_pows_g) {
         for (size_t i = 0; i < size(); i++)
@@ -748,7 +841,6 @@ public:
 };
 
 class hashed_rlwe : public array1d<bigz, hashed_rlwe> {
-    using int_rlwe = array1d<bigz, hashed_rlwe>;
 public:
     // NOTE hashed_rlwe always has two hashed_polys
     hashed_rlwe() : array1d<bigz, hashed_rlwe>() {}
@@ -822,11 +914,11 @@ public:
         }
         return conv;
     }
-    void to_eval_form() {
-        for (size_t i = 0; i < N_POLYS_IN_RLWE; i++) {
-            set(i, get_poly(i).to_eval_form());
-        }
-    }
+    // void to_eval_form() {
+    //     for (size_t i = 0; i < N_POLYS_IN_RLWE; i++) {
+    //         set(i, get_poly(i).to_eval_form());
+    //     }
+    // }
     void to_coeff_form() {
         for (size_t i = 0; i < N_POLYS_IN_RLWE; i++) {
             set(i, get_poly(i).to_coeff_form());
@@ -937,6 +1029,7 @@ public:
         assert(size() == other.size());
         GT res{1};
         for (size_t i = 0; i < n_hashed_g2_polys(); i++) {
+            TIMING(timing.calls_pairing_rgsw += 1;)
             GT tmp;
             pairing(tmp, other.g1[i], get(i));
             res *= tmp;
@@ -1001,10 +1094,10 @@ public:
         }
         return res;
     }
-    void to_eval_form() {
-        for (size_t i = 0 ; i < n_rlwes(); i++)
-            get_rlwe(i).to_eval_form();
-    }
+    // void to_eval_form() {
+    //     for (size_t i = 0 ; i < n_rlwes(); i++)
+    //         get_rlwe(i).to_eval_form();
+    // }
 };
 
 
@@ -1136,6 +1229,23 @@ public:
     }
 };
 
+
+class rlwe_eval : public array1d<poly_eval, rlwe_eval> {
+public:
+    rlwe_eval() : array1d<poly_eval, rlwe_eval>{N_POLYS_IN_RLWE} {}
+};
+
+class rgsw_eval : public array1d<rlwe_eval, rgsw_eval> {
+public:
+    rgsw_eval() : array1d<rlwe_eval, rgsw_eval>{} {}
+    rgsw_eval(size_t n_rlwes) : array1d<rlwe_eval, rgsw_eval>{n_rlwes} {}
+};
+
+class rgsw_mat_eval : public array2d<rgsw_eval> {
+public:
+    rgsw_mat_eval(size_t rows, size_t cols) : array2d<rgsw_eval>(rows, cols) {}
+};
+
 class rgsw_mat : public array2d<rgsw> {
 public:
     rgsw_mat() : array2d<rgsw>() {}
@@ -1166,16 +1276,94 @@ public:
     rlwe_vec convolve(rlwe_decomp_vec&& other) const {
         return convolve(other);
     }
-    void to_eval_form() {
-        #pragma omp parallel for collapse(3) schedule(dynamic) num_threads(N_THREADS)
+    void to_eval_form_() {
+        #pragma omp parallel for collapse(4) schedule(dynamic) num_threads(N_THREADS * 2)
         for (size_t row = 0; row < n_rows(); row++) {
             for (size_t col = 0; col < n_cols(); col++) {
                 for (size_t i = 0 ; i < n_rlwes(); i++) {
                     // get_rgsw(row, col).to_eval_form();
-                    get_rgsw(row, col).get_rlwe(i).to_eval_form();;
+                    // get_rgsw(row, col).get_rlwe(i).to_eval_form();
+                    for (size_t k = 0; k < N_POLYS_IN_RLWE; k++) {
+                        poly& p = get_rgsw(row, col).get_rlwe(i).get_poly(k);
+                        p = p.to_eval_form();
+                    }
                 }
             }
         }
+    }
+    rgsw_mat_eval to_eval_form_ntl() {
+        rgsw_mat_eval rgme{n_rows(), n_cols()};
+        for (size_t row = 0; row < n_rows(); row++) {
+            for (size_t col = 0; col < n_cols(); col++) {
+                rgsw_eval rge(n_rlwes());
+                for (size_t i = 0 ; i < n_rlwes(); i++) {
+                    rlwe_eval rle{};
+                    for (size_t k = 0; k < N_POLYS_IN_RLWE; k++) {
+                        poly& p = get_rgsw(row, col).get_rlwe(i).get_poly(k);
+                        poly_eval p_eval = p.to_eval_form_ntl();
+                        rle[k] = p_eval;
+                        // DONE set rlwe_eval
+                        // DONE set rgsw_eval
+                        // DONE set rgsw_mat_eval
+                    }
+                    rge[i] = rle;
+                }
+                rgme.set(row, col, rge);
+            }
+        }
+        return rgme;
+    }
+
+
+    // // TODO take an N length poly and copy into 2*N length ZZ_pX that's zero-init'd
+    // ZZ_pX poly_to_ZZ_pX(poly& p) {
+    //     ZZ_pX p_ret;
+    //     p_ret.SetLength(p.n_coeffs());
+    //     for (size_t j = 0; j < p.n_coeffs(); j++) {
+    //         // TODO replace with a buffer init'd at construction
+    //         p_ret[j] = mpz_to_new_ZZ_p(p[j]);
+    //     }
+    //     return p_ret;
+    // }
+    // poly ZZ_pX_to_poly(FFTRep& zzpx) {
+    //     poly p(2 * N_);
+    //     for (size_t i = 0; i < 2 * N_; i++) {
+    //         ZZ_p_to_mpz(p[i], zzpx[i]);
+    //     }
+    //     return p;
+    // }
+    // void to_eval_form_ntl() {
+    //     // #pragma omp parallel for collapse(4) schedule(dynamic) num_threads(N_THREADS * 2)
+    //     for (size_t row = 0; row < n_rows(); row++) {
+    //         for (size_t col = 0; col < n_cols(); col++) {
+    //             for (size_t i = 0 ; i < n_rlwes(); i++) {
+    //                 for (size_t k = 0; k < N_POLYS_IN_RLWE; k++) {
+    //                     poly& p = get_rgsw(row, col).get_rlwe(i).get_poly(k);
+    //                     ASSERT(p.isNTT == false);
+    //                     size_t n = 2 * p.n_coeffs();
+    //                     poly a{n};
+    //                     // #pragma omp parallel for schedule(static) num_threads(N_THREADS)
+    //                     // TODO convert poly to ZZ_pX
+    //                     for (size_t j = 0; j < p.n_coeffs(); j++) {
+    //                         a.set(j, p.get(j));
+    //                     }
+    //                     long k1 = 14;
+    //                     FFTRep x(INIT_SIZE, k1);
+    //                     ToFFTRep(x, poly_to_ZZ_pX(a));
+    //                     // TODO just mutate a;
+    //                     poly a1 = ZZ_pX_to_poly(x);
+    //                     // static const arr_u128 psi_pows = get_rou_pows(TWO_ROU);
+    //                     // ntt_iter(a, psi_pows);
+    //                     a1.isNTT = true;
+    //                     p = a1;
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+    auto to_eval_form() {
+        // return to_eval_form_();
+        return to_eval_form_ntl();
     }
     rgsw& get_rgsw(size_t row, size_t col) const {
         return get(row, col);
@@ -1204,6 +1392,7 @@ public:
         assert(size() == other.size());
         GT res{1};
         for (size_t i = 0; i < size(); i++) {
+            TIMING(timing.calls_pairing_veri_vec += 1;)
             GT tmp;
             pairing(tmp, other.g1.at(i), get(i));
             res *= tmp;

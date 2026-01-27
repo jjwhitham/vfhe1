@@ -120,11 +120,19 @@ Proof compute_proof(
     const hashed_g2_rgsw_vec& grFr_alpha = ek.grFr_alpha;
     const hashed_g2_rgsw_vec& gsHr_gamma = ek.gsHr_gamma;
 
+    TIMING(auto start = std::chrono::high_resolution_clock::now();)
     rlwe_decomp_vec x_decomped = x.decompose(v, d, power); // #=2dn
+    TIMING(auto end = std::chrono::high_resolution_clock::now();)
+    TIMING(timing.decomp += end - start;)
+
+    TIMING(start = std::chrono::high_resolution_clock::now();)
     x_decomped.msm(eval_pows_g);
     x_hi.msm(eval_pows_g); // #=2n
     x_nega_lhs.msm(eval_pows_g); // #=2n
+    TIMING(end = std::chrono::high_resolution_clock::now();)
+    TIMING(timing.msm_tot += end - start;)
 
+    TIMING(start = std::chrono::high_resolution_clock::now();)
     auto grx_ = gr.get_hash_sec(x_nega_lhs); // XXX G_1
     auto grx_hi = gr.get_hash_sec(x_hi); // XXX G_1_hi
     auto grFrx = grFr.get_hash_sec(x_decomped); // G_2
@@ -133,6 +141,8 @@ Proof compute_proof(
     auto gr_rho_x_hi = gr_rho.get_hash_sec(x_hi); // XXX G_1_
     auto grFr_alpha_x = grFr_alpha.get_hash_sec(x_decomped); // G_2_
     auto gsHr_gamma_x = gsHr_gamma.get_hash_sec(x_decomped); // G_3_
+    TIMING(end = std::chrono::high_resolution_clock::now();)
+    TIMING(timing.pairings += end - start;)
 
     return Proof {
         grx_,
@@ -245,8 +255,8 @@ void verify_with_lin_and_dyn_checks(
         }
     }
     assert(lhs == rhs * rhs1);
-    for (size_t i = 0; i < 4; i++)
-        std::cout << "veri_thread" << i << ": " << times[i].count() << "\n";
+    // for (size_t i = 0; i < 4; i++)
+        // std::cout << "veri_thread" << i << ": " << times[i].count() << "\n";
 }
 
 
@@ -280,14 +290,20 @@ void print_times_and_counts(times_and_counts& timing) {
     std::cout << timing.controller.count() / iter_ << "\n";
     std::cout << "    Proof: ";
     std::cout << timing.proof.count() / iter_ << "\n";
+    std::cout << "      decomp: ";
+    std::cout << timing.decomp.count() / iter_ << "\n";
+    std::cout << "      MSMs total: ";
+    std::cout << timing.msm_tot.count() / iter_ << "\n";
+    std::cout << "      MSMs setup: ";
+    std::cout << timing.msm.count() / iter_ << "\n";
+    std::cout << "      MSMs compute: ";
+    std::cout << timing.msm1.count() / iter_ << "\n";
+    std::cout << "      pairings: ";
+    std::cout << timing.pairings.count() / iter_ << "\n";
     std::cout << "  Plant: ";
     std::cout << timing.plant.count() / iter_ << "\n";
     std::cout << "    Verify: ";
     std::cout << timing.verify.count() / iter_ << "\n";
-    std::cout << "  MSMs setup: ";
-    std::cout << timing.msm.count() / iter_ << "\n";
-    std::cout << "  MSMs compute: ";
-    std::cout << timing.msm1.count() / iter_ << "\n";
     std::cout << "  NTT: ";
     std::cout << timing.ntt.count() / iter_ << "\n";
     std::cout << "  iNTT: ";
@@ -311,7 +327,11 @@ void print_times_and_counts(times_and_counts& timing) {
     std::cout << "  Conv-to-nega: ";
     std::cout << timing.calls_conv_to_nega / iter_ << "\n";
     std::cout << "  MSMs: ";
-    std::cout << timing.calls_msm / iter_ << "\n\n";
+    std::cout << timing.calls_msm / iter_ << "\n";
+    std::cout << "  pairing (rgsw): ";
+    std::cout << timing.calls_pairing_rgsw / iter_ << "\n";
+    std::cout << "  pairing (veri vec): ";
+    std::cout << timing.calls_pairing_veri_vec / iter_ << "\n\n";
 }
 
 vector_double mat_vec_mult(const matrix_double& mat, const vector_double& vec) {
@@ -467,10 +487,10 @@ void run_control_loop(times_and_counts& timing) {
 
     // convert rgsw mats to ntt/eval form
     TIMING(start_setup = std::chrono::high_resolution_clock::now();)
-    F_ctx.to_eval_form();
-    G_bar_ctx.to_eval_form();
-    R_bar_ctx.to_eval_form();
-    H_bar_ctx.to_eval_form();
+    auto F_ctx_eval = F_ctx.to_eval_form();
+    auto G_bar_ctx_eval = G_bar_ctx.to_eval_form();
+    auto R_bar_ctx_eval = R_bar_ctx.to_eval_form();
+    auto H_bar_ctx_eval = H_bar_ctx.to_eval_form();
     TIMING(end_setup = std::chrono::high_resolution_clock::now();)
     time_setup = end_setup - start_setup;
     std::cout << "  to eval form: ";
@@ -559,7 +579,7 @@ void run_control_loop(times_and_counts& timing) {
         rlwe_vec x_old = x;
         x = x_conv.mod_cyclo(N); // FIXME remove N
 
-        // TODO create x_hi
+        // TODO extract
         rlwe_vec x_hi{x_conv.n_rlwes(), x_conv.n_polys(), N_};
         for (size_t i = 0; i < x_hi.n_rlwes(); i++) {
             for (size_t j = 0; j < x_hi.n_polys(); j++) {
@@ -760,6 +780,19 @@ int main() {
     control_law_vars vars_unenc;
     // omp_set_nested(1);
     TIMING(auto start = std::chrono::high_resolution_clock::now();)
+
+    // init NTL
+    // TODO should this be global?
+    SetNumThreads(N_THREADS);
+    const char* q_str = "\
+21888242871839275222246405745257275088548364400416034343698204186575808495617";
+    ZZ q;
+    q = conv<ZZ>(q_str);
+    ZZ_p::init(q);
+    ZZ_pContext context;
+
+    size_t N = 8192;
+    assert(q % (2 * N) == 1);
 
     // init pairing and create G1, G2 and GT generators
     initPairing(BN_SNARK1);

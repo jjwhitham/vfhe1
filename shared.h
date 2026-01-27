@@ -48,6 +48,8 @@ typedef struct times_and_counts {
     int calls_intt1 = 0;
     int calls_conv_to_nega = 0;
     int calls_msm = 0;
+    int calls_pairing_veri_vec = 0;
+    int calls_pairing_rgsw = 0;
     int iter_ = 0;
     std::chrono::duration<double, std::milli> verify{};
     std::chrono::duration<double, std::milli> proof{};
@@ -65,6 +67,9 @@ typedef struct times_and_counts {
     std::chrono::duration<double, std::milli> g_mat{};
     std::chrono::duration<double, std::milli> enc_zero{};
     std::chrono::duration<double, std::milli> enc_rgsw_add{};
+    std::chrono::duration<double, std::milli> pairings{};
+    std::chrono::duration<double, std::milli> decomp{};
+    std::chrono::duration<double, std::milli> msm_tot{};
 } times_and_counts;
 
 // NOTE inline keyword for structs allows the struct to be used in multiple

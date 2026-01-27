@@ -37,7 +37,7 @@ void test_optimised_conv() {
     assert(q % (2 * N) == 1);
 
     // long num_polys = 10000;
-    long num_polys = 168;
+    long num_polys = 8000;
     Vec<ZZ_pX> polys1;
     Vec<ZZ_pX> polys2;
     polys1.SetLength(num_polys);
@@ -69,6 +69,7 @@ void test_optimised_conv() {
     ZZ_pContext context;
     context.save();
     NTL_EXEC_RANGE(num_polys, first, last)
+        // fprintf(stderr, "tid %s\n", CurrentThreadID().c_str());
         context.restore();
         for (long i = first; i < last; i++) {
             ToFFTRep(polys1_ntt[i], polys1[i], k);
@@ -79,6 +80,7 @@ void test_optimised_conv() {
     auto start = std::chrono::high_resolution_clock::now();
 
     NTL_EXEC_RANGE(num_polys, first, last)
+        // fprintf(stderr, "tid %s\n", CurrentThreadID().c_str());
         context.restore();
         ZZ_pX accum, tmp;
         accum.SetLength(2 * N);
@@ -93,8 +95,8 @@ void test_optimised_conv() {
 
     auto end = std::chrono::high_resolution_clock::now();
     auto elapsed = std::chrono::duration<double>(end - start).count();
-    std::cout << "(mt) " << num_polys << "x poly mults with N=" << N << " took: " << elapsed
-              << "(s) (" << num_polys / elapsed << "ops/sec) using " << num_threads << " threads\n";
+    std::cout << "(mt) " << num_polys << "x poly mults with N=" << N << " took: " << elapsed * 1000
+              << "(ms) (" << num_polys / elapsed << "ops/sec) using " << num_threads << " threads\n";
 
     ZZ_pX h;
     h.SetLength(2 * N);
@@ -429,7 +431,7 @@ void test_parallel() {
 int main() {
     // test_mult_conv();
     // test_ntt_peformance();
-    long nt = 16;
+    long nt = 10;
     SetNumThreads(nt);
     // test_ntt_peformance_mt();
     test_optimised_conv();
