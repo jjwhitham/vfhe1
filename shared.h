@@ -235,7 +235,7 @@ GT pow_t(const GT& base, const bigz& power) {
     Fr power1;
     power1.clear();
     if (power > FIELD_MODULUS) {
-        std::cout << "pow_t: power > FIELD_MODULUS\n";
+        // std::cout << "pow_t: power > FIELD_MODULUS\n"; // XXX add back and decide what to do re. vals > mod
         mpz_to_Fr(power1, power % FIELD_MODULUS);
     }
     else

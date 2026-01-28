@@ -109,7 +109,7 @@ public:
 
     rlwe_vec encrypt_rlwe_vec(const vector_bigz& vec) {
         rlwe_vec res(vec.size());
-        #pragma omp parallel for schedule(static) num_threads(N_THREADS)
+        // #pragma omp parallel for schedule(static) num_threads(N_THREADS) // FIXME
         for (size_t i = 0; i < vec.size(); i++) {
             poly p{N};
             p.set(0, vec.at(i)); // set the first coefficient to the value
@@ -152,7 +152,7 @@ public:
         TIMING(start = std::chrono::high_resolution_clock::now();)
         rgsw encs_of_zero(2 * d);
         poly zero_poly(N);
-        #pragma omp parallel for schedule(static) num_threads(N_THREADS)
+        // #pragma omp parallel for schedule(static) num_threads(N_THREADS) // FIXME
         for (size_t i = 0; i < 2 * d; i++)
             encs_of_zero.set(i, encrypt_rlwe(zero_poly));
         TIMING(end = std::chrono::high_resolution_clock::now();)

@@ -456,12 +456,23 @@ public:
     poly(FFTRep& p_) : array1d<bigz, poly>{}, p{p_} { // TODO review this
         set_isNTT(true);
     }
-    poly(ZZ_pX& p_) : array1d<bigz, poly>{static_cast<size_t>(p_.rep.length())} { // TODO review this
+    poly(ZZ_pX& p_, size_t N) : array1d<bigz, poly>{N} { // TODO review this
+        // long len = (p_.rep.length());
+        // size_t len1 = static_cast<size_t>(p_.rep.length());
+        // std::cout << "poly::poly(ZZ_pX& p_): len: " << len << "\n";
+        // std::cout << "poly::poly(ZZ_pX& p_): len1: " << len1 << "\n";
         // set_isNTT(false);
         assert(isNTT == false);
-        for (size_t i = 0; i < static_cast<size_t>(p_.rep.length()); i++) {
+        size_t len = static_cast<size_t>(p_.rep.length());
+        // if (len == 2 * N_ - 1)
+        //     len++; // HACK NTL doesn't include last coeff of conv
+        for (size_t i = 0; i < len; i++) {
             set(i, ZZ_p_to_new_mpz(p_[i]));
         }
+        // std::cout << "poly::poly(ZZ_pX& p_): above" << len << "\n";
+        if (len == 2 * N_ - 1)
+            set(2 * N_ - 1, 0); // HACK NTL doesn't include last coeff of conv
+        // std::cout << "poly::poly(ZZ_pX& p_): below " << len << "\n";
     }
     // 4. Copy assignment operator (calls array1d copy assignment, then copies p)
     poly& operator=(const poly& other) {
@@ -476,6 +487,74 @@ public:
     using array1d<bigz, poly>::operator*;
     poly operator*(const poly& other) const {
         return nega_ntt(other);
+    }
+
+    poly operator+(const poly& other) const {
+        assert(isNTT == other.isNTT);
+        if (isNTT) {
+            FFTRep x;
+            add(x, (*this).p, other.p);
+            poly res{x};
+            return res;
+        }
+        size_t N = n_coeffs();
+        poly res(N);
+        #pragma omp parallel for schedule(static) num_threads(N_THREADS)
+        for (size_t i = 0; i < N; i++) {
+            res[i] = mod_((*this)[i] + other[i], FIELD_MODULUS);
+        }
+        return res;
+    }
+    poly operator+(poly&& other) const {
+        return operator+(other);
+    }
+    poly& operator+=(const poly& other) {
+        assert(isNTT == other.isNTT);
+        if (isNTT) {
+            add((*this).p, (*this).p, other.p);
+            return *this;
+        }
+        size_t N = n_coeffs();
+        #pragma omp parallel for schedule(static) num_threads(N_THREADS)
+        for (size_t i = 0; i < N; i++) {
+            get(i) += other.get(i);
+                mod_(get(i), FIELD_MODULUS);
+        }
+        // return static_cast<poly&>(*this);
+        return *this;
+    }
+    poly& operator+=(const poly&& other) {
+        if (isNTT != other.isNTT) {
+            std::cout << "isNTT: " << isNTT << "\n";
+            std::cout << "other.isNTT: " << other.isNTT << "\n";
+            throw std::invalid_argument("poly::operator+=: mismatched isNTT");
+            // // exit or throw something that address sanitizer will provide a stack trace for
+            // exit(1);
+        }
+        assert(isNTT == other.isNTT);
+        if (isNTT) {
+            add((*this).p, (*this).p, other.p);
+            return *this;
+        }
+        size_t N = n_coeffs();
+        #pragma omp parallel for schedule(static) num_threads(N_THREADS)
+        for (size_t i = 0; i < N; i++) {
+            get(i) += other.get(i);
+                mod_(get(i), FIELD_MODULUS);
+        }
+        // return static_cast<poly&>(*this);
+        return *this;
+    }
+    poly operator-(const poly& other) const {
+        assert(isNTT == false);
+        assert(isNTT == other.isNTT);
+        size_t N = n_coeffs();
+        poly res(N);
+        #pragma omp parallel for schedule(static) num_threads(N_THREADS)
+        for (size_t i = 0; i < N; i++) {
+            res[i] = mod_sub((*this)[i], other[i]);
+        }
+        return res;
     }
     // poly& operator*=(poly& other) {
     //     mul((*this).p, (*this).p, other.p);
@@ -499,6 +578,8 @@ public:
     //     res += other;
     //     return res;
     // }
+
+
     // TODO convolve will just call operator*
     // poly convolve(const poly& other) const {
     poly convolve(const poly& other) const {
@@ -523,7 +604,9 @@ public:
         x.SetLength(N);
         // NOTE destructive version (could use NDFromFFTRep instead)
         FromFFTRep(x, a.p, 0, N - 1); // TODO check if N_ in/exclusive
-        poly ret{x};
+        // NDFromFFTRep(x, a.p, 0, N - 1); // TODO check if N_ in/exclusive
+        poly ret{x, static_cast<size_t>(N)};
+        assert(ret.isNTT == false);
         return ret;
     }
     ZZ_pX poly_to_ZZ_pX(size_t N) const {
@@ -542,10 +625,13 @@ public:
     }
     // NOTE does not mutate self
     poly to_eval_form(size_t N=2*N_, long k_=k) const {
-        ASSERT(isNTT == false);
+        assert(isNTT == false);
         FFTRep x(INIT_SIZE, k);
         ToFFTRep(x, poly_to_ZZ_pX(N), k_);
+        assert(static_cast<size_t>(x.len) == N);
         poly a{x};
+        assert(a.n_coeffs() == N);
+        assert(a.isNTT == true);
         return a;
     }
     // NOTE only used for Enc/Dec
@@ -562,6 +648,7 @@ public:
         mul(a.p, a.p, other.p);
         // intt
         poly ret = intt(a);
+        assert(ret.isNTT == false);
         return ret;
     }
     poly to_coeff_form() {
@@ -592,7 +679,7 @@ public:
 
         // convert bigz poly coeffs to Fr scalars
         TIMING(auto start = std::chrono::high_resolution_clock::now();)
-        static std::vector<Fr> scalars(2 * N_);
+        static std::vector<Fr> scalars(2 * N_); // TODO make just N_
         #pragma omp parallel for schedule(static) num_threads(N_THREADS)
         for (size_t i = 0; i < size(); i++) {
             mpz_to_Fr(scalars[i], get(i));
@@ -617,6 +704,8 @@ public:
         return get(n);
     }
     size_t n_coeffs() const {
+        size_t len = isNTT ? static_cast<size_t>(p.len) : size();
+        assert(len == N_ || len == 2 * N_);
         return isNTT ? p.len : size();
     }
     auto get_hash_serial(const vector_bigz& eval_pows) const {
@@ -781,7 +870,7 @@ public:
         return hash;
     }
     rlwe_decomp_vec to_eval_form_() {
-        #pragma omp parallel for collapse(2) schedule(dynamic) num_threads(N_THREADS)
+        // #pragma omp parallel for collapse(2) schedule(dynamic) num_threads(N_THREADS)
         for (size_t i = 0; i < n_rlwe_decomps(); i++)
             for (size_t j = 0; j < n_polys(); j++) {
                 // get_rlwe_decomp(i).set(j, get_rlwe_decomp(i).get_poly(j).to_eval_form());
@@ -1071,7 +1160,9 @@ public:
     }
     rlwe convolve(const rlwe_decomp& other) const {
         ASSERT(n_rlwes() == other.n_polys());
-        rlwe res(n_polys(), 2 * N_); // XXX 2 * N_ zero-inits polys for += later
+        rlwe res(n_polys(), N_); // FIXME zero-inits polys for += later
+        for (auto& p : res)
+            p = p.to_eval_form();
         for (size_t i = 0; i < n_rlwes(); i++) {
             for (size_t j = 0; j < n_polys(); j++) {
                 res.get(j) += get(i).get(j).convolve(other.get(i));
@@ -1250,7 +1341,11 @@ public:
         ASSERT(n_coeffs() == 2 * N_);
         rlwe_vec res(n_rows());
         for (size_t i = 0; i < n_rows(); i++) {
-            rlwe sum(n_polys(), 2 * N_); // FIXME better init of 2 * N_?
+            rlwe sum(N_POLYS_IN_RLWE, N_); // FIXME zero-inits polys for += later
+            // for (size_t p_idx = 0; p_idx < N_POLYS_IN_RLWE; p_idx++)
+            for (auto& p : sum)
+                // sum[p_idx].to_eval_form();
+                p = p.to_eval_form();
             for (size_t j = 0; j < n_cols(); j++) {
                 sum += get(i, j).convolve(other.get(j));
             }
@@ -1263,7 +1358,7 @@ public:
     }
     void to_eval_form_() {
         // #pragma omp parallel for collapse(4) schedule(dynamic) num_threads(N_THREADS * 2) // TODO
-        #pragma omp parallel for collapse(4) schedule(dynamic) num_threads(N_THREADS)
+        // #pragma omp parallel for collapse(4) schedule(dynamic) num_threads(N_THREADS) // FIXME
         for (size_t row = 0; row < n_rows(); row++) {
             for (size_t col = 0; col < n_cols(); col++) {
                 for (size_t i = 0 ; i < n_rlwes(); i++) {
@@ -1347,8 +1442,11 @@ public:
     //         }
     //     }
     // }
-    auto to_eval_form() {
-        return to_eval_form_();
+
+    // auto to_eval_form() {
+    //     return to_eval_form_();
+    void to_eval_form() {
+        to_eval_form_();
         // return to_eval_form_ntl();
     }
     rgsw& get_rgsw(size_t row, size_t col) const {
@@ -1565,7 +1663,7 @@ private:
 public:
     Params() :
         N(N_),
-        iter_(10),
+        iter_(100),
         s(10000.0),
         L(10000.0),
         r(10000.0),
