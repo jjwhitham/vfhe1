@@ -487,10 +487,10 @@ void run_control_loop(times_and_counts& timing) {
 
     // convert rgsw mats to ntt/eval form
     TIMING(start_setup = std::chrono::high_resolution_clock::now();)
-    auto F_ctx_eval = F_ctx.to_eval_form();
-    auto G_bar_ctx_eval = G_bar_ctx.to_eval_form();
-    auto R_bar_ctx_eval = R_bar_ctx.to_eval_form();
-    auto H_bar_ctx_eval = H_bar_ctx.to_eval_form();
+    F_ctx.to_eval_form();
+    G_bar_ctx.to_eval_form();
+    R_bar_ctx.to_eval_form();
+    H_bar_ctx.to_eval_form();
     TIMING(end_setup = std::chrono::high_resolution_clock::now();)
     time_setup = end_setup - start_setup;
     std::cout << "  to eval form: ";

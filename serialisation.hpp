@@ -152,8 +152,8 @@ void mpz_to_ZZ_p(ZZ_p& out, const mpz_class& in) {
     size_t n_wrote = 42; // n_wrote should never be 42;
     mpz_to_buff(BUF, &n_wrote, in);
 
-    char* mpz_str = print_to_string_mpz1(in);
-    std::cout << "mpz_to_ZZ_p is serialising the mpz_t:" << mpz_str << "\n";
+    // char* mpz_str = print_to_string_mpz1(in);
+    // std::cout << "mpz_to_ZZ_p is serialising the mpz_t:" << mpz_str << "\n";
     assert(n_wrote != 42);
 
     buff_to_ntl(out, n_wrote, BUF);
@@ -167,6 +167,7 @@ ZZ_p mpz_to_new_ZZ_p(const mpz_class& in) {
     mpz_to_ZZ_p(out, in);
     return out;
 }
+// TODO add MT like below for MCL
 void ZZ_p_to_mpz(mpz_class& out, const ZZ_p& in) {
     ZZ inzz; inzz = rep(in); // TODO is conv<ZZ>(in) better?
     long n_wrote = 42;
@@ -176,6 +177,12 @@ void ZZ_p_to_mpz(mpz_class& out, const ZZ_p& in) {
 
     buff_to_mpz(out, n_wrote, BUF);
     memset((void*)BUF, 0, N_BYTES_256_BITS);
+}
+
+mpz_class ZZ_p_to_new_mpz(const ZZ_p& in) {
+    mpz_class out;
+    ZZ_p_to_mpz(out, in);
+    return out;
 }
 
 /******************************************************************************/

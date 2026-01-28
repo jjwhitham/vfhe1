@@ -86,7 +86,7 @@ private:
     poly sk;
 public:
     Encryptor(bigz v_, size_t d_, size_t N_, bigz q_)
-        : v(v_), d(d_), N(N_), q(q_), sk{sample_secret_key(N).to_eval_form(false)} { }
+        : v(v_), d(d_), N(N_), q(q_), sk{sample_secret_key(N).to_eval_form(N, poly::k - 1)} { }
     // Encrypts an RLWE ciphertext of message m
     // m: message polynomial (poly), N: degree, sk: secret key, q: modulus, dth_pows: unused here
     rlwe encrypt_rlwe(const poly& m) {
@@ -99,6 +99,14 @@ public:
         return res;
     }
 
+    poly decrypt_rlwe(const rlwe& ctx) const {
+        ASSERT(ctx.n_polys() == 2);
+        const poly& b = ctx.get_poly(0);
+        const poly& a = ctx.get_poly(1);
+        poly m = b - a * sk;
+        return m;
+    }
+
     rlwe_vec encrypt_rlwe_vec(const vector_bigz& vec) {
         rlwe_vec res(vec.size());
         #pragma omp parallel for schedule(static) num_threads(N_THREADS)
@@ -109,14 +117,6 @@ public:
             res.set(i, r);
         }
         return res;
-    }
-
-    poly decrypt_rlwe(const rlwe& ctx) const {
-        ASSERT(ctx.n_polys() == 2);
-        const poly& b = ctx.get_poly(0);
-        const poly& a = ctx.get_poly(1);
-        poly m = b - a * sk;
-        return m;
     }
 
     vector_bigz decrypt_rlwe_vec(const rlwe_vec& ctxs) const {

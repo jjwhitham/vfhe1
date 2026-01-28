@@ -18,6 +18,12 @@
 
 
 ##### TODO
+Wed 28 Jan
+- [ ] add NTL
+  - [ ] enc/dec: keep current behaviour, i.e. sample/store a in coeff form
+
+
+
 Mon 26 Jan
 - [ ] add msm cache test
 - [ ] Add invariant: num_pairings
