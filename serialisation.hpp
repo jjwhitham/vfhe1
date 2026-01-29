@@ -135,7 +135,7 @@ void buff_to_mpz(mpz_class& out, size_t n_read, const uint8_t* buf) {
 }
 
 void buff_to_ntl(ZZ_p& out, size_t n_read, const uint8_t* buf) {
-    static ZZ tmp(INIT_SIZE, _256_BITS); // Allocate once
+    ZZ tmp(INIT_SIZE, _256_BITS);
     ZZFromBytes(tmp, buf, n_read);
     conv(out, tmp);
 }
@@ -148,18 +148,14 @@ void buff_to_mcl(mcl::Fr& out, size_t n_read, const uint8_t* buf) {
 /**************************** MPZ <--> NTL ************************************/
 /******************************************************************************/
 void mpz_to_ZZ_p(ZZ_p& out, const mpz_class& in) {
-
+    uint8_t BUF_[N_BYTES_256_BITS] = { 0 }; // TODO make static thread buf for NTL pthreads
     size_t n_wrote = 42; // n_wrote should never be 42;
-    mpz_to_buff(BUF, &n_wrote, in);
 
-    // char* mpz_str = print_to_string_mpz1(in);
-    // std::cout << "mpz_to_ZZ_p is serialising the mpz_t:" << mpz_str << "\n";
+    mpz_to_buff(BUF_, &n_wrote, in);
     assert(n_wrote != 42);
 
-    buff_to_ntl(out, n_wrote, BUF);
-
-    // clear buff
-    memset((void*)BUF, 0, N_BYTES_256_BITS);
+    buff_to_ntl(out, n_wrote, BUF_);
+    memset((void*)BUF_, 0, N_BYTES_256_BITS);
 }
 
 ZZ_p mpz_to_new_ZZ_p(const mpz_class& in) {
@@ -169,14 +165,15 @@ ZZ_p mpz_to_new_ZZ_p(const mpz_class& in) {
 }
 // TODO add MT like below for MCL
 void ZZ_p_to_mpz(mpz_class& out, const ZZ_p& in) {
+    uint8_t BUF_[N_BYTES_256_BITS] = { 0 }; // TODO make static thread buf for NTL pthreads
     ZZ inzz; inzz = rep(in); // TODO is conv<ZZ>(in) better?
     long n_wrote = 42;
 
-    ntl_to_buff(BUF, &n_wrote, inzz);
+    ntl_to_buff(BUF_, &n_wrote, inzz);
     assert(n_wrote >= 0 && n_wrote <= 32); // 256 bits (2^8) == 2^5 Bytes
 
-    buff_to_mpz(out, n_wrote, BUF);
-    memset((void*)BUF, 0, N_BYTES_256_BITS);
+    buff_to_mpz(out, n_wrote, BUF_);
+    memset((void*)BUF_, 0, N_BYTES_256_BITS);
 }
 
 mpz_class ZZ_p_to_new_mpz(const ZZ_p& in) {

@@ -431,7 +431,7 @@ void test_parallel() {
 int main() {
     // test_mult_conv();
     // test_ntt_peformance();
-    long nt = 10;
+    long nt = 4;
     SetNumThreads(nt);
     // test_ntt_peformance_mt();
     test_optimised_conv();

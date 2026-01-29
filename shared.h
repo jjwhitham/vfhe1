@@ -12,6 +12,13 @@
 
 using namespace mcl::bn;
 
+// #include <NTL/ZZ_pX.h>
+// #include <NTL/ZZ.h>
+// #include <NTL/BasicThreadPool.h>
+// #include <thread>
+
+using namespace NTL;
+
 #ifndef PAIRING_OFF
 #   define PAIRING_ON
 #endif
@@ -40,6 +47,13 @@ bigz TWO_ROU("206197010015839047606013574849515745886210832360878565866261175688
 bigz FIELD_MODULUS("\
 21888242871839275222246405745257275088548364400416034343698204186575808495617\
 ");
+
+// const char* q_str = "\
+// 21888242871839275222246405745257275088548364400416034343698204186575808495617";
+// ZZ q;
+// q = conv<ZZ>(q_str);
+// ZZ_p::init(q);
+ZZ_pContext context;
 
 typedef struct times_and_counts {
     int calls_ntt = 0;
@@ -70,6 +84,8 @@ typedef struct times_and_counts {
     std::chrono::duration<double, std::milli> pairings{};
     std::chrono::duration<double, std::milli> decomp{};
     std::chrono::duration<double, std::milli> msm_tot{};
+    std::chrono::duration<double, std::milli> to_fft_rep{};
+    std::chrono::duration<double, std::milli> from_fft_rep{};
 } times_and_counts;
 
 // NOTE inline keyword for structs allows the struct to be used in multiple

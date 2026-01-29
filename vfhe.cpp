@@ -304,14 +304,19 @@ void print_times_and_counts(times_and_counts& timing) {
     std::cout << timing.plant.count() / iter_ << "\n";
     std::cout << "    Verify: ";
     std::cout << timing.verify.count() / iter_ << "\n";
-    std::cout << "  NTT: ";
-    std::cout << timing.ntt.count() / iter_ << "\n";
-    std::cout << "  iNTT: ";
-    std::cout << timing.intt.count() / iter_ << "\n";
-    std::cout << "  NTT1: ";
-    std::cout << timing.ntt1.count() / iter_ << "\n";
-    std::cout << "  iNTT1: ";
-    std::cout << timing.intt1.count() / iter_ << "\n";
+    // std::cout << "  NTT: ";
+    // std::cout << timing.ntt.count() / iter_ << "\n";
+    // std::cout << "  iNTT: ";
+    // std::cout << timing.intt.count() / iter_ << "\n";
+    // std::cout << "  NTT1: ";
+    // std::cout << timing.ntt1.count() / iter_ << "\n";
+    // std::cout << "  iNTT1: ";
+    // std::cout << timing.intt1.count() / iter_ << "\n";
+
+    std::cout << "  ToFFTRep: ";
+    std::cout << timing.to_fft_rep.count() / iter_ << "\n";
+    std::cout << "  FromFFTRep: ";
+    std::cout << timing.from_fft_rep.count() / iter_ << "\n";
     std::cout << "\n";
 
     std::cout << "Number of calls (per loop):\n";
@@ -783,13 +788,13 @@ int main() {
 
     // init NTL
     // TODO should this be global?
-    SetNumThreads(N_THREADS);
+    SetNumThreads(4);
     const char* q_str = "\
 21888242871839275222246405745257275088548364400416034343698204186575808495617";
     ZZ q;
     q = conv<ZZ>(q_str);
     ZZ_p::init(q);
-    ZZ_pContext context;
+//     ZZ_pContext context;
 
     size_t N = 8192;
     assert(q % (2 * N) == 1);

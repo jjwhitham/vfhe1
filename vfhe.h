@@ -603,7 +603,10 @@ public:
         ZZ_pX x;
         x.SetLength(N);
         // NOTE destructive version (could use NDFromFFTRep instead)
+        TIMING(auto start = std::chrono::high_resolution_clock::now();)
         FromFFTRep(x, a.p, 0, N - 1); // TODO check if N_ in/exclusive
+        TIMING(auto end = std::chrono::high_resolution_clock::now();)
+        TIMING(timing.from_fft_rep += end - start;)
         // NDFromFFTRep(x, a.p, 0, N - 1); // TODO check if N_ in/exclusive
         poly ret{x, static_cast<size_t>(N)};
         assert(ret.isNTT == false);
@@ -612,14 +615,14 @@ public:
     ZZ_pX poly_to_ZZ_pX(size_t N) const {
         ZZ_pX p_ret;
         p_ret.SetLength(N);
-        for (size_t j = 0; j < N_; j++) {
+        for (size_t k = 0; k < N_; k++) {
             // TODO replace with a buffer init'd at construction
-            p_ret[j] = mpz_to_new_ZZ_p(get(j));
+            p_ret[k] = mpz_to_new_ZZ_p(get(k));
         }
         // executes if N == 2 * N_ (i.e. only for conv)
-        for (size_t j = N_; j < N; j++) {
+        for (size_t k = N_; k < N; k++) {
             ZZ_p x{0};
-            p_ret[j] = x;
+            p_ret[k] = x;
         }
         return p_ret;
     }
@@ -627,7 +630,10 @@ public:
     poly to_eval_form(size_t N=2*N_, long k_=k) const {
         assert(isNTT == false);
         FFTRep x(INIT_SIZE, k);
+        TIMING(auto start = std::chrono::high_resolution_clock::now();)
         ToFFTRep(x, poly_to_ZZ_pX(N), k_);
+        TIMING(auto end = std::chrono::high_resolution_clock::now();)
+        TIMING(timing.to_fft_rep += end - start;)
         assert(static_cast<size_t>(x.len) == N);
         poly a{x};
         assert(a.n_coeffs() == N);
@@ -802,12 +808,57 @@ public:
     size_t n_coeffs() const {
         return get_poly(0).size();
     }
-    // void to_eval_form() {
-    //     #pragma omp parallel for schedule(dynamic) num_threads(N_THREADS)
-    //     for (size_t i = 0; i < n_polys(); i++) {
-    //         set(i, get_poly(i).to_eval_form());
-    //     }
-    // }
+    void to_eval_form() {
+        context.save();
+        NTL_EXEC_RANGE(n_polys(), first, last)
+            context.restore();
+            for (long j = first; j < last; j++) {
+                poly& p = get_poly(j);
+                FFTRep x(INIT_SIZE, 14);
+                ZZ_pX p_ret;
+                p_ret.SetLength(2 * N_);
+                for (size_t k = 0; k < N_; k++) {
+                    // TODO replace with a buffer init'd at construction
+                    bigz& in = p.get(k);
+                    ZZ_p out(INIT_ALLOC);
+                    uint8_t buf[N_BYTES_256_BITS] = { 0 }; // TODO make static thread buf for NTL pthreads
+                    size_t n_write = 42; // n_wrote should never be 42;
+
+                    // XXX write to buf
+                    uint8_t* ret_ptr = (uint8_t*)mpz_export((void*)buf, &n_write, ORDER, WORD_SIZE, ENDIAN, NAILS, in.get_mpz_t());
+
+                    (void)ret_ptr;
+                    // if (ret_ptr == nullptr)
+                    //     std::cout << "mpz_to_buff: ret_ptr = nullptr\n";
+                    // else if (ret_ptr == buf) {
+                    //     // std::cout << "mpz_to_buff: ret_ptr points to BUF\n";
+                    // }
+                    // else {
+                    //     std::cout << "mpz_to_buff: ret_ptr points to something else (GMP allocator?), ret_ptr = " << ret_ptr << "\n";
+                    //     throw std::runtime_error("Aborting...\n");
+                    // }
+                    // assert(n_write != 42);
+
+                    ZZ tmp(INIT_SIZE, _256_BITS); // XXX culprit???
+                    ZZFromBytes(tmp, buf, n_write);
+                    conv(out, tmp);
+                    p_ret[k] = out;
+
+                    memset((void*)buf, 0, N_BYTES_256_BITS);
+                }
+                for (size_t k = N_; k < 2 * N_; k++) {
+                    ZZ_p x{0};
+                    p_ret[k] = x;
+                }
+                ToFFTRep(x, p_ret, 14);
+                poly a{x};
+                p = a;
+            }
+        NTL_EXEC_RANGE_END
+        // for (size_t i = 0; i < n_polys(); i++) {
+        //     set(i, get_poly(i).to_eval_form());
+        // }
+    }
     void msm(std::vector<G1>& eval_pows_g) {
         for (size_t i = 0; i < size(); i++)
             g1.at(i) = get(i).msm(eval_pows_g);
@@ -871,12 +922,20 @@ public:
     }
     rlwe_decomp_vec to_eval_form_() {
         // #pragma omp parallel for collapse(2) schedule(dynamic) num_threads(N_THREADS)
-        for (size_t i = 0; i < n_rlwe_decomps(); i++)
-            for (size_t j = 0; j < n_polys(); j++) {
+        for (size_t i = 0; i < n_rlwe_decomps(); i++) {
+            // ZZ_pContext context;
+            // context.save();
+            // NTL_EXEC_RANGE(n_polys(), first, last)
+            // context.restore();
+            // for (size_t j = 0; j < n_polys(); j++) {
+            // for (long j = first; j < last; j++) {
                 // get_rlwe_decomp(i).set(j, get_rlwe_decomp(i).get_poly(j).to_eval_form());
-                poly& p = get_rlwe_decomp(i).get_poly(j);
-                p = p.to_eval_form();
-            }
+                get_rlwe_decomp(i).to_eval_form();
+                // poly& p = get_rlwe_decomp(i).get_poly(j);
+                // p = p.to_eval_form();
+            // }
+        }
+            // NTL_EXEC_RANGE_END
         return *this;
     }
     // rlwe_decomp_vec_eval to_eval_form_ntl() {
@@ -1663,7 +1722,7 @@ private:
 public:
     Params() :
         N(N_),
-        iter_(100),
+        iter_(10),
         s(10000.0),
         L(10000.0),
         r(10000.0),
