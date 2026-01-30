@@ -267,6 +267,7 @@ struct control_law_vars {
     std::vector<vector_double> x_cont;
 };
 
+// TODO move to shared.h or vfhe.h
 void print_times_and_counts(times_and_counts& timing) {
     int iter_ = timing.iter_;
     int n_decimals = 0;
@@ -300,6 +301,8 @@ void print_times_and_counts(times_and_counts& timing) {
     std::cout << timing.msm1.count() / iter_ << "\n";
     std::cout << "      pairings: ";
     std::cout << timing.pairings.count() / iter_ << "\n";
+    std::cout << "      to_eval_decomp: ";
+    std::cout << timing.to_eval_rlwe_decomp.count() / iter_ << "\n";
     std::cout << "  Plant: ";
     std::cout << timing.plant.count() / iter_ << "\n";
     std::cout << "    Verify: ";
@@ -313,22 +316,22 @@ void print_times_and_counts(times_and_counts& timing) {
     // std::cout << "  iNTT1: ";
     // std::cout << timing.intt1.count() / iter_ << "\n";
 
-    std::cout << "  ToFFTRep: ";
-    std::cout << timing.to_fft_rep.count() / iter_ << "\n";
-    std::cout << "  FromFFTRep: ";
-    std::cout << timing.from_fft_rep.count() / iter_ << "\n";
+    // std::cout << "  ToFFTRep: ";
+    // std::cout << timing.to_fft_rep.count() / iter_ << "\n";
+    // std::cout << "  FromFFTRep: ";
+    // std::cout << timing.from_fft_rep.count() / iter_ << "\n";
     std::cout << "\n";
 
     std::cout << "Number of calls (per loop):\n";
 
-    std::cout << "  NTT: ";
-    std::cout << timing.calls_ntt / iter_ << "\n";
-    std::cout << "  iNTT: ";
-    std::cout << timing.calls_intt / iter_ << "\n";
-    std::cout << "  NTT1: ";
-    std::cout << timing.calls_ntt1 / iter_ << "\n";
-    std::cout << "  iNTT1: ";
-    std::cout << timing.calls_intt1 / iter_ << "\n";
+    // std::cout << "  NTT: ";
+    // std::cout << timing.calls_ntt / iter_ << "\n";
+    // std::cout << "  iNTT: ";
+    // std::cout << timing.calls_intt / iter_ << "\n";
+    // std::cout << "  NTT1: ";
+    // std::cout << timing.calls_ntt1 / iter_ << "\n";
+    // std::cout << "  iNTT1: ";
+    // std::cout << timing.calls_intt1 / iter_ << "\n";
     std::cout << "  Conv-to-nega: ";
     std::cout << timing.calls_conv_to_nega / iter_ << "\n";
     std::cout << "  MSMs: ";
@@ -787,17 +790,14 @@ int main() {
     TIMING(auto start = std::chrono::high_resolution_clock::now();)
 
     // init NTL
-    // TODO should this be global?
-    SetNumThreads(4);
+    // NOTE (context is a global in shared.h)
+    SetNumThreads(10);
     const char* q_str = "\
 21888242871839275222246405745257275088548364400416034343698204186575808495617";
     ZZ q;
     q = conv<ZZ>(q_str);
     ZZ_p::init(q);
-//     ZZ_pContext context;
-
-    size_t N = 8192;
-    assert(q % (2 * N) == 1);
+    assert(q % (2 * N_) == 1);
 
     // init pairing and create G1, G2 and GT generators
     initPairing(BN_SNARK1);

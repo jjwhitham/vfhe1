@@ -11,12 +11,6 @@
 #include "/Users/jw/Projects/mcl/include/mcl/bn.hpp"
 
 using namespace mcl::bn;
-
-// #include <NTL/ZZ_pX.h>
-// #include <NTL/ZZ.h>
-// #include <NTL/BasicThreadPool.h>
-// #include <thread>
-
 using namespace NTL;
 
 #ifndef PAIRING_OFF
@@ -31,7 +25,6 @@ using namespace NTL;
 
 typedef mpz_class bigz;
 typedef long int u32; // FIXME - why signed? Rationalise usage across code
-// u32 N_DECOMP = 2;
 u32 N_DECOMP = 7;
 
 // for N=4096
@@ -48,13 +41,9 @@ bigz FIELD_MODULUS("\
 21888242871839275222246405745257275088548364400416034343698204186575808495617\
 ");
 
-// const char* q_str = "\
-// 21888242871839275222246405745257275088548364400416034343698204186575808495617";
-// ZZ q;
-// q = conv<ZZ>(q_str);
-// ZZ_p::init(q);
 ZZ_pContext context;
 
+// TODO split into two times_and_counts[_setup]
 typedef struct times_and_counts {
     int calls_ntt = 0;
     int calls_intt = 0;
@@ -86,10 +75,12 @@ typedef struct times_and_counts {
     std::chrono::duration<double, std::milli> msm_tot{};
     std::chrono::duration<double, std::milli> to_fft_rep{};
     std::chrono::duration<double, std::milli> from_fft_rep{};
+    std::chrono::duration<double, std::milli> to_eval_rlwe_decomp{};
 } times_and_counts;
 
 // NOTE inline keyword for structs allows the struct to be used in multiple
 // translation units without causing linker errors
+// TODO check if inline is actually required
 inline times_and_counts timing = { 0 };
 
 G1 gen1;
@@ -114,8 +105,6 @@ bigz mod_(bigz& val, const bigz& q) {
 // TODO check correctness
 bigz mod_(bigz&& val, const bigz& q) {
     return mod_(val, q);
-    // val = mod_(val, q);
-    // return val;
 }
 
 std::string i128str(__uint128_t n) {

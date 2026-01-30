@@ -1,5 +1,6 @@
 # -Ofast is deprecated, use: -O3 -ffast-math
 # -fsanitize=address -g3 \
+# -lprofiler \
 clang++ -Wall -Wextra -Wpedantic -std=gnu++23 \
   -O3 -ffast-math -march=armv8.6-a -mtune=apple-m3 \
   -I/Users/jw/Projects/mcl/include \
@@ -9,7 +10,6 @@ clang++ -Wall -Wextra -Wpedantic -std=gnu++23 \
   -DMCL_USE_OMP=1 \
   -Xpreprocessor -fopenmp \
   -L/opt/homebrew/opt/libomp/lib -lomp \
-  -lprofiler \
   -pthread -lntl -lgmpxx -lgmp \
   -Wl,-rpath,/opt/homebrew/opt/libomp/lib \
   -o vfhe
