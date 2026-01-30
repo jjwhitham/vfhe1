@@ -3,6 +3,7 @@
 # -lprofiler \
 clang++ -Wall -Wextra -Wpedantic -std=gnu++23 \
   -O3 -ffast-math -march=armv8.6-a -mtune=apple-m3 \
+  -flto -fomit-frame-pointer -fstrict-aliasing \
   -I/Users/jw/Projects/mcl/include \
   -I/opt/homebrew/opt/libomp/include \
   vfhe.cpp /Users/jw/Projects/mcl/build/lib/libmcl.a \
